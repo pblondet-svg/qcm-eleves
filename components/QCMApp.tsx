@@ -1,11 +1,12 @@
 "use client";
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import mammoth from "mammoth";
+import { supabase } from "@/lib/supabase";
 import {
-  Plus, Trash2, Sparkles, Save, FileUp, Search, X, Edit2,
+  Plus, Trash2, Sparkles, FileUp, Search, X, Edit2,
   Check, FolderOpen, Play, RotateCcw, Trophy, ChevronRight, ChevronLeft,
-  Lock, LogOut, Eye, RefreshCw, Upload, Type, AlertCircle, ArrowLeft,
-  Tag, BookOpen, User, CheckCircle2, AlertTriangle,
+  Lock, LogOut, Eye, RefreshCw, ArrowLeft, Tag, CheckCircle2, AlertTriangle,
+  User, BookOpen,
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -20,7 +21,6 @@ const callAI = async (messages: {role: string, content: string}[], max_tokens = 
 };
 
 const getText = (d: any) => (d.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
-
 const parseJSON = (txt: string) => {
   const c = txt.replace(/```json/g, "").replace(/```/g, "").trim();
   const m = c.match(/[\[{][\s\S]*[\]}]/);
@@ -30,26 +30,59 @@ const parseJSON = (txt: string) => {
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const fmtDate = (ts: number) => new Date(ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 const wc = (c: string) => c.trim().split(/\s+/).filter(Boolean).length;
-
-const entryName = (e: any) =>
-  e.author && e.workTitle ? `${e.author} — ${e.workTitle}` :
-  e.workTitle ? e.workTitle : e.title || "Sans titre";
+const entryName = (e: any) => e.author && e.work_title ? `${e.author} — ${e.work_title}` : e.work_title || "Sans titre";
 const entryChapter = (e: any) => e.chapter?.trim() || "Non classé";
 
-const PROF_CODE = "bechamel77400";
-const STORAGE_KEY = "qcm-library-v1";
+const PROF_CODE = "prof1234";
 
-const loadLibrary = () => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch { return []; }
+// ── Supabase DB ───────────────────────────────────────────────────────────────
+const dbLoadTextes = async () => {
+  const { data, error } = await supabase.from("textes").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 };
 
-const saveLibrary = (lib: any[]) => {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(lib)); } catch (e) { console.error(e); }
+const dbAddTexte = async (entry: any) => {
+  const { error } = await supabase.from("textes").insert([{
+    id: entry.id, chapter: entry.chapter, author: entry.author,
+    work_title: entry.workTitle || entry.work_title,
+    notions: entry.notions, content: entry.content,
+    word_count: entry.wordCount || entry.word_count,
+    created_at: entry.createdAt || entry.created_at || Date.now(),
+  }]);
+  if (error) throw error;
 };
 
+const dbDeleteTexte = async (id: string) => {
+  const { error } = await supabase.from("textes").delete().eq("id", id);
+  if (error) throw error;
+};
+
+const dbUpdateTexte = async (id: string, fields: any) => {
+  const { error } = await supabase.from("textes").update({
+    chapter: fields.chapter, author: fields.author,
+    work_title: fields.workTitle || fields.work_title,
+    content: fields.content, word_count: wc(fields.content || ""),
+  }).eq("id", id);
+  if (error) throw error;
+};
+
+const dbSaveResultat = async (resultat: any) => {
+  const { error } = await supabase.from("resultats").insert([{
+    id: uid(), eleve_nom: resultat.elevenom,
+    chapter: resultat.chapter, score: resultat.score,
+    total: resultat.total, pourcentage: resultat.pourcentage,
+  }]);
+  if (error) throw error;
+};
+
+const dbLoadResultats = async () => {
+  const { data, error } = await supabase.from("resultats").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// ── File extraction ───────────────────────────────────────────────────────────
 async function extractFile(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "txt") return file.text();
@@ -63,22 +96,17 @@ async function extractFile(file: File) {
 async function extractMetadataWithAI(content: string, filename: string, chapterHint: string) {
   const snippet = content.slice(0, 3000);
   const hint = chapterHint ? `\nHint chapitre : "${chapterHint}"` : "";
-  const data = await callAI([{
-    role: "user",
-    content: `Analyse ce texte et extrais ses métadonnées. Réponds UNIQUEMENT en JSON valide.${hint}
-Format: {"author":"Prénom Nom","workTitle":"Titre de l'œuvre","chapter":"Mouvement littéraire","notions":["notion1","notion2","notion3"]}
+  const data = await callAI([{ role: "user", content:
+    `Analyse ce texte et extrais ses métadonnées. Réponds UNIQUEMENT en JSON valide.${hint}
+Format: {"author":"Prénom Nom","workTitle":"Titre","chapter":"Mouvement littéraire","notions":["notion1","notion2","notion3"]}
 Fichier: ${filename}
-Texte: ${snippet}`,
-  }], 600);
+Texte: ${snippet}` }], 600);
   return parseJSON(getText(data));
 }
 
 const shuffle = (arr: any[]) => {
   const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 };
 
@@ -91,36 +119,28 @@ const prepareQuiz = (questions: any[]) => questions.map(q => {
 // ── VALIDATION MODAL ──────────────────────────────────────────────────────────
 function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any) {
   const [entries, setEntries] = useState(pending);
-
   const update = (id: string, field: string, val: string) =>
     setEntries((prev: any[]) => prev.map((e: any) => e.id === id ? { ...e, [field]: val } : e));
   const updateNotion = (id: string, i: number, val: string) =>
-    setEntries((prev: any[]) => prev.map((e: any) => e.id === id
-      ? { ...e, notions: e.notions.map((n: string, ni: number) => ni === i ? val : n) } : e));
+    setEntries((prev: any[]) => prev.map((e: any) => e.id === id ? { ...e, notions: e.notions.map((n: string, ni: number) => ni === i ? val : n) } : e));
   const addNotion = (id: string) =>
     setEntries((prev: any[]) => prev.map((e: any) => e.id === id ? { ...e, notions: [...e.notions, ""] } : e));
   const removeNotion = (id: string, i: number) =>
-    setEntries((prev: any[]) => prev.map((e: any) => e.id === id
-      ? { ...e, notions: e.notions.filter((_: any, ni: number) => ni !== i) } : e));
+    setEntries((prev: any[]) => prev.map((e: any) => e.id === id ? { ...e, notions: e.notions.filter((_: any, ni: number) => ni !== i) } : e));
   const removeEntry = (id: string) => setEntries((prev: any[]) => prev.filter((e: any) => e.id !== id));
-
   const handleConfirm = () => {
-    const cleaned = entries.filter((e: any) => e.content).map((e: any) => ({
+    onConfirm(entries.filter((e: any) => e.content).map((e: any) => ({
       ...e, chapter: e.chapter || "Non classé",
       notions: e.notions.filter((n: string) => n.trim()),
       wordCount: wc(e.content), createdAt: Date.now(),
-    }));
-    onConfirm(cleaned);
+    })));
   };
-
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto py-8 px-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-xl font-black text-gray-800">Validation des métadonnées</h2>
-          <button onClick={onCancel} className="p-2 text-gray-700 hover:text-gray-600 rounded-xl hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onCancel} className="p-2 text-gray-600 hover:text-gray-800 rounded-xl hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
           {entries.map((entry: any) => (
@@ -134,25 +154,22 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
               </div>
               <div className="p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase mb-1 block">Auteur</label>
-                    <input value={entry.author || ""} onChange={e => update(entry.id, "author", e.target.value)}
-                      className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase mb-1 block">Titre</label>
-                    <input value={entry.workTitle || ""} onChange={e => update(entry.id, "workTitle", e.target.value)}
-                      className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none" />
-                  </div>
+                  {[["Auteur","author"],["Titre","workTitle"]].map(([label, field]) => (
+                    <div key={field}>
+                      <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">{label}</label>
+                      <input value={entry[field] || ""} onChange={e => update(entry.id, field, e.target.value)}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800" />
+                    </div>
+                  ))}
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-700 uppercase mb-1 block">Chapitre</label>
+                  <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Chapitre</label>
                   <input value={entry.chapter || ""} onChange={e => update(entry.id, "chapter", e.target.value)}
-                    list="val-chapters" className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none" />
+                    list="val-chapters" className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800" />
                   <datalist id="val-chapters">{existingChapters.map((ch: string) => <option key={ch} value={ch} />)}</datalist>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-700 uppercase mb-1 block">Notions</label>
+                  <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Notions</label>
                   <div className="flex flex-wrap gap-2">
                     {(entry.notions || []).map((n: string, i: number) => (
                       <div key={i} className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1">
@@ -162,7 +179,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
                       </div>
                     ))}
                     <button onClick={() => addNotion(entry.id)}
-                      className="flex items-center gap-1 text-xs font-semibold text-gray-700 hover:text-purple-600 border border-dashed border-gray-300 rounded-lg px-2 py-1">
+                      className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-purple-600 border border-dashed border-gray-300 rounded-lg px-2 py-1">
                       <Plus className="w-3 h-3" /> Ajouter
                     </button>
                   </div>
@@ -172,7 +189,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
           ))}
         </div>
         <div className="p-6 border-t border-gray-100 flex gap-3">
-          <button onClick={onCancel} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm">Annuler</button>
+          <button onClick={onCancel} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl text-sm">Annuler</button>
           <button onClick={handleConfirm} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2">
             <Check className="w-4 h-4" /> Confirmer {entries.length} texte{entries.length > 1 ? "s" : ""}
           </button>
@@ -183,7 +200,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
 }
 
 // ── QUIZ MODE ─────────────────────────────────────────────────────────────────
-function QuizMode({ questions, onBack }: any) {
+function QuizMode({ questions, chapter, elevenom, onBack }: any) {
   const [prepared] = useState(() => prepareQuiz(questions));
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number,number>>({});
@@ -192,6 +209,7 @@ function QuizMode({ questions, onBack }: any) {
   const [quizDone, setQuizDone] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [started, setStarted] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const q = prepared[current];
   const chosen = answers[current];
@@ -206,22 +224,32 @@ function QuizMode({ questions, onBack }: any) {
     if (feedbackMode === "immediate") setShowFeedback(true);
   };
   const handleNext = () => { setShowFeedback(false); current < prepared.length - 1 ? setCurrent(current + 1) : setQuizDone(true); };
-  const handleRestart = () => { setAnswers({}); setCurrent(0); setShowFeedback(false); setQuizDone(false); setReviewMode(false); };
+  const handleRestart = () => { setAnswers({}); setCurrent(0); setShowFeedback(false); setQuizDone(false); setReviewMode(false); setSaved(false); };
+
+  const handleFinish = async () => {
+    setQuizDone(true);
+    if (elevenom && !saved) {
+      try {
+        await dbSaveResultat({ elevenom, chapter, score, total: prepared.length, pourcentage: pct });
+        setSaved(true);
+      } catch (e) { console.error(e); }
+    }
+  };
 
   const optStyle = (oi: number) => {
     const b = "w-full text-left p-4 rounded-xl border-2 font-medium text-sm transition-all ";
     if (feedbackMode === "immediate" && isAnswered) {
       if (oi === q.correctIndex) return b + "border-green-400 bg-green-50 text-green-800";
       if (oi === chosen) return b + "border-red-400 bg-red-50 text-red-800";
-      return b + "border-gray-200 bg-gray-50 text-gray-700 cursor-default";
+      return b + "border-gray-200 bg-gray-50 text-gray-600 cursor-default";
     }
     if (reviewMode) {
       if (oi === prepared[current].correctIndex) return b + "border-green-400 bg-green-50 text-green-800";
       if (oi === answers[current]) return b + "border-red-400 bg-red-50 text-red-800";
-      return b + "border-gray-200 text-gray-700";
+      return b + "border-gray-200 text-gray-600";
     }
     if (chosen === oi) return b + "border-indigo-500 bg-indigo-50 text-indigo-800";
-    return b + "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer";
+    return b + "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer text-gray-800";
   };
 
   if (!started) return (
@@ -231,11 +259,11 @@ function QuizMode({ questions, onBack }: any) {
         <h2 className="text-2xl font-bold text-gray-800 mb-1">Mode Entraînement</h2>
         <p className="text-gray-700 mb-6">{prepared.length} questions</p>
         <div className="mb-6">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Mode de correction :</p>
+          <p className="text-sm font-semibold text-gray-800 mb-3">Mode de correction :</p>
           <div className="flex gap-3">
             {[["immediate","Immédiat"],["end","À la fin"]].map(([m,label]) => (
               <button key={m} onClick={() => setFeedbackMode(m)}
-                className={`flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition-all ${feedbackMode === m ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600"}`}>
+                className={`flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition-all ${feedbackMode === m ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-700"}`}>
                 {label}
               </button>
             ))}
@@ -245,7 +273,7 @@ function QuizMode({ questions, onBack }: any) {
           className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:from-indigo-700 hover:to-purple-700 transition-all text-lg shadow-lg">
           <Play className="w-5 h-5" /> Commencer
         </button>
-        <button onClick={onBack} className="mt-3 text-sm text-gray-700 hover:text-gray-600 font-semibold">← Retour</button>
+        <button onClick={onBack} className="mt-3 text-sm text-gray-600 hover:text-gray-800 font-semibold">← Retour</button>
       </div>
     </div>
   );
@@ -256,7 +284,8 @@ function QuizMode({ questions, onBack }: any) {
       <div className="flex flex-col items-center justify-center py-10 px-4">
         <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-3">{medal}</div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-5">{score}/{prepared.length} — {pct}%</h2>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">{score}/{prepared.length} — {pct}%</h2>
+          {saved && <p className="text-green-600 text-sm font-semibold mb-3">✓ Résultat sauvegardé</p>}
           <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
             <div className="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: pct + "%" }} />
           </div>
@@ -266,10 +295,10 @@ function QuizMode({ questions, onBack }: any) {
               <Eye className="w-4 h-4" /> Revoir mes réponses
             </button>
             <button onClick={handleRestart}
-              className="w-full bg-white border-2 border-gray-200 hover:border-indigo-300 text-gray-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+              className="w-full bg-white border-2 border-gray-200 hover:border-indigo-300 text-gray-800 font-bold py-3 rounded-xl flex items-center justify-center gap-2">
               <RotateCcw className="w-4 h-4" /> Recommencer
             </button>
-            <button onClick={onBack} className="text-sm text-gray-700 hover:text-gray-600 font-semibold">← Retour</button>
+            <button onClick={onBack} className="text-sm text-gray-600 hover:text-gray-800 font-semibold">← Retour</button>
           </div>
         </div>
       </div>
@@ -317,7 +346,7 @@ function QuizMode({ questions, onBack }: any) {
       </div>
       <div className="flex gap-3">
         <button onClick={() => { setShowFeedback(false); setCurrent(Math.max(0, current - 1)); }} disabled={current === 0}
-          className="bg-white border-2 border-gray-200 hover:border-indigo-300 disabled:opacity-40 text-gray-700 font-semibold py-3 px-5 rounded-xl flex items-center gap-2">
+          className="bg-white border-2 border-gray-200 hover:border-indigo-300 disabled:opacity-40 text-gray-800 font-semibold py-3 px-5 rounded-xl flex items-center gap-2">
           <ChevronLeft className="w-4 h-4" /> Précédente
         </button>
         <div className="flex-1" />
@@ -327,10 +356,122 @@ function QuizMode({ questions, onBack }: any) {
             Suivante <ChevronRight className="w-4 h-4" />
           </button>
         ) : !reviewMode && (
-          <button onClick={() => setQuizDone(true)}
+          <button onClick={handleFinish}
             className="bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold py-3 px-5 rounded-xl flex items-center gap-2">
             <Trophy className="w-4 h-4" /> Terminer
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── TABLEAU DE BORD PROF ──────────────────────────────────────────────────────
+function Dashboard({ onBack }: any) {
+  const [resultats, setResultats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    dbLoadResultats().then(data => { setResultats(data); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const chapters = [...new Set(resultats.map(r => r.chapter))].sort();
+  const filtered = filter === "all" ? resultats : resultats.filter(r => r.chapter === filter);
+  const byEleve = filtered.reduce((acc: any, r: any) => {
+    if (!acc[r.eleve_nom]) acc[r.eleve_nom] = [];
+    acc[r.eleve_nom].push(r);
+    return acc;
+  }, {});
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+            <h1 className="text-lg font-bold text-gray-800">📊 Tableau de bord</h1>
+            <span className="text-xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">{resultats.length} résultat{resultats.length > 1 ? "s" : ""}</span>
+          </div>
+          <select value={filter} onChange={e => setFilter(e.target.value)}
+            className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none">
+            <option value="all">Tous les chapitres</option>
+            {chapters.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        {loading ? (
+          <div className="text-center py-20 text-gray-600 font-semibold">Chargement…</div>
+        ) : resultats.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+            <div className="text-5xl mb-4">📭</div>
+            <p className="text-xl font-bold text-gray-600">Aucun résultat pour l'instant</p>
+            <p className="text-sm text-gray-500 mt-2">Les résultats apparaîtront quand les élèves auront fait des quiz</p>
+          </div>
+        ) : (
+          <>
+            {/* Résumé global */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                <div className="text-3xl font-black text-indigo-700">{Object.keys(byEleve).length}</div>
+                <div className="text-sm font-semibold text-gray-700 mt-1">Élèves</div>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                <div className="text-3xl font-black text-purple-700">{filtered.length}</div>
+                <div className="text-sm font-semibold text-gray-700 mt-1">Quiz effectués</div>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                <div className="text-3xl font-black text-green-700">
+                  {filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + r.pourcentage, 0) / filtered.length) : 0}%
+                </div>
+                <div className="text-sm font-semibold text-gray-700 mt-1">Moyenne générale</div>
+              </div>
+            </div>
+
+            {/* Résultats par élève */}
+            <div className="space-y-4">
+              {Object.entries(byEleve).map(([nom, res]: any) => {
+                const moy = Math.round(res.reduce((s: number, r: any) => s + r.pourcentage, 0) / res.length);
+                return (
+                  <div key={nom} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center">
+                          <User className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-800">{nom}</h3>
+                          <p className="text-xs text-gray-600">{res.length} quiz effectué{res.length > 1 ? "s" : ""}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-black ${moy >= 70 ? "text-green-700" : moy >= 50 ? "text-orange-600" : "text-red-600"}`}>{moy}%</div>
+                        <div className="text-xs text-gray-600">moyenne</div>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {res.map((r: any) => (
+                        <div key={r.id} className="flex items-center justify-between px-5 py-3">
+                          <div>
+                            <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span>
+                            <p className="text-xs text-gray-600 mt-1">{new Date(r.created_at).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-20 bg-gray-200 rounded-full h-2">
+                              <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
+                                style={{ width: r.pourcentage + "%" }} />
+                            </div>
+                            <span className="text-sm font-bold text-gray-800 w-16 text-right">{r.score}/{r.total} ({r.pourcentage}%)</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -341,11 +482,20 @@ function QuizMode({ questions, onBack }: any) {
 export default function QCMApp() {
   const [role, setRole] = useState<string | null>(null);
   const [sharedLib, setSharedLib] = useState<any[]>([]);
-  const [quizQuestions, setQuizQuestions] = useState<any[] | null>(null);
+  const [libLoaded, setLibLoaded] = useState(false);
+  const [quizData, setQuizData] = useState<any | null>(null);
+  const [showDashboard, setShowDashboard] = useState(false);
 
-  const updateLib = (lib: any[]) => { setSharedLib(lib); saveLibrary(lib); };
+  const loadLib = async () => {
+    try { const data = await dbLoadTextes(); setSharedLib(data); } catch (e) { console.error(e); }
+    setLibLoaded(true);
+  };
 
-  if (quizQuestions) return (
+  useEffect(() => { loadLib(); }, []);
+
+  if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} />;
+
+  if (quizData) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
       <div className="bg-white border-b-2 border-indigo-200 shadow-sm sticky top-0 z-30">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -353,20 +503,20 @@ export default function QCMApp() {
             <Play className="w-6 h-6 text-indigo-600" />
             <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-indigo-500">Entraînement</span></h1>
           </div>
-          <button onClick={() => setQuizQuestions(null)} className="text-sm font-semibold text-gray-700 hover:text-gray-700 flex items-center gap-1">
+          <button onClick={() => setQuizData(null)} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
             <X className="w-4 h-4" /> Quitter
           </button>
         </div>
       </div>
       <div className="max-w-3xl mx-auto">
-        <QuizMode questions={quizQuestions} onBack={() => setQuizQuestions(null)} />
+        <QuizMode questions={quizData.questions} chapter={quizData.chapter} elevenom={quizData.elevenom} onBack={() => setQuizData(null)} />
       </div>
     </div>
   );
 
-  if (!role) return <HomeScreen onSelect={(r: string) => { setSharedLib(loadLibrary()); setRole(r); }} />;
-  if (role === "prof") return <ProfMode sharedLib={sharedLib} setSharedLib={updateLib} onLogout={() => setRole(null)} />;
-  return <EleveMode sharedLib={sharedLib} onBack={() => setRole(null)} onStartQuiz={setQuizQuestions} onRefresh={() => setSharedLib(loadLibrary())} />;
+  if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} />;
+  if (role === "prof") return <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)} libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)} />;
+  return <EleveMode sharedLib={sharedLib} libLoaded={libLoaded} onBack={() => setRole(null)} onStartQuiz={setQuizData} onRefresh={loadLib} />;
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
@@ -400,7 +550,7 @@ function HomeScreen({ onSelect }: any) {
             <div>
               <input type="password" value={code} onChange={e => { setCode(e.target.value); setErr(""); }}
                 onKeyDown={e => e.key === "Enter" && (code === PROF_CODE ? onSelect("prof") : setErr("Code incorrect"))}
-                className="w-full p-2.5 border-2 border-purple-300 rounded-xl text-sm text-center mb-2 focus:border-purple-500 focus:outline-none"
+                className="w-full p-2.5 border-2 border-purple-300 rounded-xl text-sm text-center mb-2 focus:border-purple-500 focus:outline-none text-gray-800"
                 placeholder="Code professeur" autoFocus />
               {err && <p className="text-red-500 text-xs mb-2">{err}</p>}
               <button onClick={() => code === PROF_CODE ? onSelect("prof") : setErr("Code incorrect")}
@@ -414,7 +564,7 @@ function HomeScreen({ onSelect }: any) {
 }
 
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard }: any) {
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -429,18 +579,18 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
   const [pendingEntries, setPendingEntries] = useState<any[] | null>(null);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const existingChapters = useMemo(() => [...new Set(sharedLib.map((e: any) => entryChapter(e)))].sort() as string[], [sharedLib]);
 
-  const addEntry = () => {
+  const addEntry = async () => {
     if (!newContent.trim()) return;
-    setSharedLib([...sharedLib, {
-      id: uid(), chapter: newChapter || "Non classé",
-      author: newAuthor || "", workTitle: newWorkTitle || "Sans titre",
-      notions: [], content: newContent, createdAt: Date.now(), wordCount: wc(newContent),
-    }]);
-    setNewChapter(""); setNewAuthor(""); setNewWorkTitle(""); setNewContent("");
+    setSaving(true);
+    const entry = { id: uid(), chapter: newChapter || "Non classé", author: newAuthor || "", workTitle: newWorkTitle || "Sans titre", notions: [], content: newContent, createdAt: Date.now(), wordCount: wc(newContent) };
+    try { await dbAddTexte(entry); await onReload(); setNewChapter(""); setNewAuthor(""); setNewWorkTitle(""); setNewContent(""); }
+    catch (e: any) { alert("Erreur : " + e.message); }
+    setSaving(false);
   };
 
   const processFiles = async (files: File[]) => {
@@ -467,19 +617,29 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
     else setImportError("Aucun contenu extractible.");
   };
 
-  const handleValidation = (confirmed: any[]) => {
-    setSharedLib([...sharedLib, ...confirmed]);
+  const handleValidation = async (confirmed: any[]) => {
+    setSaving(true);
+    for (const e of confirmed) { try { await dbAddTexte(e); } catch (err) { console.error(err); } }
+    await onReload();
     setPendingEntries(null);
+    setSaving(false);
   };
 
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setDragging(false); const files = Array.from(e.dataTransfer.files).filter(f => /\.(txt|docx?)$/i.test(f.name)); if (files.length) processFiles(files); };
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { const files = Array.from(e.target.files || []); if (files.length) processFiles(files); e.target.value = ""; };
 
-  const saveEdit = () => {
-    setSharedLib(sharedLib.map((e: any) => e.id === editingId ? { ...e, ...editFields, wordCount: wc(editFields.content || e.content) } : e));
-    setEditingId(null);
+  const saveEdit = async () => {
+    setSaving(true);
+    try { await dbUpdateTexte(editingId!, editFields); await onReload(); setEditingId(null); }
+    catch (e: any) { alert("Erreur : " + e.message); }
+    setSaving(false);
   };
-  const deleteEntry = (id: string) => { if (confirm("Supprimer ce texte ?")) setSharedLib(sharedLib.filter((e: any) => e.id !== id)); };
+
+  const deleteEntry = async (id: string) => {
+    if (!confirm("Supprimer ce texte ?")) return;
+    try { await dbDeleteTexte(id); setSharedLib(sharedLib.filter((e: any) => e.id !== id)); }
+    catch (e: any) { alert("Erreur : " + e.message); }
+  };
 
   const filtered = sharedLib.filter((e: any) => {
     const matchChapter = chapterFilter === "all" || entryChapter(e) === chapterFilter;
@@ -507,9 +667,15 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
             <h1 className="text-lg font-bold text-gray-800">Espace Professeur</h1>
             <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">{sharedLib.length} texte{sharedLib.length !== 1 ? "s" : ""}</span>
           </div>
-          <button onClick={onLogout} className="text-sm text-gray-700 hover:text-red-600 font-semibold flex items-center gap-1.5">
-            <LogOut className="w-4 h-4" /> Déconnexion
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
+              📊 Tableau de bord
+            </button>
+            <button onClick={onReload} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
+            <button onClick={onLogout} className="text-sm text-gray-600 hover:text-red-600 font-semibold flex items-center gap-1.5">
+              <LogOut className="w-4 h-4" /> Déconnexion
+            </button>
+          </div>
         </div>
       </div>
 
@@ -533,19 +699,19 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
                     <div key={label}>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">{label}</label>
                       <input value={val} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setter(e.target.value)} list={listId || undefined}
-                        className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none" placeholder={ph} />
+                        className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800" placeholder={ph} />
                       {listId && <datalist id={listId}>{existingChapters.map(ch => <option key={ch} value={ch} />)}</datalist>}
                     </div>
                   ))}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Texte</label>
                     <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
-                      className="w-full h-36 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm resize-none focus:border-purple-400 focus:outline-none"
+                      className="w-full h-36 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm resize-none focus:border-purple-400 focus:outline-none text-gray-800"
                       placeholder="Collez le texte ici…" />
                   </div>
-                  <button onClick={addEntry} disabled={!newContent.trim()}
-                    className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ${newContent.trim() ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-gray-100 text-gray-700 cursor-not-allowed"}`}>
-                    <Plus className="w-4 h-4" /> Ajouter
+                  <button onClick={addEntry} disabled={!newContent.trim() || saving}
+                    className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ${newContent.trim() && !saving ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-gray-100 text-gray-500 cursor-not-allowed"}`}>
+                    <Plus className="w-4 h-4" /> {saving ? "Enregistrement…" : "Ajouter"}
                   </button>
                 </>
               ) : (
@@ -553,16 +719,16 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Chapitre (optionnel)</label>
                     <input value={newChapter} onChange={e => setNewChapter(e.target.value)} list="chapters-list2"
-                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none" placeholder="Détecté automatiquement" />
+                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800" placeholder="Détecté automatiquement" />
                     <datalist id="chapters-list2">{existingChapters.map(ch => <option key={ch} value={ch} />)}</datalist>
                   </div>
                   <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                     className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${dragging ? "border-purple-400 bg-purple-50" : "border-gray-300 hover:border-purple-300"}`}>
                     <input ref={fileInputRef} type="file" multiple accept=".txt,.docx" onChange={handleFileInput} className="hidden" />
-                    <FileUp className="w-8 h-8 mx-auto mb-2 text-gray-700" />
-                    <p className="text-sm font-bold text-gray-700">Glissez vos fichiers</p>
-                    <p className="text-xs text-gray-700 mt-1">.txt · .docx</p>
+                    <FileUp className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+                    <p className="text-sm font-bold text-gray-800">Glissez vos fichiers</p>
+                    <p className="text-xs text-gray-600 mt-1">.txt · .docx</p>
                   </div>
                   {importError && <p className="text-xs text-red-600 font-semibold">{importError}</p>}
                 </>
@@ -574,22 +740,24 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
         <div className="flex-1 min-w-0">
           <div className="flex gap-3 mb-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-700" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none"
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800"
                 placeholder="Rechercher…" />
             </div>
             <select value={chapterFilter} onChange={e => setChapterFilter(e.target.value)}
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-700 focus:outline-none">
+              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none">
               <option value="all">Tous les chapitres</option>
               {existingChapters.map(ch => <option key={ch} value={ch}>{ch}</option>)}
             </select>
           </div>
 
-          {filtered.length === 0 ? (
+          {!libLoaded ? (
+            <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-72 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-center p-8">
-              <FolderOpen className="w-14 h-14 text-gray-200 mb-4" />
-              <p className="text-lg font-bold text-gray-700">{sharedLib.length === 0 ? "Bibliothèque vide" : "Aucun résultat"}</p>
+              <FolderOpen className="w-14 h-14 text-gray-300 mb-4" />
+              <p className="text-lg font-bold text-gray-600">{sharedLib.length === 0 ? "Bibliothèque vide" : "Aucun résultat"}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -600,19 +768,19 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
                       <div className="grid grid-cols-3 gap-3">
                         {([["Chapitre","chapter"],["Auteur","author"],["Titre","workTitle"]] as [string,string][]).map(([label, field]) => (
                           <div key={field}>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">{label}</label>
                             <input value={editFields[field] || ""} onChange={e => setEditFields((f: any) => ({ ...f, [field]: e.target.value }))}
-                              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:outline-none" />
+                              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:outline-none text-gray-800" />
                           </div>
                         ))}
                       </div>
                       <textarea value={editFields.content || ""} onChange={e => setEditFields((f: any) => ({ ...f, content: e.target.value }))}
-                        className="w-full h-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm resize-none focus:outline-none" />
+                        className="w-full h-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm resize-none focus:outline-none text-gray-800" />
                       <div className="flex gap-2">
-                        <button onClick={saveEdit} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-1.5">
-                          <Check className="w-4 h-4" /> Sauvegarder
+                        <button onClick={saveEdit} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-1.5">
+                          <Check className="w-4 h-4" /> {saving ? "…" : "Sauvegarder"}
                         </button>
-                        <button onClick={() => setEditingId(null)} className="bg-gray-100 text-gray-700 font-semibold py-2 px-4 rounded-lg text-sm">Annuler</button>
+                        <button onClick={() => setEditingId(null)} className="bg-gray-100 text-gray-800 font-semibold py-2 px-4 rounded-lg text-sm">Annuler</button>
                       </div>
                     </div>
                   ) : (
@@ -621,17 +789,17 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{entryChapter(entry)}</span>
                           {(entry.notions || []).slice(0, 3).map((n: string, i: number) => (
-                            <span key={i} className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                            <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
                           ))}
                         </div>
                         <h3 className="font-bold text-gray-800 text-sm mt-1">{entryName(entry)}</h3>
-                        <p className="text-xs text-gray-700 mb-1">{entry.wordCount} mots · {fmtDate(entry.createdAt)}</p>
+                        <p className="text-xs text-gray-600 mb-1">{entry.word_count} mots · {fmtDate(entry.created_at)}</p>
                         <p className="text-xs text-gray-700 line-clamp-2">{entry.content.slice(0, 160)}…</p>
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
-                        <button onClick={() => { setEditingId(entry.id); setEditFields({ chapter: entryChapter(entry), author: entry.author || "", workTitle: entry.workTitle || "", content: entry.content }); }}
-                          className="p-2 text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => deleteEntry(entry.id)} className="p-2 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => { setEditingId(entry.id); setEditFields({ chapter: entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content }); }}
+                          className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => deleteEntry(entry.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </div>
                   )}
@@ -646,7 +814,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout }: any) {
 }
 
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
-function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
+function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any) {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string,boolean>>({});
   const [numQ, setNumQ] = useState(10);
@@ -654,6 +822,8 @@ function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [elevenom, setElevenom] = useState("");
+  const [nomSaisi, setNomSaisi] = useState(false);
 
   const chapters = useMemo(() => {
     const map: Record<string,number> = {};
@@ -685,32 +855,60 @@ function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
-      onStartQuiz(allQs);
+      onStartQuiz({ questions: allQs, chapter: selectedChapter, elevenom });
     } catch (e: any) { setError("Erreur : " + e.message); }
     finally { setIsGenerating(false); setProgress(""); }
   };
+
+  // Saisie du nom
+  if (!nomSaisi) return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-sm w-full text-center">
+        <div className="text-5xl mb-4">🎓</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Bonjour !</h2>
+        <p className="text-gray-700 mb-6">Entre ton prénom pour sauvegarder tes résultats</p>
+        <input value={elevenom} onChange={e => setElevenom(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && elevenom.trim() && setNomSaisi(true)}
+          className="w-full px-4 py-3 border-2 border-indigo-300 rounded-xl text-center text-lg font-semibold focus:border-indigo-500 focus:outline-none mb-4 text-gray-800"
+          placeholder="Ton prénom…" autoFocus />
+        <button onClick={() => elevenom.trim() && setNomSaisi(true)} disabled={!elevenom.trim()}
+          className={`w-full font-bold py-3 rounded-xl text-white transition-all ${elevenom.trim() ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300 cursor-not-allowed"}`}>
+          Commencer
+        </button>
+        <button onClick={() => { setElevenom("Anonyme"); setNomSaisi(true); }} className="mt-3 text-sm text-gray-600 hover:text-gray-800 font-semibold">
+          Continuer sans prénom
+        </button>
+        <button onClick={onBack} className="mt-2 text-sm text-gray-500 hover:text-gray-700">← Retour</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="bg-white border-b-2 border-indigo-200 shadow-sm sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {selectedChapter && <button onClick={() => { setSelectedChapter(null); setSelectedIds({}); }} className="p-2 text-gray-700 hover:text-indigo-600 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>}
+            {selectedChapter && <button onClick={() => { setSelectedChapter(null); setSelectedIds({}); }} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>}
             <span className="text-2xl">🎓</span>
-            <h1 className="text-lg font-bold text-gray-800">{selectedChapter || "Espace Élève"}</h1>
+            <div>
+              <h1 className="text-lg font-bold text-gray-800">{selectedChapter || "Espace Élève"}</h1>
+              <p className="text-xs text-gray-600">Bonjour {elevenom} !</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onRefresh} className="p-2 text-gray-700 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
-            <button onClick={onBack} className="text-sm font-semibold text-gray-700 hover:text-gray-700 flex items-center gap-1"><LogOut className="w-4 h-4" /> Accueil</button>
+            <button onClick={onRefresh} className="p-2 text-gray-500 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
+            <button onClick={onBack} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1"><LogOut className="w-4 h-4" /> Accueil</button>
           </div>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {sharedLib.length === 0 ? (
+        {!libLoaded ? (
+          <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
+        ) : sharedLib.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
             <div className="text-5xl mb-4">📭</div>
-            <p className="text-xl font-bold text-gray-700">Aucun chapitre disponible</p>
+            <p className="text-xl font-bold text-gray-600">Aucun chapitre disponible</p>
           </div>
         ) : !selectedChapter ? (
           <>
@@ -722,7 +920,7 @@ function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
                   className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 text-left hover:border-indigo-400 hover:shadow-lg transition-all group">
                   <div className="text-3xl mb-3">📖</div>
                   <h3 className="font-bold text-gray-800 text-lg mb-1 group-hover:text-indigo-700">{ch}</h3>
-                  <p className="text-sm text-gray-700">{count} texte{count > 1 ? "s" : ""}</p>
+                  <p className="text-sm text-gray-600">{count} texte{count > 1 ? "s" : ""}</p>
                 </button>
               ))}
             </div>
@@ -747,11 +945,11 @@ function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
                       </div>
                       <div>
                         <h3 className={`font-bold text-base ${isSel ? "text-indigo-700" : "text-gray-800"}`}>{entryName(entry)}</h3>
-                        <p className="text-xs text-gray-700 mt-0.5">{entry.wordCount} mots · {fmtDate(entry.createdAt)}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots · {fmtDate(entry.created_at)}</p>
                         {(entry.notions || []).length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {entry.notions.slice(0, 4).map((n: string, i: number) => (
-                              <span key={i} className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                              <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
                             ))}
                           </div>
                         )}
@@ -765,18 +963,18 @@ function EleveMode({ sharedLib, onBack, onStartQuiz, onRefresh }: any) {
               <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-lg p-6">
                 <div className="flex flex-wrap items-end gap-4 mb-4">
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-700">{selectedEntries.length} texte{selectedEntries.length > 1 ? "s" : ""} sélectionné{selectedEntries.length > 1 ? "s" : ""}</p>
+                    <p className="text-sm font-bold text-gray-800">{selectedEntries.length} texte{selectedEntries.length > 1 ? "s" : ""} sélectionné{selectedEntries.length > 1 ? "s" : ""}</p>
                   </div>
                   <div className="flex gap-4">
                     <div>
                       <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Questions</p>
                       <input type="number" min="5" max="50" value={numQ} onChange={e => setNumQ(Math.max(5, Math.min(50, parseInt(e.target.value) || 5)))}
-                        className="w-16 p-2 border-2 border-indigo-300 rounded-xl text-center font-bold focus:outline-none" />
+                        className="w-16 p-2 border-2 border-indigo-300 rounded-xl text-center font-bold focus:outline-none text-gray-800" />
                     </div>
                     <div>
                       <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Difficulté</p>
                       <select value={difficulty} onChange={e => setDifficulty(e.target.value)}
-                        className="p-2 border-2 border-indigo-300 rounded-xl text-sm font-semibold focus:outline-none bg-white">
+                        className="p-2 border-2 border-indigo-300 rounded-xl text-sm font-semibold focus:outline-none bg-white text-gray-800">
                         <option value="facile">Facile</option>
                         <option value="moyen">Moyen</option>
                         <option value="difficile">Difficile</option>

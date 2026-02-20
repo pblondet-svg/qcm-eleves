@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
     "groq-sdk": "^0.37.0",
     "lucide-react": "^0.575.0",
     "mammoth": "^1.11.0",
