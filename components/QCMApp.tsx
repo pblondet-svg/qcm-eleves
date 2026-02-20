@@ -36,7 +36,7 @@ const entryName = (e: any) =>
   e.workTitle ? e.workTitle : e.title || "Sans titre";
 const entryChapter = (e: any) => e.chapter?.trim() || "Non classé";
 
-const PROF_CODE = "prof1234";
+const PROF_CODE = "bechamel77400";
 const STORAGE_KEY = "qcm-library-v1";
 
 const loadLibrary = () => {
