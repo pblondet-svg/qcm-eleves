@@ -69,7 +69,7 @@ const dbUpdateTexte = async (id: string, fields: any) => {
 
 const dbSaveResultat = async (resultat: any) => {
   const { error } = await supabase.from("resultats").insert([{
-    id: uid(), eleve_nom: resultat."Anonyme",
+    id: uid(), eleve_nom: resultat.elevenom,
     chapter: resultat.chapter, score: resultat.score,
     total: resultat.total, pourcentage: resultat.pourcentage,
   }]);
@@ -200,7 +200,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
 }
 
 // ── QUIZ MODE ─────────────────────────────────────────────────────────────────
-function QuizMode({ questions, chapter, "Anonyme", onBack }: any) {
+function QuizMode({ questions, chapter, elevenom, onBack }: any) {
   const [prepared] = useState(() => prepareQuiz(questions));
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number,number>>({});
@@ -210,6 +210,8 @@ function QuizMode({ questions, chapter, "Anonyme", onBack }: any) {
   const [reviewMode, setReviewMode] = useState(false);
   const [started, setStarted] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [explanation, setExplanation] = useState("");
+  const [loadingExplan, setLoadingExplan] = useState(false);
 
   const q = prepared[current];
   const chosen = answers[current];
@@ -221,16 +223,32 @@ function QuizMode({ questions, chapter, "Anonyme", onBack }: any) {
   const handleAnswer = (oi: number) => {
     if (feedbackMode === "immediate" && isAnswered) return;
     setAnswers(prev => ({ ...prev, [current]: oi }));
+    setExplanation("");
     if (feedbackMode === "immediate") setShowFeedback(true);
+  };
+
+  const handleExplain = async () => {
+    setLoadingExplan(true);
+    setExplanation("");
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Question : ${q.question}
+Bonne réponse : ${q.options[q.correctIndex]}
+Réponse de l'élève : ${q.options[chosen]}
+
+Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]}" est la bonne réponse. Si l'élève a mal répondu, explique son erreur avec bienveillance.` }], 500);
+      setExplanation(getText(data));
+    } catch (e) { setExplanation("Impossible de générer une explication."); }
+    setLoadingExplan(false);
   };
   const handleNext = () => { setShowFeedback(false); current < prepared.length - 1 ? setCurrent(current + 1) : setQuizDone(true); };
   const handleRestart = () => { setAnswers({}); setCurrent(0); setShowFeedback(false); setQuizDone(false); setReviewMode(false); setSaved(false); };
 
   const handleFinish = async () => {
     setQuizDone(true);
-    if ("Anonyme" && !saved) {
+    if (elevenom && !saved) {
       try {
-        await dbSaveResultat({ "Anonyme", chapter, score, total: prepared.length, pourcentage: pct });
+        await dbSaveResultat({ elevenom, chapter, score, total: prepared.length, pourcentage: pct });
         setSaved(true);
       } catch (e) { console.error(e); }
     }
@@ -338,9 +356,21 @@ function QuizMode({ questions, chapter, "Anonyme", onBack }: any) {
           ))}
         </div>
         {feedbackMode === "immediate" && showFeedback && !reviewMode && (
-          <div className={`mt-4 p-4 rounded-xl font-semibold text-sm flex items-center gap-2 ${isCorrect ? "bg-green-50 text-green-800 border border-green-300" : "bg-red-50 text-red-800 border border-red-300"}`}>
-            {isCorrect ? <Check className="w-5 h-5 text-green-600" /> : <X className="w-5 h-5 text-red-600" />}
-            {isCorrect ? "Bonne réponse ! 🎉" : "Incorrect. Bonne réponse : " + q.options[q.correctIndex]}
+          <div>
+            <div className={`mt-4 p-4 rounded-xl font-semibold text-sm flex items-center gap-2 ${isCorrect ? "bg-green-50 text-green-800 border border-green-300" : "bg-red-50 text-red-800 border border-red-300"}`}>
+              {isCorrect ? <Check className="w-5 h-5 text-green-600" /> : <X className="w-5 h-5 text-red-600" />}
+              {isCorrect ? "Bonne réponse ! 🎉" : "Incorrect. Bonne réponse : " + q.options[q.correctIndex]}
+            </div>
+            <button onClick={handleExplain} disabled={loadingExplan}
+              className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 font-semibold text-sm rounded-xl transition-all">
+              {loadingExplan ? <><Sparkles className="w-4 h-4 animate-spin" /> Analyse en cours…</> : <>💡 Pourquoi cette réponse ?</>}
+            </button>
+            {explanation && (
+              <div className="mt-2 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900 leading-relaxed">
+                <p className="font-bold mb-1">Explication :</p>
+                <p>{explanation}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -509,7 +539,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto">
-        <QuizMode questions={quizData.questions} chapter={quizData.chapter} "Anonyme"={quizData."Anonyme"} onBack={() => setQuizData(null)} />
+        <QuizMode questions={quizData.questions} chapter={quizData.chapter} elevenom={quizData.elevenom} onBack={() => setQuizData(null)} />
       </div>
     </div>
   );
@@ -822,8 +852,6 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const ["Anonyme", setElevenom] = useState("");
-
   const chapters = useMemo(() => {
     const map: Record<string,number> = {};
     sharedLib.forEach((e: any) => { const ch = entryChapter(e); map[ch] = (map[ch] || 0) + 1; });
@@ -854,7 +882,7 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
-      onStartQuiz({ questions: allQs, chapter: selectedChapter, "Anonyme" });
+      onStartQuiz({ questions: allQs, chapter: selectedChapter, elevenom });
     } catch (e: any) { setError("Erreur : " + e.message); }
     finally { setIsGenerating(false); setProgress(""); }
   };
@@ -868,10 +896,7 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
           <div className="flex items-center gap-2">
             {selectedChapter && <button onClick={() => { setSelectedChapter(null); setSelectedIds({}); }} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>}
             <span className="text-2xl">🎓</span>
-            <div>
-              <h1 className="text-lg font-bold text-gray-800">{selectedChapter || "Espace Élève"}</h1>
-              <p className="text-xs text-gray-600">Bonjour {"Anonyme"} !</p>
-            </div>
+            <h1 className="text-lg font-bold text-gray-800">{selectedChapter || "Espace Élève"}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onRefresh} className="p-2 text-gray-500 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
