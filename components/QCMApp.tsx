@@ -69,7 +69,7 @@ const dbUpdateTexte = async (id: string, fields: any) => {
 
 const dbSaveResultat = async (resultat: any) => {
   const { error } = await supabase.from("resultats").insert([{
-    id: uid(), eleve_nom: resultat.elevenom,
+    id: uid(), eleve_nom: resultat."Anonyme",
     chapter: resultat.chapter, score: resultat.score,
     total: resultat.total, pourcentage: resultat.pourcentage,
   }]);
@@ -200,7 +200,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
 }
 
 // ── QUIZ MODE ─────────────────────────────────────────────────────────────────
-function QuizMode({ questions, chapter, elevenom, onBack }: any) {
+function QuizMode({ questions, chapter, "Anonyme", onBack }: any) {
   const [prepared] = useState(() => prepareQuiz(questions));
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number,number>>({});
@@ -228,9 +228,9 @@ function QuizMode({ questions, chapter, elevenom, onBack }: any) {
 
   const handleFinish = async () => {
     setQuizDone(true);
-    if (elevenom && !saved) {
+    if ("Anonyme" && !saved) {
       try {
-        await dbSaveResultat({ elevenom, chapter, score, total: prepared.length, pourcentage: pct });
+        await dbSaveResultat({ "Anonyme", chapter, score, total: prepared.length, pourcentage: pct });
         setSaved(true);
       } catch (e) { console.error(e); }
     }
@@ -509,7 +509,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto">
-        <QuizMode questions={quizData.questions} chapter={quizData.chapter} elevenom={quizData.elevenom} onBack={() => setQuizData(null)} />
+        <QuizMode questions={quizData.questions} chapter={quizData.chapter} "Anonyme"={quizData."Anonyme"} onBack={() => setQuizData(null)} />
       </div>
     </div>
   );
@@ -822,8 +822,7 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [elevenom, setElevenom] = useState("");
-  const [nomSaisi, setNomSaisi] = useState(false);
+  const ["Anonyme", setElevenom] = useState("");
 
   const chapters = useMemo(() => {
     const map: Record<string,number> = {};
@@ -855,33 +854,12 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
-      onStartQuiz({ questions: allQs, chapter: selectedChapter, elevenom });
+      onStartQuiz({ questions: allQs, chapter: selectedChapter, "Anonyme" });
     } catch (e: any) { setError("Erreur : " + e.message); }
     finally { setIsGenerating(false); setProgress(""); }
   };
 
-  // Saisie du nom
-  if (!nomSaisi) return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-sm w-full text-center">
-        <div className="text-5xl mb-4">🎓</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Bonjour !</h2>
-        <p className="text-gray-700 mb-6">Entre ton prénom pour sauvegarder tes résultats</p>
-        <input value={elevenom} onChange={e => setElevenom(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && elevenom.trim() && setNomSaisi(true)}
-          className="w-full px-4 py-3 border-2 border-indigo-300 rounded-xl text-center text-lg font-semibold focus:border-indigo-500 focus:outline-none mb-4 text-gray-800"
-          placeholder="Ton prénom…" autoFocus />
-        <button onClick={() => elevenom.trim() && setNomSaisi(true)} disabled={!elevenom.trim()}
-          className={`w-full font-bold py-3 rounded-xl text-white transition-all ${elevenom.trim() ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300 cursor-not-allowed"}`}>
-          Commencer
-        </button>
-        <button onClick={() => { setElevenom("Anonyme"); setNomSaisi(true); }} className="mt-3 text-sm text-gray-600 hover:text-gray-800 font-semibold">
-          Continuer sans prénom
-        </button>
-        <button onClick={onBack} className="mt-2 text-sm text-gray-500 hover:text-gray-700">← Retour</button>
-      </div>
-    </div>
-  );
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -892,7 +870,7 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
             <span className="text-2xl">🎓</span>
             <div>
               <h1 className="text-lg font-bold text-gray-800">{selectedChapter || "Espace Élève"}</h1>
-              <p className="text-xs text-gray-600">Bonjour {elevenom} !</p>
+              <p className="text-xs text-gray-600">Bonjour {"Anonyme"} !</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
