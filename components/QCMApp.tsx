@@ -69,7 +69,7 @@ const dbUpdateTexte = async (id: string, fields: any) => {
 
 const dbSaveResultat = async (resultat: any) => {
   const { error } = await supabase.from("resultats").insert([{
-    id: uid(), eleve_nom: resultat.elevenom,
+    id: uid(), eleve_nom: "Anonyme",
     chapter: resultat.chapter, score: resultat.score,
     total: resultat.total, pourcentage: resultat.pourcentage,
   }]);
@@ -200,7 +200,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
 }
 
 // ── QUIZ MODE ─────────────────────────────────────────────────────────────────
-function QuizMode({ questions, chapter, elevenom, onBack }: any) {
+function QuizMode({ questions, chapter, onBack }: any) {
   const [prepared] = useState(() => prepareQuiz(questions));
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number,number>>({});
@@ -246,9 +246,9 @@ Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]
 
   const handleFinish = async () => {
     setQuizDone(true);
-    if (elevenom && !saved) {
+    if (!saved) {
       try {
-        await dbSaveResultat({ elevenom, chapter, score, total: prepared.length, pourcentage: pct });
+        await dbSaveResultat({ chapter, score, total: prepared.length, pourcentage: pct });
         setSaved(true);
       } catch (e) { console.error(e); }
     }
@@ -539,7 +539,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto">
-        <QuizMode questions={quizData.questions} chapter={quizData.chapter} elevenom={quizData.elevenom} onBack={() => setQuizData(null)} />
+        <QuizMode questions={quizData.questions} chapter={quizData.chapter} onBack={() => setQuizData(null)} />
       </div>
     </div>
   );
@@ -882,7 +882,7 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
-      onStartQuiz({ questions: allQs, chapter: selectedChapter, elevenom });
+      onStartQuiz({ questions: allQs, chapter: selectedChapter, });
     } catch (e: any) { setError("Erreur : " + e.message); }
     finally { setIsGenerating(false); setProgress(""); }
   };
