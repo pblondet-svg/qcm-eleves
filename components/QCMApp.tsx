@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase";
 import {
   Plus, Trash2, Sparkles, FileUp, Search, X, Edit2,
   Check, FolderOpen, Play, RotateCcw, Trophy, ChevronRight, ChevronLeft,
-  Lock, LogOut, Eye, RefreshCw, ArrowLeft, Tag, CheckCircle2, AlertTriangle,
-  User, BookOpen,
+  Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
+  BookOpen, Send, MessageCircle,
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ const dbAddTexte = async (entry: any) => {
     notions: entry.notions, content: entry.content,
     word_count: entry.wordCount || entry.word_count,
     created_at: entry.createdAt || entry.created_at || Date.now(),
+    type: entry.type || "les deux",
   }]);
   if (error) throw error;
 };
@@ -63,6 +64,7 @@ const dbUpdateTexte = async (id: string, fields: any) => {
     chapter: fields.chapter, author: fields.author,
     work_title: fields.workTitle || fields.work_title,
     content: fields.content, word_count: wc(fields.content || ""),
+    type: fields.type || "les deux",
   }).eq("id", id);
   if (error) throw error;
 };
@@ -133,6 +135,7 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
       ...e, chapter: e.chapter || "Non classé",
       notions: e.notions.filter((n: string) => n.trim()),
       wordCount: wc(e.content), createdAt: Date.now(),
+      type: e.type || "les deux",
     })));
   };
   return (
@@ -169,6 +172,15 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
                   <datalist id="val-chapters">{existingChapters.map((ch: string) => <option key={ch} value={ch} />)}</datalist>
                 </div>
                 <div>
+                  <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Utilisation</label>
+                  <select value={entry.type || "les deux"} onChange={e => update(entry.id, "type", e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800">
+                    <option value="les deux">Cours ET QCM</option>
+                    <option value="cours">Cours uniquement</option>
+                    <option value="qcm">QCM uniquement</option>
+                  </select>
+                </div>
+                <div>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Notions</label>
                   <div className="flex flex-wrap gap-2">
                     {(entry.notions || []).map((n: string, i: number) => (
@@ -195,6 +207,128 @@ function ValidationModal({ pending, existingChapters, onConfirm, onCancel }: any
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── MODE RÉVISION ─────────────────────────────────────────────────────────────
+function RevisionMode({ entries, chapter, onBack }: any) {
+  const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
+  const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading || !selectedEntry) return;
+    const userMsg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+    try {
+      const systemContext = `Tu es un assistant pédagogique. Réponds aux questions de l'élève en te basant UNIQUEMENT sur le texte suivant. Si la réponse n'est pas dans le texte, dis-le clairement. Sois bienveillant et pédagogique.
+
+Texte : ${selectedEntry.content}`;
+      const data = await callAI([
+        { role: "user", content: systemContext },
+        ...newMessages,
+      ], 800);
+      setMessages([...newMessages, { role: "assistant", content: getText(data) }]);
+    } catch (e) { setMessages([...newMessages, { role: "assistant", content: "Désolé, une erreur s'est produite." }]); }
+    setLoading(false);
+  };
+
+  if (!selectedEntry) return (
+    <div className="max-w-3xl mx-auto py-8 px-4">
+      <h2 className="text-xl font-black text-gray-800 mb-5">Choisir un texte à réviser</h2>
+      <div className="space-y-3">
+        {entries.map((e: any) => (
+          <button key={e.id} onClick={() => setSelectedEntry(e)}
+            className="w-full text-left bg-white rounded-2xl border-2 border-gray-200 hover:border-indigo-400 shadow-sm p-5 transition-all">
+            <h3 className="font-bold text-gray-800 text-base">{entryName(e)}</h3>
+            <p className="text-xs text-gray-600 mt-1">{e.word_count} mots</p>
+            <p className="text-sm text-gray-700 mt-2 line-clamp-2">{e.content.slice(0, 150)}…</p>
+          </button>
+        ))}
+      </div>
+      <button onClick={onBack} className="mt-6 text-sm text-gray-600 hover:text-gray-800 font-semibold flex items-center gap-1">
+        <ArrowLeft className="w-4 h-4" /> Retour
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="max-w-3xl mx-auto py-6 px-4 flex flex-col h-[calc(100vh-80px)]">
+      {/* Texte du cours */}
+      <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm mb-4 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-indigo-50">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-indigo-600" />
+            <h3 className="font-bold text-indigo-800 text-sm">{entryName(selectedEntry)}</h3>
+          </div>
+          {entries.length > 1 && (
+            <button onClick={() => { setSelectedEntry(null); setMessages([]); }}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">Changer</button>
+          )}
+        </div>
+        <div className="p-5 max-h-48 overflow-y-auto">
+          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedEntry.content}</p>
+        </div>
+      </div>
+
+      {/* Chat */}
+      <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <MessageCircle className="w-4 h-4 text-gray-600" />
+          <h3 className="font-bold text-gray-700 text-sm">Pose tes questions sur ce texte</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">💬</div>
+              <p className="text-gray-600 font-semibold">Pose une question sur le texte !</p>
+              <p className="text-gray-500 text-sm mt-1">L'IA répondra en se basant uniquement sur ce cours</p>
+            </div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user"
+                ? "bg-indigo-600 text-white rounded-br-sm"
+                : "bg-gray-100 text-gray-800 rounded-bl-sm border border-gray-200"}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 border border-gray-200 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500 animate-spin" />
+                <span className="text-sm text-gray-600">Réflexion en cours…</span>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+        <div className="p-4 border-t border-gray-100">
+          <div className="flex gap-2">
+            <input value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none text-gray-800"
+              placeholder="Ta question sur le cours…" disabled={loading} />
+            <button onClick={sendMessage} disabled={!input.trim() || loading}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl transition-all">
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={onBack} className="mt-4 text-sm text-gray-600 hover:text-gray-800 font-semibold flex items-center gap-1 justify-center">
+        <ArrowLeft className="w-4 h-4" /> Retour aux chapitres
+      </button>
     </div>
   );
 }
@@ -228,31 +362,29 @@ function QuizMode({ questions, chapter, onBack }: any) {
   };
 
   const handleExplain = async () => {
-    setLoadingExplan(true);
-    setExplanation("");
+    setLoadingExplan(true); setExplanation("");
     try {
       const data = await callAI([{ role: "user", content:
         `Question : ${q.question}
 Bonne réponse : ${q.options[q.correctIndex]}
 Réponse de l'élève : ${q.options[chosen]}
-
-Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]}" est la bonne réponse. Si l'élève a mal répondu, explique son erreur avec bienveillance.` }], 500);
+Explique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse. Si l'élève a mal répondu, explique son erreur avec bienveillance.` }], 500);
       setExplanation(getText(data));
-    } catch (e) { setExplanation("Impossible de générer une explication."); }
+    } catch { setExplanation("Impossible de générer une explication."); }
     setLoadingExplan(false);
   };
-  const handleNext = () => { setShowFeedback(false); current < prepared.length - 1 ? setCurrent(current + 1) : setQuizDone(true); };
-  const handleRestart = () => { setAnswers({}); setCurrent(0); setShowFeedback(false); setQuizDone(false); setReviewMode(false); setSaved(false); };
+
+  const handleNext = () => { setShowFeedback(false); setExplanation(""); current < prepared.length - 1 ? setCurrent(current + 1) : setQuizDone(true); };
 
   const handleFinish = async () => {
     setQuizDone(true);
     if (!saved) {
-      try {
-        await dbSaveResultat({ chapter, score, total: prepared.length, pourcentage: pct });
-        setSaved(true);
-      } catch (e) { console.error(e); }
+      try { await dbSaveResultat({ chapter, score, total: prepared.length, pourcentage: pct }); setSaved(true); }
+      catch (e) { console.error(e); }
     }
   };
+
+  const handleRestart = () => { setAnswers({}); setCurrent(0); setShowFeedback(false); setExplanation(""); setQuizDone(false); setReviewMode(false); setSaved(false); };
 
   const optStyle = (oi: number) => {
     const b = "w-full text-left p-4 rounded-xl border-2 font-medium text-sm transition-all ";
@@ -274,7 +406,7 @@ Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]
     <div className="flex flex-col items-center justify-center py-10 px-4">
       <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-md w-full text-center">
         <Trophy className="w-14 h-14 text-indigo-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">Mode Entraînement</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-1">Mode Quiz</h2>
         <p className="text-gray-700 mb-6">{prepared.length} questions</p>
         <div className="mb-6">
           <p className="text-sm font-semibold text-gray-800 mb-3">Mode de correction :</p>
@@ -375,7 +507,7 @@ Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]
         )}
       </div>
       <div className="flex gap-3">
-        <button onClick={() => { setShowFeedback(false); setCurrent(Math.max(0, current - 1)); }} disabled={current === 0}
+        <button onClick={() => { setShowFeedback(false); setExplanation(""); setCurrent(Math.max(0, current - 1)); }} disabled={current === 0}
           className="bg-white border-2 border-gray-200 hover:border-indigo-300 disabled:opacity-40 text-gray-800 font-semibold py-3 px-5 rounded-xl flex items-center gap-2">
           <ChevronLeft className="w-4 h-4" /> Précédente
         </button>
@@ -396,7 +528,7 @@ Explique en 2-3 phrases simples et claires pourquoi "${q.options[q.correctIndex]
   );
 }
 
-// ── TABLEAU DE BORD PROF ──────────────────────────────────────────────────────
+// ── TABLEAU DE BORD ───────────────────────────────────────────────────────────
 function Dashboard({ onBack }: any) {
   const [resultats, setResultats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -408,11 +540,6 @@ function Dashboard({ onBack }: any) {
 
   const chapters = [...new Set(resultats.map(r => r.chapter))].sort();
   const filtered = filter === "all" ? resultats : resultats.filter(r => r.chapter === filter);
-  const byEleve = filtered.reduce((acc: any, r: any) => {
-    if (!acc[r.eleve_nom]) acc[r.eleve_nom] = [];
-    acc[r.eleve_nom].push(r);
-    return acc;
-  }, {});
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -437,69 +564,56 @@ function Dashboard({ onBack }: any) {
           <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
             <div className="text-5xl mb-4">📭</div>
             <p className="text-xl font-bold text-gray-600">Aucun résultat pour l'instant</p>
-            <p className="text-sm text-gray-500 mt-2">Les résultats apparaîtront quand les élèves auront fait des quiz</p>
           </div>
         ) : (
           <>
-            {/* Résumé global */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
-                <div className="text-3xl font-black text-indigo-700">{Object.keys(byEleve).length}</div>
-                <div className="text-sm font-semibold text-gray-700 mt-1">Élèves</div>
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
-                <div className="text-3xl font-black text-purple-700">{filtered.length}</div>
+                <div className="text-3xl font-black text-indigo-700">{filtered.length}</div>
                 <div className="text-sm font-semibold text-gray-700 mt-1">Quiz effectués</div>
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
                 <div className="text-3xl font-black text-green-700">
+                  {filtered.filter(r => r.pourcentage >= 70).length}
+                </div>
+                <div className="text-sm font-semibold text-gray-700 mt-1">Réussis (≥70%)</div>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                <div className="text-3xl font-black text-purple-700">
                   {filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + r.pourcentage, 0) / filtered.length) : 0}%
                 </div>
                 <div className="text-sm font-semibold text-gray-700 mt-1">Moyenne générale</div>
               </div>
             </div>
-
-            {/* Résultats par élève */}
-            <div className="space-y-4">
-              {Object.entries(byEleve).map(([nom, res]: any) => {
-                const moy = Math.round(res.reduce((s: number, r: any) => s + r.pourcentage, 0) / res.length);
-                return (
-                  <div key={nom} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-gray-800">{nom}</h3>
-                          <p className="text-xs text-gray-600">{res.length} quiz effectué{res.length > 1 ? "s" : ""}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-lg font-black ${moy >= 70 ? "text-green-700" : moy >= 50 ? "text-orange-600" : "text-red-600"}`}>{moy}%</div>
-                        <div className="text-xs text-gray-600">moyenne</div>
-                      </div>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                      {res.map((r: any) => (
-                        <div key={r.id} className="flex items-center justify-between px-5 py-3">
-                          <div>
-                            <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span>
-                            <p className="text-xs text-gray-600 mt-1">{new Date(r.created_at).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</p>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-5 py-3 font-bold text-gray-700">Date</th>
+                    <th className="text-left px-5 py-3 font-bold text-gray-700">Chapitre</th>
+                    <th className="text-left px-5 py-3 font-bold text-gray-700">Score</th>
+                    <th className="text-left px-5 py-3 font-bold text-gray-700">Résultat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map((r: any) => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3 text-gray-700">{new Date(r.created_at).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</td>
+                      <td className="px-5 py-3"><span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span></td>
+                      <td className="px-5 py-3 font-bold text-gray-800">{r.score}/{r.total}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2">
+                            <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
+                              style={{ width: r.pourcentage + "%" }} />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-20 bg-gray-200 rounded-full h-2">
-                              <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
-                                style={{ width: r.pourcentage + "%" }} />
-                            </div>
-                            <span className="text-sm font-bold text-gray-800 w-16 text-right">{r.score}/{r.total} ({r.pourcentage}%)</span>
-                          </div>
+                          <span className={`text-sm font-bold ${r.pourcentage >= 70 ? "text-green-700" : r.pourcentage >= 50 ? "text-orange-600" : "text-red-600"}`}>{r.pourcentage}%</span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -514,6 +628,7 @@ export default function QCMApp() {
   const [sharedLib, setSharedLib] = useState<any[]>([]);
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
+  const [revisionData, setRevisionData] = useState<any | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
 
   const loadLib = async () => {
@@ -530,8 +645,8 @@ export default function QCMApp() {
       <div className="bg-white border-b-2 border-indigo-200 shadow-sm sticky top-0 z-30">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Play className="w-6 h-6 text-indigo-600" />
-            <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-indigo-500">Entraînement</span></h1>
+            <Trophy className="w-6 h-6 text-indigo-600" />
+            <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-indigo-500">Quiz</span></h1>
           </div>
           <button onClick={() => setQuizData(null)} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
             <X className="w-4 h-4" /> Quitter
@@ -544,9 +659,28 @@ export default function QCMApp() {
     </div>
   );
 
+  if (revisionData) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
+      <div className="bg-white border-b-2 border-green-200 shadow-sm sticky top-0 z-30">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-6 h-6 text-green-600" />
+            <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-green-600">Révision</span></h1>
+          </div>
+          <button onClick={() => setRevisionData(null)} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
+            <X className="w-4 h-4" /> Quitter
+          </button>
+        </div>
+      </div>
+      <div className="max-w-3xl mx-auto">
+        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} />
+      </div>
+    </div>
+  );
+
   if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} />;
   if (role === "prof") return <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)} libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)} />;
-  return <EleveMode sharedLib={sharedLib} libLoaded={libLoaded} onBack={() => setRole(null)} onStartQuiz={setQuizData} onRefresh={loadLib} />;
+  return <EleveMode sharedLib={sharedLib} libLoaded={libLoaded} onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData} onRefresh={loadLib} />;
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
@@ -566,7 +700,7 @@ function HomeScreen({ onSelect }: any) {
           className="flex-1 bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 hover:border-indigo-400 hover:shadow-xl transition-all group text-center">
           <div className="text-5xl mb-4">🎓</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2 group-hover:text-indigo-700">Élève</h2>
-          <p className="text-gray-700 text-sm">Choisir un chapitre et s'entraîner</p>
+          <p className="text-gray-700 text-sm">Réviser et s'entraîner</p>
         </button>
         <div className="flex-1 bg-white rounded-3xl border-2 border-purple-200 shadow-lg p-8 hover:border-purple-400 transition-all text-center">
           <div className="text-5xl mb-4">👩‍🏫</div>
@@ -603,6 +737,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
   const [newAuthor, setNewAuthor] = useState("");
   const [newWorkTitle, setNewWorkTitle] = useState("");
   const [newContent, setNewContent] = useState("");
+  const [newType, setNewType] = useState("les deux");
   const [inputTab, setInputTab] = useState("paste");
   const [dragging, setDragging] = useState(false);
   const [importError, setImportError] = useState("");
@@ -617,8 +752,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
   const addEntry = async () => {
     if (!newContent.trim()) return;
     setSaving(true);
-    const entry = { id: uid(), chapter: newChapter || "Non classé", author: newAuthor || "", workTitle: newWorkTitle || "Sans titre", notions: [], content: newContent, createdAt: Date.now(), wordCount: wc(newContent) };
-    try { await dbAddTexte(entry); await onReload(); setNewChapter(""); setNewAuthor(""); setNewWorkTitle(""); setNewContent(""); }
+    const entry = { id: uid(), chapter: newChapter || "Non classé", author: newAuthor || "", workTitle: newWorkTitle || "Sans titre", notions: [], content: newContent, createdAt: Date.now(), wordCount: wc(newContent), type: newType };
+    try { await dbAddTexte(entry); await onReload(); setNewChapter(""); setNewAuthor(""); setNewWorkTitle(""); setNewContent(""); setNewType("les deux"); }
     catch (e: any) { alert("Erreur : " + e.message); }
     setSaving(false);
   };
@@ -639,8 +774,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
           const aiMeta = await extractMetadataWithAI(content, file.name, newChapter);
           meta = { author: aiMeta.author || "", workTitle: aiMeta.workTitle || file.name.replace(/\.[^.]+$/, ""), chapter: newChapter || aiMeta.chapter || "Non classé", notions: Array.isArray(aiMeta.notions) ? aiMeta.notions : [] };
         } catch { status = "error"; }
-        entries.push({ id: uid(), filename: file.name, content, wordCount: wc(content), ...meta, status });
-      } catch { entries.push({ id: uid(), filename: file.name, content: "", wordCount: 0, author: "", workTitle: file.name, chapter: "Non classé", notions: [], status: "error" }); }
+        entries.push({ id: uid(), filename: file.name, content, wordCount: wc(content), ...meta, type: "les deux", status });
+      } catch { entries.push({ id: uid(), filename: file.name, content: "", wordCount: 0, author: "", workTitle: file.name, chapter: "Non classé", notions: [], type: "les deux", status: "error" }); }
     }
     setIsProcessingFiles(false); setProcessingStatus("");
     if (entries.length) setPendingEntries(entries);
@@ -670,6 +805,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
     try { await dbDeleteTexte(id); setSharedLib(sharedLib.filter((e: any) => e.id !== id)); }
     catch (e: any) { alert("Erreur : " + e.message); }
   };
+
+  const typeLabel = (t: string) => t === "cours" ? "📖 Cours" : t === "qcm" ? "✅ QCM" : "📖✅ Les deux";
 
   const filtered = sharedLib.filter((e: any) => {
     const matchChapter = chapterFilter === "all" || entryChapter(e) === chapterFilter;
@@ -733,6 +870,15 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                       {listId && <datalist id={listId}>{existingChapters.map(ch => <option key={ch} value={ch} />)}</datalist>}
                     </div>
                   ))}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Utilisation</label>
+                    <select value={newType} onChange={e => setNewType(e.target.value)}
+                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800">
+                      <option value="les deux">Cours ET QCM</option>
+                      <option value="cours">Cours uniquement</option>
+                      <option value="qcm">QCM uniquement</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Texte</label>
                     <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
@@ -804,6 +950,15 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                           </div>
                         ))}
                       </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Utilisation</label>
+                        <select value={editFields.type || "les deux"} onChange={e => setEditFields((f: any) => ({ ...f, type: e.target.value }))}
+                          className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:outline-none text-gray-800">
+                          <option value="les deux">Cours ET QCM</option>
+                          <option value="cours">Cours uniquement</option>
+                          <option value="qcm">QCM uniquement</option>
+                        </select>
+                      </div>
                       <textarea value={editFields.content || ""} onChange={e => setEditFields((f: any) => ({ ...f, content: e.target.value }))}
                         className="w-full h-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm resize-none focus:outline-none text-gray-800" />
                       <div className="flex gap-2">
@@ -818,7 +973,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{entryChapter(entry)}</span>
-                          {(entry.notions || []).slice(0, 3).map((n: string, i: number) => (
+                          <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{typeLabel(entry.type || "les deux")}</span>
+                          {(entry.notions || []).slice(0, 2).map((n: string, i: number) => (
                             <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
                           ))}
                         </div>
@@ -827,7 +983,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                         <p className="text-xs text-gray-700 line-clamp-2">{entry.content.slice(0, 160)}…</p>
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
-                        <button onClick={() => { setEditingId(entry.id); setEditFields({ chapter: entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content }); }}
+                        <button onClick={() => { setEditingId(entry.id); setEditFields({ chapter: entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content, type: entry.type || "les deux" }); }}
                           className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                         <button onClick={() => deleteEntry(entry.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -844,7 +1000,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 }
 
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
-function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any) {
+function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onRefresh }: any) {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string,boolean>>({});
   const [numQ, setNumQ] = useState(10);
@@ -852,6 +1008,8 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"revision"|"quiz">("revision");
+
   const chapters = useMemo(() => {
     const map: Record<string,number> = {};
     sharedLib.forEach((e: any) => { const ch = entryChapter(e); map[ch] = (map[ch] || 0) + 1; });
@@ -859,11 +1017,20 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
   }, [sharedLib]);
 
   const textsInChapter = useMemo(() => selectedChapter ? sharedLib.filter((e: any) => entryChapter(e) === selectedChapter) : [], [sharedLib, selectedChapter]);
-  const selectChapter = (ch: string) => { setSelectedChapter(ch); const ids: Record<string,boolean> = {}; sharedLib.filter((e: any) => entryChapter(e) === ch).forEach((e: any) => ids[e.id] = true); setSelectedIds(ids); };
+  const revisionTexts = textsInChapter.filter((e: any) => !e.type || e.type === "cours" || e.type === "les deux");
+  const quizTexts = textsInChapter.filter((e: any) => !e.type || e.type === "qcm" || e.type === "les deux");
+
+  const selectChapter = (ch: string) => {
+    setSelectedChapter(ch);
+    const ids: Record<string,boolean> = {};
+    sharedLib.filter((e: any) => entryChapter(e) === ch && (!e.type || e.type === "qcm" || e.type === "les deux")).forEach((e: any) => ids[e.id] = true);
+    setSelectedIds(ids);
+  };
+
   const toggleId = (id: string) => setSelectedIds(prev => { const n = { ...prev }; if (n[id]) delete n[id]; else n[id] = true; return n; });
-  const selectedEntries = textsInChapter.filter((e: any) => selectedIds[e.id]);
-  const allSelected = textsInChapter.length > 0 && textsInChapter.every((e: any) => selectedIds[e.id]);
-  const toggleAll = () => { if (allSelected) setSelectedIds({}); else { const ids: Record<string,boolean> = {}; textsInChapter.forEach((e: any) => ids[e.id] = true); setSelectedIds(ids); } };
+  const selectedEntries = quizTexts.filter((e: any) => selectedIds[e.id]);
+  const allSelected = quizTexts.length > 0 && quizTexts.every((e: any) => selectedIds[e.id]);
+  const toggleAll = () => { if (allSelected) setSelectedIds({}); else { const ids: Record<string,boolean> = {}; quizTexts.forEach((e: any) => ids[e.id] = true); setSelectedIds(ids); } };
 
   const generateAndStart = async () => {
     if (!selectedEntries.length) { setError("Sélectionne au moins un texte."); return; }
@@ -882,12 +1049,10 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
-      onStartQuiz({ questions: allQs, chapter: selectedChapter, });
+      onStartQuiz({ questions: allQs, chapter: selectedChapter });
     } catch (e: any) { setError("Erreur : " + e.message); }
     finally { setIsGenerating(false); setProgress(""); }
   };
-
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -915,8 +1080,8 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
           </div>
         ) : !selectedChapter ? (
           <>
-            <h2 className="text-2xl font-black text-gray-800 mb-2 text-center">Quel chapitre veux-tu réviser ?</h2>
-            <p className="text-gray-700 text-center mb-8">Clique sur un chapitre pour voir les textes</p>
+            <h2 className="text-2xl font-black text-gray-800 mb-2 text-center">Que veux-tu faire ?</h2>
+            <p className="text-gray-700 text-center mb-8">Choisis un chapitre pour réviser ou faire un quiz</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {chapters.map(([ch, count]) => (
                 <button key={ch} onClick={() => selectChapter(ch)}
@@ -930,69 +1095,110 @@ function EleveMode({ sharedLib, libLoaded, onBack, onStartQuiz, onRefresh }: any
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-black text-gray-800">Choisis tes textes</h2>
-              <button onClick={toggleAll} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl">
-                {allSelected ? <><X className="w-4 h-4" /> Tout désélectionner</> : <><Check className="w-4 h-4" /> Tout sélectionner</>}
+            {/* Tabs Révision / Quiz */}
+            <div className="flex gap-3 mb-6">
+              <button onClick={() => setActiveTab("revision")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-bold text-sm transition-all ${activeTab === "revision" ? "border-green-500 bg-green-50 text-green-700" : "border-gray-200 bg-white text-gray-700 hover:border-green-300"}`}>
+                <BookOpen className="w-4 h-4" /> 📖 Réviser le cours
+              </button>
+              <button onClick={() => setActiveTab("quiz")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 font-bold text-sm transition-all ${activeTab === "quiz" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300"}`}>
+                <Trophy className="w-4 h-4" /> ✅ Faire un quiz
               </button>
             </div>
-            <div className="space-y-3 mb-6">
-              {textsInChapter.map((entry: any) => {
-                const isSel = !!selectedIds[entry.id];
-                return (
-                  <button key={entry.id} onClick={() => toggleId(entry.id)}
-                    className={`w-full text-left bg-white rounded-2xl border-2 shadow-sm p-5 transition-all ${isSel ? "border-indigo-500 ring-2 ring-indigo-100" : "border-gray-200 hover:border-indigo-300"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center mt-0.5 ${isSel ? "bg-indigo-600 border-indigo-600" : "border-gray-300"}`}>
-                        {isSel && <Check className="w-4 h-4 text-white" />}
-                      </div>
-                      <div>
-                        <h3 className={`font-bold text-base ${isSel ? "text-indigo-700" : "text-gray-800"}`}>{entryName(entry)}</h3>
-                        <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots · {fmtDate(entry.created_at)}</p>
-                        {(entry.notions || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {entry.notions.slice(0, 4).map((n: string, i: number) => (
-                              <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+
+            {/* Mode Révision */}
+            {activeTab === "revision" && (
+              <div>
+                {revisionTexts.length === 0 ? (
+                  <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <p className="text-gray-600 font-semibold">Aucun texte de cours dans ce chapitre</p>
+                  </div>
+                ) : (
+                  <button onClick={() => onStartRevision({ entries: revisionTexts, chapter: selectedChapter })}
+                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-lg shadow-lg transition-all">
+                    <BookOpen className="w-6 h-6" /> Réviser — {revisionTexts.length} texte{revisionTexts.length > 1 ? "s" : ""}
                   </button>
-                );
-              })}
-            </div>
-            {selectedEntries.length > 0 && (
-              <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-lg p-6">
-                <div className="flex flex-wrap items-end gap-4 mb-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-800">{selectedEntries.length} texte{selectedEntries.length > 1 ? "s" : ""} sélectionné{selectedEntries.length > 1 ? "s" : ""}</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <div>
-                      <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Questions</p>
-                      <input type="number" min="5" max="50" value={numQ} onChange={e => setNumQ(Math.max(5, Math.min(50, parseInt(e.target.value) || 5)))}
-                        className="w-16 p-2 border-2 border-indigo-300 rounded-xl text-center font-bold focus:outline-none text-gray-800" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Difficulté</p>
-                      <select value={difficulty} onChange={e => setDifficulty(e.target.value)}
-                        className="p-2 border-2 border-indigo-300 rounded-xl text-sm font-semibold focus:outline-none bg-white text-gray-800">
-                        <option value="facile">Facile</option>
-                        <option value="moyen">Moyen</option>
-                        <option value="difficile">Difficile</option>
-                        <option value="mixte">Mixte</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>}
-                {progress && <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 font-semibold text-center">{progress}</div>}
-                <button onClick={generateAndStart} disabled={isGenerating}
-                  className={`w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-white text-lg shadow-lg ${isGenerating ? "bg-gray-300" : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"}`}>
-                  {isGenerating ? <><Sparkles className="w-6 h-6 animate-spin" /> Génération…</> : <><Play className="w-6 h-6" /> Lancer le quiz — {numQ} questions</>}
-                </button>
+                )}
               </div>
+            )}
+
+            {/* Mode Quiz */}
+            {activeTab === "quiz" && (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-black text-gray-800">Choisis tes textes</h2>
+                  <button onClick={toggleAll} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl">
+                    {allSelected ? <><X className="w-4 h-4" /> Tout désélectionner</> : <><Check className="w-4 h-4" /> Tout sélectionner</>}
+                  </button>
+                </div>
+                {quizTexts.length === 0 ? (
+                  <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <p className="text-gray-600 font-semibold">Aucun texte QCM dans ce chapitre</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3 mb-6">
+                      {quizTexts.map((entry: any) => {
+                        const isSel = !!selectedIds[entry.id];
+                        return (
+                          <button key={entry.id} onClick={() => toggleId(entry.id)}
+                            className={`w-full text-left bg-white rounded-2xl border-2 shadow-sm p-5 transition-all ${isSel ? "border-indigo-500 ring-2 ring-indigo-100" : "border-gray-200 hover:border-indigo-300"}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center mt-0.5 ${isSel ? "bg-indigo-600 border-indigo-600" : "border-gray-300"}`}>
+                                {isSel && <Check className="w-4 h-4 text-white" />}
+                              </div>
+                              <div>
+                                <h3 className={`font-bold text-base ${isSel ? "text-indigo-700" : "text-gray-800"}`}>{entryName(entry)}</h3>
+                                <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots</p>
+                                {(entry.notions || []).length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {entry.notions.slice(0, 4).map((n: string, i: number) => (
+                                      <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedEntries.length > 0 && (
+                      <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-lg p-6">
+                        <div className="flex flex-wrap items-end gap-4 mb-4">
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-gray-800">{selectedEntries.length} texte{selectedEntries.length > 1 ? "s" : ""} sélectionné{selectedEntries.length > 1 ? "s" : ""}</p>
+                          </div>
+                          <div className="flex gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Questions</p>
+                              <input type="number" min="5" max="50" value={numQ} onChange={e => setNumQ(Math.max(5, Math.min(50, parseInt(e.target.value) || 5)))}
+                                className="w-16 p-2 border-2 border-indigo-300 rounded-xl text-center font-bold focus:outline-none text-gray-800" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-gray-700 uppercase mb-1.5">Difficulté</p>
+                              <select value={difficulty} onChange={e => setDifficulty(e.target.value)}
+                                className="p-2 border-2 border-indigo-300 rounded-xl text-sm font-semibold focus:outline-none bg-white text-gray-800">
+                                <option value="facile">Facile</option>
+                                <option value="moyen">Moyen</option>
+                                <option value="difficile">Difficile</option>
+                                <option value="mixte">Mixte</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                        {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>}
+                        {progress && <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 font-semibold text-center">{progress}</div>}
+                        <button onClick={generateAndStart} disabled={isGenerating}
+                          className={`w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-white text-lg shadow-lg ${isGenerating ? "bg-gray-300" : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"}`}>
+                          {isGenerating ? <><Sparkles className="w-6 h-6 animate-spin" /> Génération…</> : <><Play className="w-6 h-6" /> Lancer le quiz — {numQ} questions</>}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
           </>
         )}
