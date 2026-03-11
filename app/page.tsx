@@ -6,7 +6,7 @@ import {
   Plus, Trash2, Sparkles, FileUp, Search, X, Edit2,
   Check, FolderOpen, Play, RotateCcw, Trophy, ChevronRight, ChevronLeft,
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
-  BookOpen, Send, MessageCircle,
+  BookOpen, Send, MessageCircle, User, Layers,
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -59,9 +59,11 @@ const HLP_CHAPITRES = [
   },
 ];
 
-// ── Matière : HLP ou Philosophie uniquement (strict) ─────────────────────────
-const matchesMatiere = (entry: any, matiere: string) =>
-  (entry.matiere || "hlp").toLowerCase() === matiere.toLowerCase();
+const matchesMatiere = (entry: any, matiere: string) => {
+  const m = (entry.matiere || "").toLowerCase().trim();
+  if (matiere === "philosophie") return m === "philosophie";
+  return m === "hlp" || m === "";
+};
 
 const matiereLabel = (m: string) =>
   m === "hlp" ? "📜 HLP" : "🧠 Philosophie";
@@ -114,7 +116,7 @@ const dbUpdateTexte = async (id: string, fields: any) => {
 const dbSaveResultat = async (resultat: any) => {
   const { error } = await supabase.from("resultats").insert([{
     id: uid(),
-    eleve_nom: "Anonyme",
+    eleve_nom: resultat.eleveNom || "Anonyme",
     chapter: resultat.chapter,
     score: resultat.score,
     total: resultat.total,
@@ -258,7 +260,6 @@ function ValidationModal({ pending, existingChapters, defaultMatiere, onConfirm,
                 <button onClick={() => removeEntry(entry.id)}><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
               <div className="p-4 space-y-3">
-                {/* Matière — 2 boutons uniquement */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1.5 block">Matière</label>
                   <div className="flex gap-2">
@@ -273,17 +274,11 @@ function ValidationModal({ pending, existingChapters, defaultMatiere, onConfirm,
                     ))}
                   </div>
                 </div>
-                {/* Chapitre */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Chapitre</label>
-                  <ChapterSelect
-                    matiere={entry.matiere || "hlp"}
-                    value={entry.chapter || ""}
-                    onChange={(v) => update(entry.id, "chapter", v)}
-                    existingChapters={existingChapters}
-                  />
+                  <ChapterSelect matiere={entry.matiere || "hlp"} value={entry.chapter || ""}
+                    onChange={(v) => update(entry.id, "chapter", v)} existingChapters={existingChapters} />
                 </div>
-                {/* Auteur / Titre */}
                 <div className="grid grid-cols-2 gap-3">
                   {([["Auteur", "author"], ["Titre", "workTitle"]] as [string, string][]).map(([label, field]) => (
                     <div key={field}>
@@ -293,7 +288,6 @@ function ValidationModal({ pending, existingChapters, defaultMatiere, onConfirm,
                     </div>
                   ))}
                 </div>
-                {/* Utilisation */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Utilisation</label>
                   <select value={entry.type || "les deux"} onChange={(e) => update(entry.id, "type", e.target.value)}
@@ -303,7 +297,6 @@ function ValidationModal({ pending, existingChapters, defaultMatiere, onConfirm,
                     <option value="qcm">QCM uniquement</option>
                   </select>
                 </div>
-                {/* Notions */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Notions</label>
                   <div className="flex flex-wrap gap-2">
@@ -336,15 +329,191 @@ function ValidationModal({ pending, existingChapters, defaultMatiere, onConfirm,
   );
 }
 
+// ── FLASHCARDS MODE ───────────────────────────────────────────────────────────
+function FlashcardsMode({ entry, onBack }: any) {
+  const [cards, setCards] = useState<{ recto: string; verso: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [current, setCurrent] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [known, setKnown] = useState<boolean[]>([]);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    generateCards();
+  }, []);
+
+  const generateCards = async () => {
+    setLoading(true);
+    try {
+      const dbNotions: string[] = (entry.notions || []).filter((n: string) => n.trim());
+      const data = await callAI([{ role: "user", content:
+        `À partir de ce texte littéraire, génère des flashcards de révision.
+${dbNotions.length > 0 ? `Notions déjà identifiées : ${dbNotions.join(", ")}. Crée une flashcard pour chacune, puis ajoute d'autres notions importantes du texte.` : "Identifie les notions clés du texte et crée une flashcard pour chacune."}
+
+Format JSON strict : [{"recto":"Notion ou question courte","verso":"Définition ou explication en 2-3 phrases max, en lien avec le texte"}]
+Génère entre 6 et 10 flashcards au total.
+
+Texte :
+${entry.content.slice(0, 4000)}` }], 1200);
+      const parsed = parseJSON(getText(data));
+      setCards(parsed);
+      setKnown(new Array(parsed.length).fill(false));
+    } catch {
+      setCards([{ recto: "Erreur", verso: "Impossible de générer les flashcards." }]);
+    }
+    setLoading(false);
+  };
+
+  const handleKnow = (val: boolean) => {
+    const newKnown = [...known];
+    newKnown[current] = val;
+    setKnown(newKnown);
+    setFlipped(false);
+    if (current < cards.length - 1) {
+      setCurrent(current + 1);
+    } else {
+      setDone(true);
+    }
+  };
+
+  const handleRestart = () => {
+    setCurrent(0); setFlipped(false);
+    setKnown(new Array(cards.length).fill(false)); setDone(false);
+  };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <Sparkles className="w-10 h-10 text-purple-500 animate-pulse mb-4" />
+      <p className="text-gray-700 font-semibold">Génération des flashcards…</p>
+    </div>
+  );
+
+  if (done) {
+    const score = known.filter(Boolean).length;
+    return (
+      <div className="max-w-md mx-auto py-10 px-4 text-center">
+        <div className="text-6xl mb-4">{score === cards.length ? "🌟" : score >= cards.length / 2 ? "👍" : "💪"}</div>
+        <h2 className="text-2xl font-black text-gray-800 mb-2">{score}/{cards.length} notions maîtrisées</h2>
+        <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
+          <div className="h-3 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
+            style={{ width: (score / cards.length) * 100 + "%" }} />
+        </div>
+        <div className="flex flex-col gap-3">
+          <button onClick={handleRestart}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+            <RotateCcw className="w-4 h-4" /> Recommencer
+          </button>
+          <button onClick={onBack} className="text-sm text-gray-600 hover:text-gray-800 font-semibold">← Retour</button>
+        </div>
+      </div>
+    );
+  }
+
+  const card = cards[current];
+
+  return (
+    <div className="max-w-lg mx-auto py-6 px-4">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-bold text-gray-600">{current + 1} / {cards.length}</p>
+        <div className="flex gap-1">
+          {cards.map((_, i) => (
+            <div key={i} className={`w-2 h-2 rounded-full ${i < current ? (known[i] ? "bg-green-400" : "bg-red-400") : i === current ? "bg-purple-500" : "bg-gray-200"}`} />
+          ))}
+        </div>
+      </div>
+
+      {/* Carte cliquable */}
+      <div onClick={() => setFlipped(!flipped)}
+        className="relative w-full cursor-pointer select-none mb-6"
+        style={{ perspective: "1000px", height: "220px" }}>
+        <div style={{
+          position: "absolute", width: "100%", height: "100%",
+          transformStyle: "preserve-3d",
+          transition: "transform 0.5s",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+        }}>
+          {/* Recto */}
+          <div style={{ backfaceVisibility: "hidden", position: "absolute", width: "100%", height: "100%" }}
+            className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center">
+            <p className="text-xs font-bold text-purple-200 uppercase mb-3 tracking-widest">Notion</p>
+            <p className="text-xl font-black text-white leading-snug">{card.recto}</p>
+            <p className="text-purple-300 text-xs mt-4">Clique pour voir la définition</p>
+          </div>
+          {/* Verso */}
+          <div style={{ backfaceVisibility: "hidden", position: "absolute", width: "100%", height: "100%", transform: "rotateY(180deg)" }}
+            className="bg-white border-2 border-purple-200 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center">
+            <p className="text-xs font-bold text-purple-500 uppercase mb-3 tracking-widest">Définition</p>
+            <p className="text-base font-semibold text-gray-800 leading-relaxed">{card.verso}</p>
+          </div>
+        </div>
+      </div>
+
+      {flipped ? (
+        <div className="flex gap-3">
+          <button onClick={() => handleKnow(false)}
+            className="flex-1 bg-red-50 hover:bg-red-100 border-2 border-red-200 text-red-700 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all">
+            <X className="w-5 h-5" /> À revoir
+          </button>
+          <button onClick={() => handleKnow(true)}
+            className="flex-1 bg-green-50 hover:bg-green-100 border-2 border-green-200 text-green-700 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all">
+            <Check className="w-5 h-5" /> Je sais !
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => setFlipped(true)}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all">
+          Retourner la carte
+        </button>
+      )}
+
+      <button onClick={onBack} className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 font-semibold text-center">
+        ← Retour
+      </button>
+    </div>
+  );
+}
+
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
 function RevisionMode({ entries, chapter, onBack }: any) {
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
+  const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards">("chat");
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fiche, setFiche] = useState<string | null>(null);
+  const [ficheLoading, setFicheLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const loadFiche = async () => {
+    if (fiche || ficheLoading || !selectedEntry) return;
+    setFicheLoading(true);
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Génère une fiche de lecture structurée pour ce texte littéraire. Réponds en markdown simple (pas de titres #, utilise des **gras** et des listes -).
+Structure :
+**Auteur & œuvre** : ...
+**Contexte** : (époque, mouvement littéraire, 2 phrases)
+**Thèmes principaux** :
+- ...
+**Points clés à retenir** :
+- ... (5 points max, formulés comme des phrases mémorisables)
+**Citation emblématique** : (si présente dans le texte)
+
+Texte :
+${selectedEntry.content.slice(0, 5000)}` }], 1000);
+      setFiche(getText(data));
+    } catch {
+      setFiche("Impossible de générer la fiche.");
+    }
+    setFicheLoading(false);
+  };
+
+  const handleTabChange = (tab: "chat" | "fiche" | "flashcards") => {
+    setActiveTab(tab);
+    if (tab === "fiche") loadFiche();
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading || !selectedEntry) return;
@@ -391,76 +560,133 @@ ${selectedEntry.content}`;
     </div>
   );
 
-  return (
-    <div className="max-w-3xl mx-auto py-6 px-4 flex flex-col h-[calc(100vh-80px)]">
-      <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm mb-4 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-indigo-50">
+  if (activeTab === "flashcards") {
+    return (
+      <div className="max-w-3xl mx-auto py-6 px-4">
+        <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-sm mb-4 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-indigo-600" />
-            <h3 className="font-bold text-indigo-800 text-sm">{entryName(selectedEntry)}</h3>
+            <Layers className="w-4 h-4 text-purple-600" />
+            <h3 className="font-bold text-purple-800 text-sm">{entryName(selectedEntry)} — Flashcards</h3>
           </div>
-          {entries.length > 1 && (
-            <button onClick={() => { setSelectedEntry(null); setMessages([]); }}
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">Changer</button>
-          )}
+          <button onClick={() => setActiveTab("chat")} className="text-xs text-purple-600 hover:text-purple-800 font-semibold">← Retour au chat</button>
         </div>
-        <div className="p-5 max-h-48 overflow-y-auto">
-          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedEntry.content}</p>
+        <FlashcardsMode entry={selectedEntry} onBack={() => setActiveTab("chat")} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
+      {/* ── Colonne gauche : texte du cours (42%) ── */}
+      <div className="flex flex-col" style={{ width: "42%", minWidth: 0 }}>
+        <div className="bg-white border-r-2 border-indigo-100 flex flex-col h-full">
+          <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex-shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <BookOpen className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+              <h3 className="font-bold text-indigo-800 text-sm truncate">{entryName(selectedEntry)}</h3>
+            </div>
+            {entries.length > 1 && (
+              <button onClick={() => { setSelectedEntry(null); setMessages([]); setFiche(null); setActiveTab("chat"); }}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex-shrink-0 ml-2">Changer</button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto p-5">
+            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedEntry.content}</p>
+          </div>
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+            <p className="text-xs text-gray-500 font-semibold text-center">{selectedEntry.word_count} mots</p>
+          </div>
         </div>
       </div>
-      <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <MessageCircle className="w-4 h-4 text-gray-600" />
-          <h3 className="font-bold text-gray-700 text-sm">Pose tes questions sur ce texte</h3>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-3">💬</div>
-              <p className="text-gray-600 font-semibold">Pose une question sur le texte !</p>
-              <p className="text-gray-500 text-sm mt-1">L'IA répondra en se basant uniquement sur ce cours</p>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === "user" ? "bg-indigo-600 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm border border-gray-200"}`}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 border border-gray-200 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-500 animate-spin" />
-                <span className="text-sm text-gray-600">Réflexion en cours…</span>
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex gap-2">
-            <input value={input} onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-              className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none text-gray-800"
-              placeholder="Ta question sur le cours…" disabled={loading} />
-            <button onClick={sendMessage} disabled={!input.trim() || loading}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl transition-all">
-              <Send className="w-4 h-4" />
+
+      {/* ── Colonne droite : onglets (58%) ── */}
+      <div className="flex flex-col flex-1 min-w-0 p-4">
+        {/* Onglets */}
+        <div className="flex gap-2 mb-3 flex-shrink-0">
+          {([
+            ["chat", "💬 Chat IA", "border-indigo-500 bg-indigo-50 text-indigo-700"],
+            ["fiche", "📋 Fiche", "border-amber-500 bg-amber-50 text-amber-700"],
+            ["flashcards", "🃏 Flashcards", "border-purple-500 bg-purple-50 text-purple-700"],
+          ] as [string, string, string][]).map(([tab, label, activeClass]) => (
+            <button key={tab} onClick={() => handleTabChange(tab as any)}
+              className={`flex-1 py-2.5 rounded-xl border-2 font-bold text-xs transition-all ${activeTab === tab ? activeClass : "border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+              {label}
             </button>
-          </div>
+          ))}
         </div>
+
+        {/* Fiche */}
+        {activeTab === "fiche" && (
+          <div className="flex-1 bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-y-auto p-5">
+            {ficheLoading ? (
+              <div className="flex flex-col items-center justify-center h-full py-16">
+                <Sparkles className="w-8 h-8 text-amber-500 animate-spin mb-3" />
+                <p className="text-gray-600 font-semibold text-sm">Génération de la fiche…</p>
+              </div>
+            ) : fiche ? (
+              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{fiche}</pre>
+            ) : null}
+          </div>
+        )}
+
+        {/* Chat */}
+        {activeTab === "chat" && (
+          <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 shadow-sm flex flex-col overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+              <MessageCircle className="w-4 h-4 text-gray-600" />
+              <h3 className="font-bold text-gray-700 text-sm">Chat IA — questions sur le texte</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.length === 0 && (
+                <div className="text-center py-10">
+                  <div className="text-4xl mb-3">💬</div>
+                  <p className="text-gray-600 font-semibold">Pose une question sur le texte !</p>
+                  <p className="text-gray-500 text-xs mt-1">L'IA répond en se basant uniquement sur le cours</p>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                    msg.role === "user" ? "bg-indigo-600 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm border border-gray-200"}`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 border border-gray-200 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-500 animate-spin" />
+                    <span className="text-sm text-gray-600">Réflexion en cours…</span>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+            <div className="p-3 border-t border-gray-100 flex-shrink-0">
+              <div className="flex gap-2">
+                <input value={input} onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none text-gray-800"
+                  placeholder="Ta question sur le cours…" disabled={loading} />
+                <button onClick={sendMessage} disabled={!input.trim() || loading}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl transition-all">
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onBack} className="mt-3 text-sm text-gray-600 hover:text-gray-800 font-semibold flex items-center gap-1 justify-center flex-shrink-0">
+          <ArrowLeft className="w-4 h-4" /> Retour aux chapitres
+        </button>
       </div>
-      <button onClick={onBack} className="mt-4 text-sm text-gray-600 hover:text-gray-800 font-semibold flex items-center gap-1 justify-center">
-        <ArrowLeft className="w-4 h-4" /> Retour aux chapitres
-      </button>
     </div>
   );
 }
 
 // ── QUIZ MODE ─────────────────────────────────────────────────────────────────
-function QuizMode({ questions, chapter, onBack }: any) {
+function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
   const [prepared] = useState(() => prepareQuiz(questions));
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -505,7 +731,7 @@ Explique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la b
   const handleFinish = async () => {
     setQuizDone(true);
     if (!saved) {
-      try { await dbSaveResultat({ chapter, score, total: prepared.length, pourcentage: pct }); setSaved(true); }
+      try { await dbSaveResultat({ chapter, score, total: prepared.length, pourcentage: pct, eleveNom: eleveNom || "Anonyme" }); setSaved(true); }
       catch (e) { console.error(e); }
     }
   };
@@ -533,6 +759,7 @@ Explique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la b
       <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-md w-full text-center">
         <Trophy className="w-14 h-14 text-indigo-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-800 mb-1">Mode Quiz</h2>
+        {eleveNom && <p className="text-indigo-600 font-semibold text-sm mb-1">👤 {eleveNom}</p>}
         <p className="text-gray-700 mb-6">{prepared.length} questions</p>
         <div className="mb-6">
           <p className="text-sm font-semibold text-gray-800 mb-3">Mode de correction :</p>
@@ -561,6 +788,7 @@ Explique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la b
         <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-lg p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-3">{medal}</div>
           <h2 className="text-3xl font-bold text-gray-800 mb-2">{score}/{prepared.length} — {pct}%</h2>
+          {eleveNom && <p className="text-gray-500 text-sm mb-2">👤 {eleveNom}</p>}
           {saved && <p className="text-green-600 text-sm font-semibold mb-3">✓ Résultat sauvegardé</p>}
           <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
             <div className="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: pct + "%" }} />
@@ -714,7 +942,7 @@ function Dashboard({ onBack }: any) {
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>{["Date", "Chapitre", "Score", "Résultat"].map((h) => (
+                  <tr>{["Date", "Élève", "Chapitre", "Score", "Résultat"].map((h) => (
                     <th key={h} className="text-left px-5 py-3 font-bold text-gray-700">{h}</th>
                   ))}</tr>
                 </thead>
@@ -723,6 +951,11 @@ function Dashboard({ onBack }: any) {
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-5 py-3 text-gray-700">
                         {new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                          {r.eleve_nom || "Anonyme"}
+                        </span>
                       </td>
                       <td className="px-5 py-3"><span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span></td>
                       <td className="px-5 py-3 font-bold text-gray-800">{r.score}/{r.total}</td>
@@ -752,6 +985,7 @@ function Dashboard({ onBack }: any) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function QCMApp() {
   const [role, setRole] = useState<string | null>(null);
+  const [eleveNom, setEleveNom] = useState<string>("");
   const [sharedLib, setSharedLib] = useState<any[]>([]);
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
@@ -783,15 +1017,15 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto">
-        <QuizMode questions={quizData.questions} chapter={quizData.chapter} onBack={() => setQuizData(null)} />
+        <QuizMode questions={quizData.questions} chapter={quizData.chapter} eleveNom={eleveNom} onBack={() => setQuizData(null)} />
       </div>
     </div>
   );
 
   if (revisionData) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
-      <div className="bg-white border-b-2 border-green-200 shadow-sm sticky top-0 z-30">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col bg-white overflow-hidden">
+      <div className="bg-white border-b-2 border-green-200 shadow-sm flex-shrink-0">
+        <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BookOpen className="w-6 h-6 text-green-600" />
             <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-green-600">Révision</span></h1>
@@ -801,36 +1035,53 @@ export default function QCMApp() {
           </button>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto">
+      <div className="flex-1 overflow-hidden">
         <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} />
       </div>
     </div>
   );
 
-  if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} />;
+  if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)} />
   );
   return (
-    <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded}
+    <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData} onRefresh={loadLib} />
   );
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({ onSelect }: any) {
+function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
+  const [pseudoInput, setPseudoInput] = useState(eleveNom || "");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6">
-      <div className="text-center mb-10">
+      <div className="text-center mb-8">
         <div className="text-5xl mb-4">📚</div>
         <h1 className="text-4xl font-black text-gray-800 mb-2">QCM Entraînement</h1>
         <p className="text-gray-700 text-lg">Choisissez votre profil</p>
       </div>
+
+      {/* Pseudo élève */}
+      <div className="w-full max-w-2xl mb-6">
+        <div className="bg-white rounded-2xl border-2 border-gray-200 px-5 py-4 flex items-center gap-3 shadow-sm">
+          <User className="w-5 h-5 text-gray-400 flex-shrink-0" />
+          <input
+            value={pseudoInput}
+            onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }}
+            className="flex-1 text-sm font-semibold text-gray-800 bg-transparent border-none outline-none placeholder-gray-400"
+            placeholder="Ton prénom ou pseudo (optionnel)" />
+          {pseudoInput && (
+            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Enregistré</span>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4">
         <button onClick={() => onSelect("eleve-HLP")}
           className="flex-1 bg-white rounded-3xl border-2 border-emerald-200 shadow-lg p-7 hover:border-emerald-400 hover:shadow-xl transition-all group text-center">
@@ -1015,7 +1266,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
         <ValidationModal pending={pendingEntries} existingChapters={existingChapters}
           defaultMatiere={newMatiere} onConfirm={handleValidation} onCancel={() => setPendingEntries(null)} />
       )}
-
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1036,9 +1286,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
           </div>
         </div>
       </div>
-
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
-        {/* Formulaire */}
         <div className="w-80 flex-shrink-0">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="flex border-b border-gray-200">
@@ -1050,7 +1298,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
               ))}
             </div>
             <div className="p-5 space-y-3">
-              {/* Matière — 2 boutons */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Matière</label>
                 <div className="flex gap-2">
@@ -1065,7 +1312,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                   ))}
                 </div>
               </div>
-
               {inputTab === "paste" ? (
                 <>
                   <div>
@@ -1130,8 +1376,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
             </div>
           </div>
         </div>
-
-        {/* Bibliothèque */}
         <div className="flex-1 min-w-0">
           <div className="flex gap-3 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-48">
@@ -1152,7 +1396,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
               {existingChapters.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
             </select>
           </div>
-
           {!libLoaded ? (
             <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
           ) : filtered.length === 0 ? (
@@ -1166,7 +1409,6 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                 <div key={entry.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:border-purple-200 transition-all overflow-hidden">
                   {editingId === entry.id ? (
                     <div className="p-5 space-y-3">
-                      {/* Matière édition */}
                       <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1.5">Matière</label>
                         <div className="flex gap-2">
@@ -1252,7 +1494,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 }
 
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onRefresh }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onRefresh, eleveNom }: any) {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [numQ, setNumQ] = useState(10);
@@ -1305,15 +1547,28 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
     if (!selectedEntries.length) { setError("Sélectionne au moins un texte."); return; }
     setIsGenerating(true); setError("");
     const allContent = selectedEntries.map((e: any) => `=== ${entryName(e)} ===\n${e.content}`).join("\n\n");
-    const diffHint = difficulty !== "mixte" ? `\nNiveau : ${difficulty}` : "\nMélange facile/moyen/difficile";
+    const diffHint = difficulty !== "mixte" ? `\nNiveau de difficulté : ${difficulty}` : "\nMélange de niveaux : facile, moyen et difficile";
     try {
       let allQs: any[] = [], rem = numQ;
       while (rem > 0) {
         const batchSize = Math.min(20, rem); rem -= batchSize;
-        const already = allQs.length ? "\n\nNe pas répéter:\n" + allQs.map((q, i) => `${i + 1}. ${q.question}`).join("\n") : "";
+        const already = allQs.length ? "\n\nNe répète pas ces questions déjà générées :\n" + allQs.map((q, i) => `${i + 1}. ${q.question}`).join("\n") : "";
         setProgress(`Génération : ${allQs.length}/${numQ}…`);
         const data = await callAI([{ role: "user", content:
-          `Génère EXACTEMENT ${batchSize} QCM variées. Règle: bonne réponse en position 0, 4 choix.${diffHint}${already}\nFormat JSON: [{"q":"?","r":["Bonne","Fausse1","Fausse2","Fausse3"]}]\n\nTexte:\n${allContent}` }]);
+          `Génère EXACTEMENT ${batchSize} questions QCM sur le texte littéraire ci-dessous.
+Règle de format : la bonne réponse est TOUJOURS en position 0, suivie de 3 mauvaises réponses. 4 choix au total.
+${diffHint}${already}
+
+CONSIGNES IMPORTANTES pour les mauvaises réponses :
+- Elles doivent être CLAIREMENT et ÉVIDEMMENT fausses pour un élève ayant lu le texte.
+- Évite absolument les nuances subtiles ou les formulations proches de la bonne réponse.
+- Utilise des erreurs franches : mauvais auteur, mauvaise époque, affirmation contraire au texte, anachronisme évident, œuvre sans rapport.
+- Un élève attentif doit pouvoir éliminer les mauvaises réponses sans hésiter.
+
+Format JSON strict (rien d'autre) : [{"q":"Question ?","r":["Bonne réponse","Mauvaise réponse évidente 1","Mauvaise réponse évidente 2","Mauvaise réponse évidente 3"]}]
+
+Texte source :
+${allContent}` }]);
         const parsed = parseJSON(getText(data));
         allQs = allQs.concat(parsed.map((item: any) => ({ question: item.q, options: item.r, correctAnswer: 0 })));
       }
@@ -1339,6 +1594,11 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {eleveNom && (
+              <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-full flex items-center gap-1">
+                <User className="w-3 h-3" /> {eleveNom}
+              </span>
+            )}
             <button onClick={onRefresh} className="p-2 text-gray-500 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
             <button onClick={onBack} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
               <LogOut className="w-4 h-4" /> Accueil
@@ -1359,7 +1619,9 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
         ) : !selectedChapter ? (
           <>
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-black text-gray-800 mb-2">Que veux-tu faire ?</h2>
+              <h2 className="text-2xl font-black text-gray-800 mb-2">
+                {eleveNom ? `Bonjour ${eleveNom} ! 👋` : "Que veux-tu faire ?"}
+              </h2>
               <p className="text-gray-600">Choisis un chapitre pour réviser ou faire un quiz</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
