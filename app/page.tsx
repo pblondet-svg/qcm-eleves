@@ -523,11 +523,13 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     setInput("");
     setLoading(true);
     try {
-      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à comprendre un texte de cours de littérature française.
-Réponds UNIQUEMENT en te basant sur le texte ci-dessous. Si la réponse n'est pas dans le texte, dis-le clairement.
+      const systemPrompt = `Tu es un assistant pédagogique strict et bienveillant. Tu aides un élève à comprendre un texte de cours.
+RÈGLE ABSOLUE : tu ne réponds QU'en te basant sur le texte fourni ci-dessous. Tu n'utilises AUCUNE connaissance extérieure, même si tu la possèdes.
+Si la question porte sur quelque chose qui n'est PAS dans le texte, réponds exactement : "Cette information ne figure pas dans le texte fourni."
+Tu ne complètes jamais avec des éléments hors-texte, tu ne cites pas d'autres œuvres ou auteurs non mentionnés, tu ne donnes pas de contexte historique non présent dans le texte.
 Sois précis, encourageant et pédagogique. Réponds en français.
 
-TEXTE DU COURS :
+TEXTE DU COURS (ta SEULE source autorisée) :
 ${selectedEntry.content}`;
       const data = await callAI([
         { role: "user", content: systemPrompt },
@@ -1559,11 +1561,16 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
 Règle de format : la bonne réponse est TOUJOURS en position 0, suivie de 3 mauvaises réponses. 4 choix au total.
 ${diffHint}${already}
 
-CONSIGNES IMPORTANTES pour les mauvaises réponses :
-- Elles doivent être CLAIREMENT et ÉVIDEMMENT fausses pour un élève ayant lu le texte.
-- Évite absolument les nuances subtiles ou les formulations proches de la bonne réponse.
-- Utilise des erreurs franches : mauvais auteur, mauvaise époque, affirmation contraire au texte, anachronisme évident, œuvre sans rapport.
-- Un élève attentif doit pouvoir éliminer les mauvaises réponses sans hésiter.
+CONSIGNES ABSOLUES pour les mauvaises réponses :
+- Chaque mauvaise réponse doit être IMMÉDIATEMENT et SANS AMBIGUÏTÉ fausse pour tout élève ayant lu le texte.
+- INTERDIT : les nuances, les formulations proches de la bonne réponse, les pièges subtils.
+- OBLIGATOIRE : utilise des erreurs grossières et évidentes parmi ces types :
+  * Mauvais auteur (un auteur d'une autre époque ou d'un autre genre totalement différent)
+  * Mauvaise époque (anachronisme flagrant, ex: "XVIIIe siècle" si le texte est du XXe)
+  * Affirmation directement contraire à ce qui est écrit dans le texte
+  * Œuvre ou personnage sans aucun rapport avec le texte
+  * Notion philosophique ou littéraire complètement hors-sujet
+- Test de validation : un élève qui a lu le texte une seule fois doit pouvoir éliminer les 3 mauvaises réponses en moins de 5 secondes.
 
 Format JSON strict (rien d'autre) : [{"q":"Question ?","r":["Bonne réponse","Mauvaise réponse évidente 1","Mauvaise réponse évidente 2","Mauvaise réponse évidente 3"]}]
 
