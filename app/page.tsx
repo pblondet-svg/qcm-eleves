@@ -59,6 +59,15 @@ const HLP_CHAPITRES = [
   },
 ];
 
+// ── Programme Philosophie ─────────────────────────────────────────────────────
+const PHILO_CHAPITRES = [
+  "Sujet 1 - Peut-on être esclave de soi-même ?",
+  "Sujet 2 - Pour être juste, suffit-il d'être juste ?",
+  "Sujet 3 - La technique nous permet-elle de ne plus avoir peur de la nature ?",
+  "Sujet 4 - L'artiste travaille-t-il ?",
+  "Sujet 5 - Est-ce un devoir d'être heureux ?",
+];
+
 const matchesMatiere = (entry: any, matiere: string) => {
   const m = (entry.matiere || "").toLowerCase().trim();
   if (matiere === "philosophie") return m === "philosophie";
@@ -186,6 +195,24 @@ function ChapterSelect({ matiere, value, onChange, existingChapters, forceType }
             {s.items.map((item) => <option key={item} value={item}>{item}</option>)}
           </optgroup>
         ))}
+      </select>
+    );
+  }
+  if (matiere === "philosophie") {
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800">
+        <option value="">— Choisir un sujet de philosophie —</option>
+        <optgroup label="Sujets du programme">
+          {PHILO_CHAPITRES.map((item) => <option key={item} value={item}>{item}</option>)}
+        </optgroup>
+        {existingChapters.filter((ch) => !PHILO_CHAPITRES.includes(ch) && ch !== "Non classé").length > 0 && (
+          <optgroup label="Chapitres personnalisés">
+            {existingChapters
+              .filter((ch) => !PHILO_CHAPITRES.includes(ch) && ch !== "Non classé")
+              .map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+          </optgroup>
+        )}
       </select>
     );
   }
@@ -422,7 +449,6 @@ ${entry.content.slice(0, 4000)}` }], 1200);
         </div>
       </div>
 
-      {/* Carte cliquable */}
       <div onClick={() => setFlipped(!flipped)}
         className="relative w-full cursor-pointer select-none mb-6"
         style={{ perspective: "1000px", height: "220px" }}>
@@ -432,14 +458,12 @@ ${entry.content.slice(0, 4000)}` }], 1200);
           transition: "transform 0.5s",
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
         }}>
-          {/* Recto */}
           <div style={{ backfaceVisibility: "hidden", position: "absolute", width: "100%", height: "100%" }}
             className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center">
             <p className="text-xs font-bold text-purple-200 uppercase mb-3 tracking-widest">Notion</p>
             <p className="text-xl font-black text-white leading-snug">{card.recto}</p>
             <p className="text-purple-300 text-xs mt-4">Clique pour voir la définition</p>
           </div>
-          {/* Verso */}
           <div style={{ backfaceVisibility: "hidden", position: "absolute", width: "100%", height: "100%", transform: "rotateY(180deg)" }}
             className="bg-white border-2 border-purple-200 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center">
             <p className="text-xs font-bold text-purple-500 uppercase mb-3 tracking-widest">Définition</p>
@@ -523,13 +547,18 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     setInput("");
     setLoading(true);
     try {
-      const systemPrompt = `Tu es un assistant pédagogique strict et bienveillant. Tu aides un élève à comprendre un texte de cours.
-RÈGLE ABSOLUE : tu ne réponds QU'en te basant sur le texte fourni ci-dessous. Tu n'utilises AUCUNE connaissance extérieure, même si tu la possèdes.
-Si la question porte sur quelque chose qui n'est PAS dans le texte, réponds exactement : "Cette information ne figure pas dans le texte fourni."
-Tu ne complètes jamais avec des éléments hors-texte, tu ne cites pas d'autres œuvres ou auteurs non mentionnés, tu ne donnes pas de contexte historique non présent dans le texte.
+      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser un texte de cours.
+
+RÈGLE DE RÉPONSE (applique ces étapes dans l'ordre) :
+1. Cherche d'abord la réponse dans le TEXTE FOURNI ci-dessous.
+2. Si la réponse EST dans le texte : cite explicitement entre guillemets le passage concerné, puis explique-le.
+3. Si la réponse N'EST PAS dans le texte : commence obligatoirement par "⚠️ Cette information ne figure pas dans le texte fourni. Voici ce que l'on peut dire :" puis réponds avec tes connaissances générales, en restant cohérent avec le texte.
+4. INTERDIT ABSOLU : contredire le texte fourni. Toute information extérieure doit être parfaitement compatible avec lui.
+5. Avant d'envoyer ta réponse, vérifie-la mentalement : est-elle cohérente avec le texte ? Est-elle factuellement exacte ?
+
 Sois précis, encourageant et pédagogique. Réponds en français.
 
-TEXTE DU COURS (ta SEULE source autorisée) :
+TEXTE DU COURS (source principale) :
 ${selectedEntry.content}`;
       const data = await callAI([
         { role: "user", content: systemPrompt },
@@ -603,7 +632,6 @@ ${selectedEntry.content}`;
 
       {/* ── Colonne droite : onglets (58%) ── */}
       <div className="flex flex-col flex-1 min-w-0 p-4">
-        {/* Onglets */}
         <div className="flex gap-2 mb-3 flex-shrink-0">
           {([
             ["chat", "💬 Chat IA", "border-indigo-500 bg-indigo-50 text-indigo-700"],
@@ -643,7 +671,7 @@ ${selectedEntry.content}`;
                 <div className="text-center py-10">
                   <div className="text-4xl mb-3">💬</div>
                   <p className="text-gray-600 font-semibold">Pose une question sur le texte !</p>
-                  <p className="text-gray-500 text-xs mt-1">L'IA répond en se basant uniquement sur le cours</p>
+                  <p className="text-gray-500 text-xs mt-1">L'IA répond en se basant sur le cours, et te signale si elle va au-delà</p>
                 </div>
               )}
               {messages.map((msg, i) => (
@@ -1069,7 +1097,6 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
         <p className="text-gray-700 text-lg">Choisissez votre profil</p>
       </div>
 
-      {/* Pseudo élève */}
       <div className="w-full max-w-2xl mb-6">
         <div className="bg-white rounded-2xl border-2 border-gray-200 px-5 py-4 flex items-center gap-3 shadow-sm">
           <User className="w-5 h-5 text-gray-400 flex-shrink-0" />
