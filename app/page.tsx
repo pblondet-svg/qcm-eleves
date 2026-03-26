@@ -501,7 +501,7 @@ ${entry.content.slice(0, 4000)}` }], 1200);
 function RevisionMode({ entries, chapter, onBack }: any) {
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
   const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards">("chat");
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: string; content: string; source?: "texte" | "synthese" | "hors_texte" }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [fiche, setFiche] = useState<string | null>(null);
@@ -549,25 +549,45 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     try {
       const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser un texte de cours.
 
-RÈGLE DE RÉPONSE (applique ces étapes dans l'ordre) :
-1. Cherche d'abord la réponse dans le TEXTE FOURNI ci-dessous.
-2. Si la réponse EST dans le texte : cite explicitement entre guillemets le passage concerné, puis explique-le.
-3. Si la réponse N'EST PAS dans le texte : commence obligatoirement par "⚠️ Cette information ne figure pas dans le texte fourni. Voici ce que l'on peut dire :" puis réponds avec tes connaissances générales, en restant cohérent avec le texte.
-4. INTERDIT ABSOLU : contredire le texte fourni. Toute information extérieure doit être parfaitement compatible avec lui.
-5. Avant d'envoyer ta réponse, vérifie-la mentalement : est-elle cohérente avec le texte ? Est-elle factuellement exacte ?
+Tu dois TOUJOURS répondre en JSON valide, rien d'autre. Format strict :
+{"source": "texte" | "synthese" | "hors_texte", "contenu": "ta réponse ici"}
 
-Sois précis, encourageant et pédagogique. Réponds en français.
+Règles pour choisir la source :
+- "texte" : la réponse s'appuie DIRECTEMENT sur un passage du texte fourni (cite-le entre guillemets dans ta réponse)
+- "synthese" : la réponse interprète ou explique le texte fourni sans citation directe, mais reste dans le texte
+- "hors_texte" : l'information demandée ne figure PAS dans le texte (commence alors par "⚠️ Cette information ne figure pas dans le texte fourni." puis réponds avec tes connaissances)
+
+INTERDIT ABSOLU : contredire le texte fourni. Toute information extérieure doit être compatible avec lui.
+Réponds en français, sois pédagogique et encourageant.
 
 TEXTE DU COURS (source principale) :
 ${selectedEntry.content}`;
+
+      // Pour l'historique on n'envoie que le texte brut (sans la source)
+      const historyForAPI = newMessages.map(m => ({ role: m.role, content: m.content }));
+
       const data = await callAI([
         { role: "user", content: systemPrompt },
-        { role: "assistant", content: "Bien sûr, je suis prêt à répondre à tes questions sur ce texte." },
-        ...newMessages,
-      ], 800);
-      setMessages([...newMessages, { role: "assistant", content: getText(data) }]);
+        { role: "assistant", content: '{"source":"synthese","contenu":"Bien sûr, je suis prêt à répondre à tes questions sur ce texte."}' },
+        ...historyForAPI,
+      ], 900);
+
+      const raw = getText(data);
+      let source: "texte" | "synthese" | "hors_texte" = "synthese";
+      let contenu = raw;
+      try {
+        const parsed = parseJSON(raw);
+        source = parsed.source || "synthese";
+        contenu = parsed.contenu || raw;
+      } catch {
+        // Si le JSON échoue, on détecte la source via le texte brut
+        if (raw.includes("⚠️")) source = "hors_texte";
+        else if (raw.includes("«") || raw.includes("\"")) source = "texte";
+      }
+
+      setMessages([...newMessages, { role: "assistant", content: contenu, source }]);
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: "Désolé, une erreur s'est produite." }]);
+      setMessages([...newMessages, { role: "assistant", content: "Désolé, une erreur s'est produite.", source: "synthese" }]);
     }
     setLoading(false);
   };
@@ -676,10 +696,42 @@ ${selectedEntry.content}`;
               )}
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === "user" ? "bg-indigo-600 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm border border-gray-200"}`}>
-                    {msg.content}
-                  </div>
+                  {msg.role === "assistant" ? (
+                    <div className="max-w-[85%] flex flex-col gap-1">
+                      {/* Badge source */}
+                      {msg.source && (
+                        <div className="flex items-center gap-1.5 px-1">
+                          {msg.source === "texte" && (
+                            <span className="flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
+                              🟡 Extrait du texte
+                            </span>
+                          )}
+                          {msg.source === "synthese" && (
+                            <span className="flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">
+                              🔵 Synthèse IA du cours
+                            </span>
+                          )}
+                          {msg.source === "hors_texte" && (
+                            <span className="flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">
+                              🟠 Hors texte — connaissance générale
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Bulle */}
+                      <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed rounded-bl-sm border ${
+                        msg.source === "texte" ? "bg-yellow-50 border-yellow-200 text-gray-800" :
+                        msg.source === "hors_texte" ? "bg-orange-50 border-orange-200 text-gray-800" :
+                        "bg-gray-100 border-gray-200 text-gray-800"
+                      }`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-indigo-600 text-white rounded-br-sm">
+                      {msg.content}
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
