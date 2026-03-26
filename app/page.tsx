@@ -1449,12 +1449,15 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                           ))}
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-600 mb-1">Chapitre</label>
-                          <ChapterSelect matiere={editFields.matiere || "hlp"} value={editFields.chapter || ""}
-                            onChange={(v) => setEditFields((f: any) => ({ ...f, chapter: v }))} existingChapters={existingChapters} />
-                        </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 uppercase mb-1.5">
+                          📂 Chapitre / Sujet
+                          {editFields.chapter === "" && <span className="ml-2 text-orange-500 font-bold">← à reclasser !</span>}
+                        </label>
+                        <ChapterSelect matiere={editFields.matiere || "hlp"} value={editFields.chapter || ""}
+                          onChange={(v) => setEditFields((f: any) => ({ ...f, chapter: v }))} existingChapters={existingChapters} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-gray-600 mb-1">Auteur</label>
                           <input value={editFields.author || ""} onChange={(e) => setEditFields((f: any) => ({ ...f, author: e.target.value }))}
@@ -1506,7 +1509,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                       <div className="flex gap-1.5 flex-shrink-0">
                         <button onClick={() => {
                           setEditingId(entry.id);
-                          setEditFields({ chapter: entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content, type: entry.type || "les deux", matiere: entry.matiere || "hlp" });
+                          setEditFields({ chapter: entryChapter(entry) === "Non classé" ? "" : entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content, type: entry.type || "les deux", matiere: entry.matiere || "hlp" });
                         }} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                         <button onClick={() => deleteEntry(entry.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
