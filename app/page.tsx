@@ -1159,6 +1159,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<any>({});
   const [newChapter, setNewChapter] = useState("");
@@ -1272,8 +1273,11 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
   const filtered = sharedLib.filter((e: any) => {
     const matchChapter = chapterFilter === "all" || entryChapter(e) === chapterFilter;
     const matchMat = matiereFilter === "all" || (e.matiere || "hlp") === matiereFilter;
+    const matchType = typeFilter === "all"
+      || (typeFilter === "cours" && (e.type === "cours"))
+      || (typeFilter === "texte" && (e.type === "qcm" || e.type === "les deux" || !e.type));
     const term = search.toLowerCase();
-    return matchChapter && matchMat && (!term || entryName(e).toLowerCase().includes(term) || e.content.toLowerCase().includes(term));
+    return matchChapter && matchMat && matchType && (!term || entryName(e).toLowerCase().includes(term) || e.content.toLowerCase().includes(term));
   });
 
   const canAdd = newContent.trim() && !saving &&
@@ -1344,13 +1348,34 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
               {inputTab === "paste" ? (
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Utilisation</label>
-                    <select value={newType} onChange={(e) => { setNewType(e.target.value); setNewChapter(""); }}
-                      className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800">
-                      <option value="les deux">Cours ET QCM</option>
-                      <option value="cours">Cours uniquement</option>
-                      <option value="qcm">QCM uniquement</option>
-                    </select>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Nature du document</label>
+                    <div className="flex gap-2">
+                      {[
+                        ["cours", "📖 Cours du prof", "border-amber-400 bg-amber-50 text-amber-700"],
+                        ["les deux", "📝 Texte d'auteur", "border-indigo-400 bg-indigo-50 text-indigo-700"],
+                      ].map(([val, label, activeClass]) => (
+                        <button key={val} onClick={() => { setNewType(val); setNewChapter(""); }}
+                          className={`flex-1 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${newType === val || (val === "les deux" && newType === "qcm") ? activeClass : "border-gray-200 text-gray-500 hover:border-gray-300"}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {newType === "cours" && (
+                      <p className="text-xs text-amber-600 mt-1.5 font-semibold">📌 Visible en révision uniquement</p>
+                    )}
+                    {(newType === "les deux" || newType === "qcm") && (
+                      <div className="mt-2 flex gap-2">
+                        {[
+                          ["les deux", "Révision + Quiz"],
+                          ["qcm", "Quiz uniquement"],
+                        ].map(([val, label]) => (
+                          <button key={val} onClick={() => setNewType(val)}
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all ${newType === val ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Chapitre / Thème</label>
@@ -1419,6 +1444,12 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
               <option value="hlp">📜 HLP</option>
               <option value="philosophie">🧠 Philosophie</option>
             </select>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none">
+              <option value="all">Cours & Textes</option>
+              <option value="cours">📖 Cours uniquement</option>
+              <option value="texte">📝 Textes uniquement</option>
+            </select>
             <select value={chapterFilter} onChange={(e) => setChapterFilter(e.target.value)}
               className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none">
               <option value="all">Tous les chapitres</option>
@@ -1470,13 +1501,32 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Utilisation</label>
-                        <select value={editFields.type || "les deux"} onChange={(e) => setEditFields((f: any) => ({ ...f, type: e.target.value }))}
-                          className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:outline-none text-gray-800">
-                          <option value="les deux">Cours ET QCM</option>
-                          <option value="cours">Cours uniquement</option>
-                          <option value="qcm">QCM uniquement</option>
-                        </select>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Nature du document</label>
+                        <div className="flex gap-2">
+                          {[
+                            ["cours", "📖 Cours du prof", "border-amber-400 bg-amber-50 text-amber-700"],
+                            ["texte", "📝 Texte d'auteur", "border-indigo-400 bg-indigo-50 text-indigo-700"],
+                          ].map(([val, label, ac]) => {
+                            const isTexte = val === "texte" && (editFields.type === "les deux" || editFields.type === "qcm" || !editFields.type);
+                            const isCours = val === "cours" && editFields.type === "cours";
+                            return (
+                              <button key={val} onClick={() => setEditFields((f: any) => ({ ...f, type: val === "cours" ? "cours" : "les deux" }))}
+                                className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition-all ${isCours || isTexte ? ac : "border-gray-200 text-gray-500"}`}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {(editFields.type === "les deux" || editFields.type === "qcm") && (
+                          <div className="mt-2 flex gap-2">
+                            {[["les deux", "Révision + Quiz"], ["qcm", "Quiz uniquement"]].map(([val, label]) => (
+                              <button key={val} onClick={() => setEditFields((f: any) => ({ ...f, type: val }))}
+                                className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all ${editFields.type === val ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500"}`}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <textarea value={editFields.content || ""} onChange={(e) => setEditFields((f: any) => ({ ...f, content: e.target.value }))}
                         className="w-full h-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm resize-none focus:outline-none text-gray-800" />
@@ -1535,6 +1585,7 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"revision" | "quiz">("revision");
+  const [revisionSubTab, setRevisionSubTab] = useState<"cours" | "textes">("cours");
 
   const isHLP = matiere === "hlp";
   const headerBorder = isHLP ? "border-emerald-200" : "border-blue-200";
@@ -1557,7 +1608,11 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   );
 
   const revisionTexts = textsInChapter.filter((e: any) => !e.type || e.type === "cours" || e.type === "les deux");
+  const coursTexts = revisionTexts.filter((e: any) => e.type === "cours");
+  const litteraireTexts = revisionTexts.filter((e: any) => e.type !== "cours");
   const quizTexts = textsInChapter.filter((e: any) => !e.type || e.type === "qcm" || e.type === "les deux");
+  const quizCoursTexts = quizTexts.filter((e: any) => e.type === "cours");
+  const quizLitteraireTexts = quizTexts.filter((e: any) => e.type !== "cours");
 
   const selectChapter = (ch: string) => {
     setSelectedChapter(ch);
@@ -1688,13 +1743,43 @@ ${allContent}` }]);
             {activeTab === "revision" && (
               revisionTexts.length === 0 ? (
                 <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                  <p className="text-gray-600 font-semibold">Aucun texte de cours dans ce chapitre</p>
+                  <p className="text-gray-600 font-semibold">Aucun contenu de révision dans ce chapitre</p>
                 </div>
               ) : (
-                <button onClick={() => onStartRevision({ entries: revisionTexts, chapter: selectedChapter })}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-lg shadow-lg transition-all">
-                  <BookOpen className="w-6 h-6" /> Réviser — {revisionTexts.length} texte{revisionTexts.length > 1 ? "s" : ""}
-                </button>
+                <>
+                  {/* Sous-onglets Cours / Textes */}
+                  {coursTexts.length > 0 && litteraireTexts.length > 0 && (
+                    <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-xl">
+                      <button onClick={() => setRevisionSubTab("cours")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${revisionSubTab === "cours" ? "bg-white shadow text-amber-700 border border-amber-200" : "text-gray-500 hover:text-gray-700"}`}>
+                        📖 Cours du prof
+                        <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-xs">{coursTexts.length}</span>
+                      </button>
+                      <button onClick={() => setRevisionSubTab("textes")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${revisionSubTab === "textes" ? "bg-white shadow text-indigo-700 border border-indigo-200" : "text-gray-500 hover:text-gray-700"}`}>
+                        📝 Textes d'auteurs
+                        <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full text-xs">{litteraireTexts.length}</span>
+                      </button>
+                    </div>
+                  )}
+                  {/* Contenu selon sous-onglet */}
+                  {(() => {
+                    const toRevise = (coursTexts.length > 0 && litteraireTexts.length > 0)
+                      ? (revisionSubTab === "cours" ? coursTexts : litteraireTexts)
+                      : revisionTexts;
+                    return toRevise.length === 0 ? (
+                      <div className="text-center py-8 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                        <p className="text-gray-500 font-semibold text-sm">Aucun contenu dans cet onglet</p>
+                      </div>
+                    ) : (
+                      <button onClick={() => onStartRevision({ entries: toRevise, chapter: selectedChapter })}
+                        className={`w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-white text-lg shadow-lg transition-all bg-gradient-to-r ${revisionSubTab === "cours" || coursTexts.length === 0 ? "from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" : "from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"}`}>
+                        {revisionSubTab === "cours" || coursTexts.length === 0 ? <BookOpen className="w-6 h-6" /> : <BookOpen className="w-6 h-6" />}
+                        Réviser — {toRevise.length} {revisionSubTab === "textes" && litteraireTexts.length > 0 ? "texte" : "cours"}{toRevise.length > 1 ? "s" : ""}
+                      </button>
+                    );
+                  })()}
+                </>
               )
             )}
 
@@ -1713,30 +1798,65 @@ ${allContent}` }]);
                     </button>
                   </div>
                   <div className="space-y-3 mb-6">
-                    {quizTexts.map((entry: any) => {
-                      const isSel = !!selectedIds[entry.id];
-                      return (
-                        <button key={entry.id} onClick={() => toggleId(entry.id)}
-                          className={`w-full text-left bg-white rounded-2xl border-2 shadow-sm p-5 transition-all ${isSel ? (isHLP ? "border-emerald-500 ring-2 ring-emerald-100" : "border-blue-500 ring-2 ring-blue-100") : "border-gray-200 hover:border-indigo-300"}`}>
-                          <div className="flex items-start gap-3">
-                            <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center mt-0.5 ${isSel ? (isHLP ? "bg-emerald-600 border-emerald-600" : "bg-blue-600 border-blue-600") : "border-gray-300"}`}>
-                              {isSel && <Check className="w-4 h-4 text-white" />}
-                            </div>
-                            <div>
-                              <h3 className={`font-bold text-base ${isSel ? (isHLP ? "text-emerald-700" : "text-blue-700") : "text-gray-800"}`}>{entryName(entry)}</h3>
-                              <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots</p>
-                              {(entry.notions || []).length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {entry.notions.slice(0, 4).map((n: string, i: number) => (
-                                    <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
-                                  ))}
+                    {/* Cours du prof */}
+                    {quizCoursTexts.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 my-2">
+                          <span className="text-xs font-black text-amber-600 uppercase tracking-widest">📖 Cours du prof</span>
+                          <div className="flex-1 h-px bg-amber-200" />
+                        </div>
+                        {quizCoursTexts.map((entry: any) => {
+                          const isSel = !!selectedIds[entry.id];
+                          return (
+                            <button key={entry.id} onClick={() => toggleId(entry.id)}
+                              className={`w-full text-left bg-white rounded-2xl border-2 shadow-sm p-5 transition-all ${isSel ? "border-amber-400 ring-2 ring-amber-100" : "border-gray-200 hover:border-amber-300"}`}>
+                              <div className="flex items-start gap-3">
+                                <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center mt-0.5 ${isSel ? "bg-amber-500 border-amber-500" : "border-gray-300"}`}>
+                                  {isSel && <Check className="w-4 h-4 text-white" />}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+                                <div>
+                                  <h3 className={`font-bold text-base ${isSel ? "text-amber-700" : "text-gray-800"}`}>{entryName(entry)}</h3>
+                                  <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots</p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                    {/* Textes d'auteurs */}
+                    {quizLitteraireTexts.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 my-2">
+                          <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">📝 Textes d'auteurs</span>
+                          <div className="flex-1 h-px bg-indigo-200" />
+                        </div>
+                        {quizLitteraireTexts.map((entry: any) => {
+                          const isSel = !!selectedIds[entry.id];
+                          return (
+                            <button key={entry.id} onClick={() => toggleId(entry.id)}
+                              className={`w-full text-left bg-white rounded-2xl border-2 shadow-sm p-5 transition-all ${isSel ? (isHLP ? "border-emerald-500 ring-2 ring-emerald-100" : "border-blue-500 ring-2 ring-blue-100") : "border-gray-200 hover:border-indigo-300"}`}>
+                              <div className="flex items-start gap-3">
+                                <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center mt-0.5 ${isSel ? (isHLP ? "bg-emerald-600 border-emerald-600" : "bg-blue-600 border-blue-600") : "border-gray-300"}`}>
+                                  {isSel && <Check className="w-4 h-4 text-white" />}
+                                </div>
+                                <div>
+                                  <h3 className={`font-bold text-base ${isSel ? (isHLP ? "text-emerald-700" : "text-blue-700") : "text-gray-800"}`}>{entryName(entry)}</h3>
+                                  <p className="text-xs text-gray-600 mt-0.5">{entry.word_count} mots</p>
+                                  {(entry.notions || []).length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {entry.notions.slice(0, 4).map((n: string, i: number) => (
+                                        <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                   {selectedEntries.length > 0 && (
                     <div className={`bg-white rounded-2xl border-2 shadow-lg p-6 ${isHLP ? "border-emerald-200" : "border-blue-200"}`}>
