@@ -6,7 +6,8 @@ import {
   Plus, Trash2, Sparkles, FileUp, Search, X, Edit2,
   Check, FolderOpen, Play, RotateCcw, Trophy, ChevronRight, ChevronLeft,
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
-  BookOpen, Send, MessageCircle, User, Layers,
+  BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
+  Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -365,9 +366,7 @@ function FlashcardsMode({ entry, onBack }: any) {
   const [known, setKnown] = useState<boolean[]>([]);
   const [done, setDone] = useState(false);
 
-  useEffect(() => {
-    generateCards();
-  }, []);
+  useEffect(() => { generateCards(); }, []);
 
   const generateCards = async () => {
     setLoading(true);
@@ -376,10 +375,8 @@ function FlashcardsMode({ entry, onBack }: any) {
       const data = await callAI([{ role: "user", content:
         `À partir de ce texte littéraire, génère des flashcards de révision.
 ${dbNotions.length > 0 ? `Notions déjà identifiées : ${dbNotions.join(", ")}. Crée une flashcard pour chacune, puis ajoute d'autres notions importantes du texte.` : "Identifie les notions clés du texte et crée une flashcard pour chacune."}
-
 Format JSON strict : [{"recto":"Notion ou question courte","verso":"Définition ou explication en 2-3 phrases max, en lien avec le texte"}]
 Génère entre 6 et 10 flashcards au total.
-
 Texte :
 ${entry.content.slice(0, 4000)}` }], 1200);
       const parsed = parseJSON(getText(data));
@@ -396,11 +393,7 @@ ${entry.content.slice(0, 4000)}` }], 1200);
     newKnown[current] = val;
     setKnown(newKnown);
     setFlipped(false);
-    if (current < cards.length - 1) {
-      setCurrent(current + 1);
-    } else {
-      setDone(true);
-    }
+    if (current < cards.length - 1) { setCurrent(current + 1); } else { setDone(true); }
   };
 
   const handleRestart = () => {
@@ -437,7 +430,6 @@ ${entry.content.slice(0, 4000)}` }], 1200);
   }
 
   const card = cards[current];
-
   return (
     <div className="max-w-lg mx-auto py-6 px-4">
       <div className="flex items-center justify-between mb-4">
@@ -448,16 +440,8 @@ ${entry.content.slice(0, 4000)}` }], 1200);
           ))}
         </div>
       </div>
-
-      <div onClick={() => setFlipped(!flipped)}
-        className="relative w-full cursor-pointer select-none mb-6"
-        style={{ perspective: "1000px", height: "220px" }}>
-        <div style={{
-          position: "absolute", width: "100%", height: "100%",
-          transformStyle: "preserve-3d",
-          transition: "transform 0.5s",
-          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-        }}>
+      <div onClick={() => setFlipped(!flipped)} className="relative w-full cursor-pointer select-none mb-6" style={{ perspective: "1000px", height: "220px" }}>
+        <div style={{ position: "absolute", width: "100%", height: "100%", transformStyle: "preserve-3d", transition: "transform 0.5s", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
           <div style={{ backfaceVisibility: "hidden", position: "absolute", width: "100%", height: "100%" }}
             className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center">
             <p className="text-xs font-bold text-purple-200 uppercase mb-3 tracking-widest">Notion</p>
@@ -471,7 +455,6 @@ ${entry.content.slice(0, 4000)}` }], 1200);
           </div>
         </div>
       </div>
-
       {flipped ? (
         <div className="flex gap-3">
           <button onClick={() => handleKnow(false)}
@@ -484,15 +467,11 @@ ${entry.content.slice(0, 4000)}` }], 1200);
           </button>
         </div>
       ) : (
-        <button onClick={() => setFlipped(true)}
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all">
+        <button onClick={() => setFlipped(true)} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl transition-all">
           Retourner la carte
         </button>
       )}
-
-      <button onClick={onBack} className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 font-semibold text-center">
-        ← Retour
-      </button>
+      <button onClick={onBack} className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 font-semibold text-center">← Retour</button>
     </div>
   );
 }
@@ -524,13 +503,10 @@ Structure :
 **Points clés à retenir** :
 - ... (5 points max, formulés comme des phrases mémorisables)
 **Citation emblématique** : (si présente dans le texte)
-
 Texte :
 ${selectedEntry.content.slice(0, 5000)}` }], 1000);
       setFiche(getText(data));
-    } catch {
-      setFiche("Impossible de générer la fiche.");
-    }
+    } catch { setFiche("Impossible de générer la fiche."); }
     setFicheLoading(false);
   };
 
@@ -548,30 +524,20 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     setLoading(true);
     try {
       const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser un texte de cours.
-
 Tu dois TOUJOURS répondre en JSON valide, rien d'autre. Format strict :
 {"source": "texte" | "synthese" | "hors_texte", "contenu": "ta réponse ici"}
-
 Règles pour choisir la source :
-- "texte" : la réponse s'appuie DIRECTEMENT sur un passage du texte fourni (cite-le entre guillemets dans ta réponse)
-- "synthese" : la réponse interprète ou explique le texte fourni sans citation directe, mais reste dans le texte
-- "hors_texte" : l'information demandée ne figure PAS dans le texte (commence alors par "⚠️ Cette information ne figure pas dans le texte fourni." puis réponds avec tes connaissances)
-
-INTERDIT ABSOLU : contredire le texte fourni. Toute information extérieure doit être compatible avec lui.
-Réponds en français, sois pédagogique et encourageant.
-
-TEXTE DU COURS (source principale) :
+- "texte" : la réponse s'appuie DIRECTEMENT sur un passage du texte fourni
+- "synthese" : la réponse interprète ou explique le texte fourni sans citation directe
+- "hors_texte" : l'information demandée ne figure PAS dans le texte (commence par "⚠️ Cette information ne figure pas dans le texte fourni.")
+TEXTE DU COURS :
 ${selectedEntry.content}`;
-
-      // Pour l'historique on n'envoie que le texte brut (sans la source)
       const historyForAPI = newMessages.map(m => ({ role: m.role, content: m.content }));
-
       const data = await callAI([
         { role: "user", content: systemPrompt },
         { role: "assistant", content: '{"source":"synthese","contenu":"Bien sûr, je suis prêt à répondre à tes questions sur ce texte."}' },
         ...historyForAPI,
       ], 900);
-
       const raw = getText(data);
       let source: "texte" | "synthese" | "hors_texte" = "synthese";
       let contenu = raw;
@@ -580,11 +546,9 @@ ${selectedEntry.content}`;
         source = parsed.source || "synthese";
         contenu = parsed.contenu || raw;
       } catch {
-        // Si le JSON échoue, on détecte la source via le texte brut
         if (raw.includes("⚠️")) source = "hors_texte";
         else if (raw.includes("«") || raw.includes("\"")) source = "texte";
       }
-
       setMessages([...newMessages, { role: "assistant", content: contenu, source }]);
     } catch {
       setMessages([...newMessages, { role: "assistant", content: "Désolé, une erreur s'est produite.", source: "synthese" }]);
@@ -628,7 +592,6 @@ ${selectedEntry.content}`;
 
   return (
     <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
-      {/* ── Colonne gauche : texte du cours (42%) ── */}
       <div className="flex flex-col" style={{ width: "42%", minWidth: 0 }}>
         <div className="bg-white border-r-2 border-indigo-100 flex flex-col h-full">
           <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex-shrink-0">
@@ -649,8 +612,6 @@ ${selectedEntry.content}`;
           </div>
         </div>
       </div>
-
-      {/* ── Colonne droite : onglets (58%) ── */}
       <div className="flex flex-col flex-1 min-w-0 p-4">
         <div className="flex gap-2 mb-3 flex-shrink-0">
           {([
@@ -664,8 +625,6 @@ ${selectedEntry.content}`;
             </button>
           ))}
         </div>
-
-        {/* Fiche */}
         {activeTab === "fiche" && (
           <div className="flex-1 bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-y-auto p-5">
             {ficheLoading ? (
@@ -678,8 +637,6 @@ ${selectedEntry.content}`;
             ) : null}
           </div>
         )}
-
-        {/* Chat */}
         {activeTab === "chat" && (
           <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 shadow-sm flex flex-col overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
@@ -691,46 +648,26 @@ ${selectedEntry.content}`;
                 <div className="text-center py-10">
                   <div className="text-4xl mb-3">💬</div>
                   <p className="text-gray-600 font-semibold">Pose une question sur le texte !</p>
-                  <p className="text-gray-500 text-xs mt-1">L'IA répond en se basant sur le cours, et te signale si elle va au-delà</p>
+                  <p className="text-gray-500 text-xs mt-1">L'IA répond en se basant sur le cours</p>
                 </div>
               )}
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role === "assistant" ? (
                     <div className="max-w-[85%] flex flex-col gap-1">
-                      {/* Badge source */}
                       {msg.source && (
                         <div className="flex items-center gap-1.5 px-1">
-                          {msg.source === "texte" && (
-                            <span className="flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
-                              🟡 Extrait du texte
-                            </span>
-                          )}
-                          {msg.source === "synthese" && (
-                            <span className="flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">
-                              🔵 Synthèse IA du cours
-                            </span>
-                          )}
-                          {msg.source === "hors_texte" && (
-                            <span className="flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">
-                              🟠 Hors texte — connaissance générale
-                            </span>
-                          )}
+                          {msg.source === "texte" && <span className="flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🟡 Extrait du texte</span>}
+                          {msg.source === "synthese" && <span className="flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">🔵 Synthèse IA du cours</span>}
+                          {msg.source === "hors_texte" && <span className="flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">🟠 Hors texte — connaissance générale</span>}
                         </div>
                       )}
-                      {/* Bulle */}
-                      <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed rounded-bl-sm border ${
-                        msg.source === "texte" ? "bg-yellow-50 border-yellow-200 text-gray-800" :
-                        msg.source === "hors_texte" ? "bg-orange-50 border-orange-200 text-gray-800" :
-                        "bg-gray-100 border-gray-200 text-gray-800"
-                      }`}>
+                      <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed rounded-bl-sm border ${msg.source === "texte" ? "bg-yellow-50 border-yellow-200 text-gray-800" : msg.source === "hors_texte" ? "bg-orange-50 border-orange-200 text-gray-800" : "bg-gray-100 border-gray-200 text-gray-800"}`}>
                         {msg.content}
                       </div>
                     </div>
                   ) : (
-                    <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-indigo-600 text-white rounded-br-sm">
-                      {msg.content}
-                    </div>
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-indigo-600 text-white rounded-br-sm">{msg.content}</div>
                   )}
                 </div>
               ))}
@@ -758,11 +695,729 @@ ${selectedEntry.content}`;
             </div>
           </div>
         )}
-
         <button onClick={onBack} className="mt-3 text-sm text-gray-600 hover:text-gray-800 font-semibold flex items-center gap-1 justify-center flex-shrink-0">
           <ArrowLeft className="w-4 h-4" /> Retour aux chapitres
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── DISSERTATION MODE ─────────────────────────────────────────────────────────
+type DissWorkMode = "plan" | "brainstorm" | "corrige" | "combined";
+type PlanLevel = 1 | 2 | 3 | 4;
+
+function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
+  // Étape : "select" | "working"
+  const [step, setStep] = useState<"select" | "working">("select");
+
+  // Sélection des notions
+  const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
+  const [sujet, setSujet] = useState("");
+  const [sujetAlt, setSujetAlt] = useState(""); // sujet contre-intuitif
+  const [activeSujet, setActiveSujet] = useState<"main" | "alt">("main");
+  const [isGeneratingSujet, setIsGeneratingSujet] = useState(false);
+  const [workMode, setWorkMode] = useState<DissWorkMode>("plan");
+
+  // Plan guidé
+  const [planLevel, setPlanLevel] = useState<PlanLevel>(1);
+  const [plan, setPlan] = useState("");
+  const [planLoading, setPlanLoading] = useState(false);
+
+  // Brainstorming
+  const [brainstormMessages, setBrainstormMessages] = useState<{ role: string; content: string }[]>([]);
+  const [brainstormInput, setBrainstormInput] = useState("");
+  const [brainstormLoading, setBrainstormLoading] = useState(false);
+  const brainstormRef = useRef<HTMLDivElement>(null);
+
+  // Corrigé différé
+  const [eleveTexte, setEleveTexte] = useState("");
+  const [corrige, setCorrige] = useState("");
+  const [corrigeLoading, setCorrigeLoading] = useState(false);
+  const [corrigeSubmitted, setCorrigeSubmitted] = useState(false);
+
+  useEffect(() => { brainstormRef.current?.scrollIntoView({ behavior: "smooth" }); }, [brainstormMessages]);
+
+  // Liste des chapitres disponibles dans la bibliothèque
+  const filteredLib = useMemo(
+    () => sharedLib.filter((e: any) => !matiere || matchesMatiere(e, matiere)),
+    [sharedLib, matiere]
+  );
+  const allChapters = useMemo(() => {
+    const set = new Set<string>();
+    filteredLib.forEach((e: any) => { const ch = entryChapter(e); if (ch !== "Non classé") set.add(ch); });
+    return Array.from(set).sort();
+  }, [filteredLib]);
+
+  // Notions extraites des textes sélectionnés
+  const notionsFromSelected = useMemo(() => {
+    const notions = new Set<string>();
+    filteredLib
+      .filter((e: any) => selectedChapters.includes(entryChapter(e)))
+      .forEach((e: any) => (e.notions || []).forEach((n: string) => notions.add(n)));
+    return Array.from(notions);
+  }, [filteredLib, selectedChapters]);
+
+  // Textes sélectionnés (pour contexte IA)
+  const selectedTextes = useMemo(
+    () => filteredLib.filter((e: any) => selectedChapters.includes(entryChapter(e))),
+    [filteredLib, selectedChapters]
+  );
+
+  const contextForAI = selectedTextes
+    .map((e: any) => `=== ${entryName(e)} (${entryChapter(e)}) ===\n${e.content.slice(0, 1500)}`)
+    .join("\n\n");
+
+  const toggleChapter = (ch: string) => {
+    setSelectedChapters(prev =>
+      prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]
+    );
+  };
+
+  // Génération du sujet (surprise ou classique)
+  const generateSujets = async () => {
+    if (selectedChapters.length < 1) return;
+    setIsGeneratingSujet(true);
+    try {
+      const notionsStr = notionsFromSelected.length > 0
+        ? `Notions clés identifiées : ${notionsFromSelected.join(", ")}.`
+        : "";
+      const chapitresStr = selectedChapters.join(", ");
+      const data = await callAI([{ role: "user", content:
+        `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP (Humanités, Littérature et Philosophie)"} en terminale.
+Tu dois générer deux sujets de dissertation INÉDITS qui croisent les thèmes et notions suivants :
+Chapitres/thèmes sélectionnés : ${chapitresStr}
+${notionsStr}
+
+CONTRAINTE ABSOLUE : ces sujets ne doivent PAS avoir été traités en classe. Ils doivent CROISER les notions de manière inattendue.
+
+Génère exactement 2 sujets :
+1. "classique" : un sujet rigoureux et classique au format dissertation, qui croise les notions de façon cohérente.
+2. "surprenant" : un sujet provocateur, paradoxal ou contre-intuitif qui pousse à raisonner autrement. Peut être formulé de façon surprenante.
+
+Réponds UNIQUEMENT en JSON :
+{"classique":"Sujet classique complet ?","surprenant":"Sujet surprenant complet ?"}` }], 600);
+      const parsed = parseJSON(getText(data));
+      setSujet(parsed.classique || "");
+      setSujetAlt(parsed.surprenant || "");
+      setActiveSujet("main");
+    } catch (e: any) {
+      setSujet("Erreur lors de la génération du sujet.");
+    }
+    setIsGeneratingSujet(false);
+  };
+
+  // Démarrer le travail sur un sujet
+  const startWorking = (mode: DissWorkMode) => {
+    setWorkMode(mode);
+    setStep("working");
+    setPlan("");
+    setBrainstormMessages([]);
+    setEleveTexte("");
+    setCorrige("");
+    setCorrigeSubmitted(false);
+  };
+
+  // Générer le plan selon le niveau
+  const generatePlan = async (level: PlanLevel) => {
+    setPlanLevel(level);
+    setPlan("");
+    setPlanLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    const levelDesc = {
+      1: "un plan dialectique I/II/III avec sous-parties A, B, C seulement (titres courts, pas de contenu rédigé)",
+      2: "un plan dialectique I/II/III avec sous-parties A, B, C ET une amorce de rédaction d'une phrase pour chaque sous-partie",
+      3: "un plan dialectique I/II/III avec sous-parties A, B, C ET pour chaque sous-partie, une question socratique qui guide la réflexion",
+      4: "un plan dialectique I/II/III complet avec sous-parties A, B, C, une amorce rédigée ET des exemples tirés des textes étudiés"
+    }[level];
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
+Sujet de dissertation : "${currentSujet}"
+Chapitres mobilisés : ${selectedChapters.join(", ")}
+${contextForAI ? `\nExtraits des textes étudiés :\n${contextForAI}` : ""}
+
+Génère ${levelDesc}.
+Format lisible avec des emojis pour les parties (I → 🔹, II → 🔸, III → 🔺).
+Sois précis et adapté au niveau terminale.` }], 1500);
+      setPlan(getText(data));
+    } catch { setPlan("Erreur lors de la génération du plan."); }
+    setPlanLoading(false);
+  };
+
+  // Brainstorming : premier message auto
+  const startBrainstorm = async () => {
+    if (brainstormMessages.length > 0) return;
+    setBrainstormLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale qui guide un élève en brainstorming socratique.
+Sujet : "${currentSujet}"
+Chapitres : ${selectedChapters.join(", ")}
+${contextForAI ? `\nContexte des textes étudiés :\n${contextForAI.slice(0, 2000)}` : ""}
+
+Lance le brainstorming par une question ouverte qui pousse l'élève à définir les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500);
+      setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
+    } catch { setBrainstormMessages([{ role: "assistant", content: "Commençons ! Qu'est-ce que le sujet te demande selon toi ?" }]); }
+    setBrainstormLoading(false);
+  };
+
+  const sendBrainstorm = async () => {
+    if (!brainstormInput.trim() || brainstormLoading) return;
+    const userMsg = { role: "user", content: brainstormInput.trim() };
+    const newMsgs = [...brainstormMessages, userMsg];
+    setBrainstormMessages(newMsgs);
+    setBrainstormInput("");
+    setBrainstormLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    try {
+      const data = await callAI([
+        { role: "user", content:
+          `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale en session de brainstorming socratique avec un élève.
+Sujet : "${currentSujet}"
+Chapitres : ${selectedChapters.join(", ")}
+${contextForAI ? `Contexte textes : ${contextForAI.slice(0, 1500)}` : ""}
+Règles : guide par des questions, ne donne pas de plan tout fait, encourage la réflexion autonome, sois bienveillant. Pose une seule question à la fois. Réponds en 3-5 phrases max.` },
+        { role: "assistant", content: "Bien sûr, je suis prêt à guider ta réflexion." },
+        ...newMsgs,
+      ], 600);
+      setBrainstormMessages([...newMsgs, { role: "assistant", content: getText(data) }]);
+    } catch { setBrainstormMessages([...newMsgs, { role: "assistant", content: "Continue ta réflexion ! Qu'est-ce que cela t'évoque ?" }]); }
+    setBrainstormLoading(false);
+  };
+
+  // Corrigé : soumettre le texte de l'élève
+  const submitCorrige = async () => {
+    if (!eleveTexte.trim()) return;
+    setCorrigeLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Corrige et commente la copie d'un élève.
+Sujet : "${currentSujet}"
+Chapitres mobilisés : ${selectedChapters.join(", ")}
+${contextForAI ? `\nExtraits des textes étudiés :\n${contextForAI.slice(0, 2000)}` : ""}
+
+COPIE DE L'ÉLÈVE :
+${eleveTexte}
+
+Fournis une correction bienveillante et détaillée :
+1. **Points forts** (ce qui est réussi) — liste de 2-4 points
+2. **Points à améliorer** (avec des explications précises) — liste de 2-4 points
+3. **Sur le fond** : la problématique est-elle bien posée ? Les arguments sont-ils pertinents ?
+4. **Sur la forme** : structure, transitions, introduction/conclusion
+5. **Suggestion principale** : une seule chose prioritaire à travailler
+6. **Note indicative** /20 avec justification courte
+
+Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
+      setCorrige(getText(data));
+      setCorrigeSubmitted(true);
+    } catch { setCorrige("Erreur lors de la correction."); }
+    setCorrigeLoading(false);
+  };
+
+  const currentSujetText = activeSujet === "main" ? sujet : sujetAlt;
+
+  // ── ÉCRAN DE SÉLECTION ────────────────────────────────────────────────────
+  if (step === "select") {
+    return (
+      <div className="max-w-3xl mx-auto py-8 px-4">
+        {/* En-tête */}
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={onBack} className="p-2 text-gray-500 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-all">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-black text-gray-800">✍️ Dissertation</h1>
+            <p className="text-sm text-gray-500">Travaille un sujet inédit croisant plusieurs notions</p>
+          </div>
+        </div>
+
+        {/* Étape 1 : choix des chapitres */}
+        <div className="bg-white rounded-2xl border-2 border-rose-100 shadow-sm p-6 mb-5">
+          <h2 className="text-base font-black text-gray-800 mb-1 flex items-center gap-2">
+            <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">1</span>
+            Choisis les notions à croiser
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">Sélectionne 2 à 3 chapitres pour un sujet transversal inédit</p>
+
+          {allChapters.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+              <p className="text-gray-500 font-semibold text-sm">Aucun chapitre disponible</p>
+              <p className="text-gray-400 text-xs mt-1">Le professeur doit d'abord ajouter des textes.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {allChapters.map((ch) => {
+                const isSel = selectedChapters.includes(ch);
+                const count = filteredLib.filter((e: any) => entryChapter(e) === ch).length;
+                return (
+                  <button key={ch} onClick={() => toggleChapter(ch)}
+                    className={`text-left p-4 rounded-xl border-2 transition-all ${isSel ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300 bg-white"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center ${isSel ? "bg-rose-500 border-rose-500" : "border-gray-300"}`}>
+                          {isSel && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className={`text-sm font-bold leading-snug ${isSel ? "text-rose-700" : "text-gray-700"}`}>{ch}</span>
+                      </div>
+                      <span className="flex-shrink-0 text-xs text-gray-400 font-semibold">{count}t</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedChapters.length > 0 && (
+            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-semibold text-rose-700">
+              <Check className="w-3.5 h-3.5" />
+              {selectedChapters.length} chapitre{selectedChapters.length > 1 ? "s" : ""} sélectionné{selectedChapters.length > 1 ? "s" : ""}
+              {notionsFromSelected.length > 0 && ` · ${notionsFromSelected.length} notions disponibles`}
+            </div>
+          )}
+        </div>
+
+        {/* Étape 2 : générer le sujet */}
+        <div className="bg-white rounded-2xl border-2 border-rose-100 shadow-sm p-6 mb-5">
+          <h2 className="text-base font-black text-gray-800 mb-1 flex items-center gap-2">
+            <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">2</span>
+            Génère ton sujet
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">L'IA propose un sujet classique et un sujet surprenant</p>
+
+          <button
+            onClick={generateSujets}
+            disabled={selectedChapters.length === 0 || isGeneratingSujet}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              selectedChapters.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" :
+              "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md"
+            }`}>
+            {isGeneratingSujet ? (
+              <><Sparkles className="w-4 h-4 animate-spin" /> Génération du sujet…</>
+            ) : (
+              <><Zap className="w-4 h-4" /> {sujet ? "Regénérer un sujet" : "Génère un sujet inédit"}</>
+            )}
+          </button>
+
+          {(sujet || sujetAlt) && (
+            <div className="mt-4 space-y-3">
+              {/* Sujet classique */}
+              {sujet && (
+                <button onClick={() => setActiveSujet("main")}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${activeSujet === "main" ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300"}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${activeSujet === "main" ? "bg-rose-500 border-rose-500" : "border-gray-300"}`}>
+                      {activeSujet === "main" && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-rose-600 uppercase tracking-wide">Sujet classique</span>
+                      <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{sujet}</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+              {/* Sujet surprenant */}
+              {sujetAlt && (
+                <button onClick={() => setActiveSujet("alt")}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${activeSujet === "alt" ? "border-amber-500 bg-amber-50 ring-2 ring-amber-100" : "border-gray-200 hover:border-amber-300"}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${activeSujet === "alt" ? "bg-amber-500 border-amber-500" : "border-gray-300"}`}>
+                      {activeSujet === "alt" && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-amber-600 uppercase tracking-wide">⚡ Sujet surprenant</span>
+                      <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{sujetAlt}</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Étape 3 : choisir le mode de travail */}
+        {currentSujetText && (
+          <div className="bg-white rounded-2xl border-2 border-rose-100 shadow-sm p-6">
+            <h2 className="text-base font-black text-gray-800 mb-1 flex items-center gap-2">
+              <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">3</span>
+              Choisis ton mode de travail
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">Sujet retenu : <span className="font-bold text-gray-700 italic">"{currentSujetText}"</span></p>
+
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                ["plan", "📋 Plan guidé", "Génère un plan I/II/III avec le niveau de détail que tu choisis", "border-indigo-300 hover:border-indigo-500", "bg-indigo-600", "text-indigo-700 bg-indigo-50"],
+                ["brainstorm", "💬 Brainstorming", "L'IA te guide par des questions socratiques pour développer ta réflexion", "border-teal-300 hover:border-teal-500", "bg-teal-600", "text-teal-700 bg-teal-50"],
+                ["corrige", "✏️ Corrigé différé", "Rédige ta dissertation, puis l'IA la corrige et la commente", "border-amber-300 hover:border-amber-500", "bg-amber-600", "text-amber-700 bg-amber-50"],
+                ["combined", "🔀 Vue combinée", "Accède aux 3 modes en simultané dans des onglets", "border-purple-300 hover:border-purple-500", "bg-purple-600", "text-purple-700 bg-purple-50"],
+              ] as [DissWorkMode, string, string, string, string, string][]).map(([mode, label, desc, border, btnBg, activeBg]) => (
+                <button key={mode} onClick={() => { if (mode === "brainstorm") startBrainstorm(); startWorking(mode); }}
+                  className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md ${border} bg-white`}>
+                  <p className="font-black text-gray-800 text-sm mb-1">{label}</p>
+                  <p className="text-xs text-gray-500 leading-snug">{desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── ÉCRAN DE TRAVAIL ──────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <div className="bg-white border-b-2 border-rose-100 sticky top-0 z-20 px-4 py-3 flex items-center gap-3">
+        <button onClick={() => setStep("select")} className="p-2 text-gray-500 hover:text-rose-600 rounded-xl hover:bg-rose-50">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-rose-600 font-black uppercase tracking-wide">Dissertation</p>
+          <p className="text-sm font-bold text-gray-800 truncate italic">"{currentSujetText}"</p>
+        </div>
+        <div className="flex gap-1 text-xs text-gray-400 font-semibold flex-shrink-0">
+          {selectedChapters.slice(0, 2).map(ch => (
+            <span key={ch} className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">{ch.slice(0, 20)}{ch.length > 20 ? "…" : ""}</span>
+          ))}
+          {selectedChapters.length > 2 && <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">+{selectedChapters.length - 2}</span>}
+        </div>
+      </div>
+
+      {/* Vue combinée */}
+      {workMode === "combined" && (
+        <CombinedDissView
+          sujet={currentSujetText}
+          selectedChapters={selectedChapters}
+          matiere={matiere}
+          contextForAI={contextForAI}
+          brainstormMessages={brainstormMessages}
+          setBrainstormMessages={setBrainstormMessages}
+          onStartBrainstorm={startBrainstorm}
+        />
+      )}
+
+      {/* Plan guidé */}
+      {workMode === "plan" && (
+        <div className="max-w-3xl mx-auto py-6 px-4">
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 mb-5">
+            <h2 className="font-black text-indigo-800 mb-1 flex items-center gap-2"><ListChecks className="w-5 h-5" /> Plan guidé</h2>
+            <p className="text-xs text-indigo-600 mb-4">Choisis ton niveau de détail :</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                [1, "Niveau 1 — Squelette", "Plan I/II/III + sous-parties uniquement"],
+                [2, "Niveau 2 — Amorces", "Plan + amorce rédigée pour chaque sous-partie"],
+                [3, "Niveau 3 — Socratique", "Plan + questions pour guider ta réflexion"],
+                [4, "Niveau 4 — Complet", "Plan + amorces + exemples tirés de tes textes"],
+              ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
+                <button key={lvl} onClick={() => generatePlan(lvl)}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${planLevel === lvl && plan ? "border-indigo-500 bg-white ring-2 ring-indigo-100" : "border-indigo-200 bg-white hover:border-indigo-400"}`}>
+                  <p className="font-bold text-indigo-800 text-xs">{label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {planLoading && (
+            <div className="flex flex-col items-center py-16">
+              <Sparkles className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
+              <p className="text-gray-600 font-semibold">Génération du plan niveau {planLevel}…</p>
+            </div>
+          )}
+
+          {plan && !planLoading && (
+            <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black text-gray-800 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  Plan — Niveau {planLevel}
+                </h3>
+                <button onClick={() => generatePlan(planLevel)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" /> Regénérer
+                </button>
+              </div>
+              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Brainstorming */}
+      {workMode === "brainstorm" && (
+        <div className="max-w-2xl mx-auto py-6 px-4 flex flex-col" style={{ minHeight: "calc(100vh - 65px)" }}>
+          <div className="bg-teal-50 border-2 border-teal-200 rounded-2xl p-4 mb-4 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-teal-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-teal-800">Brainstorming socratique — L'IA te guide par des questions</p>
+          </div>
+          <div className="flex-1 bg-white rounded-2xl border-2 border-teal-200 shadow-sm flex flex-col overflow-hidden" style={{ minHeight: "400px" }}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {brainstormLoading && brainstormMessages.length === 0 && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
+                  <Sparkles className="w-4 h-4 animate-spin text-teal-500" /> Lancement du brainstorming…
+                </div>
+              )}
+              {brainstormMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "assistant" ? "bg-teal-50 border border-teal-200 text-gray-800 rounded-bl-sm" : "bg-teal-600 text-white rounded-br-sm"}`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {brainstormLoading && brainstormMessages.length > 0 && (
+                <div className="flex justify-start">
+                  <div className="bg-teal-50 rounded-2xl rounded-bl-sm px-4 py-3 border border-teal-200 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-teal-500 animate-spin" />
+                    <span className="text-sm text-gray-600">Réflexion…</span>
+                  </div>
+                </div>
+              )}
+              <div ref={brainstormRef} />
+            </div>
+            <div className="p-3 border-t border-teal-100 flex-shrink-0">
+              <div className="flex gap-2">
+                <input value={brainstormInput} onChange={(e) => setBrainstormInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendBrainstorm()}
+                  className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-teal-400 focus:outline-none text-gray-800"
+                  placeholder="Ta réflexion…" disabled={brainstormLoading} />
+                <button onClick={sendBrainstorm} disabled={!brainstormInput.trim() || brainstormLoading}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl transition-all">
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Corrigé différé */}
+      {workMode === "corrige" && (
+        <div className="max-w-3xl mx-auto py-6 px-4">
+          {!corrigeSubmitted ? (
+            <>
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5">
+                <h2 className="font-black text-amber-800 mb-1 flex items-center gap-2"><PenLine className="w-5 h-5" /> Rédige ta dissertation</h2>
+                <p className="text-xs text-amber-600">Rédige ton introduction, ton développement ou ta dissertation complète. L'IA corrigera après.</p>
+              </div>
+              <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-700">Sujet : {currentSujetText}</span>
+                  {eleveTexte && <span className="text-xs text-gray-500">{wc(eleveTexte)} mots</span>}
+                </div>
+                <textarea
+                  value={eleveTexte}
+                  onChange={(e) => setEleveTexte(e.target.value)}
+                  className="w-full h-80 p-5 text-sm text-gray-800 leading-relaxed resize-none focus:outline-none"
+                  placeholder="Rédige ta dissertation ici…&#10;&#10;Tu peux écrire ton introduction, tes arguments, ta conclusion…&#10;L'IA analysera ta copie et te donnera un retour détaillé." />
+              </div>
+              <button
+                onClick={submitCorrige}
+                disabled={!eleveTexte.trim() || corrigeLoading}
+                className={`mt-4 w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${eleveTexte.trim() ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
+                {corrigeLoading ? <><Sparkles className="w-4 h-4 animate-spin" /> Correction en cours…</> : <><Eye className="w-4 h-4" /> Soumettre pour correction</>}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 mb-5 flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-green-800 text-sm">Copie corrigée !</p>
+                  <p className="text-xs text-green-600">{wc(eleveTexte)} mots rédigés</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-4 overflow-y-auto max-h-96">
+                  <h3 className="font-black text-gray-700 text-xs uppercase mb-3 flex items-center gap-1.5"><PenLine className="w-3.5 h-3.5" /> Ta copie</h3>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{eleveTexte}</p>
+                </div>
+                <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm p-4 overflow-y-auto max-h-96">
+                  <h3 className="font-black text-amber-700 text-xs uppercase mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Correction IA</h3>
+                  <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{corrige}</pre>
+                </div>
+              </div>
+              <button onClick={() => { setCorrigeSubmitted(false); setCorrige(""); }}
+                className="w-full py-3 rounded-xl border-2 border-amber-300 text-amber-700 font-bold text-sm hover:bg-amber-50 transition-all flex items-center justify-center gap-2">
+                <RotateCcw className="w-4 h-4" /> Recommencer avec une nouvelle copie
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── VUE COMBINÉE ──────────────────────────────────────────────────────────────
+function CombinedDissView({ sujet, selectedChapters, matiere, contextForAI, brainstormMessages, setBrainstormMessages, onStartBrainstorm }: any) {
+  const [activeTab, setActiveTab] = useState<"plan" | "brainstorm" | "corrige">("plan");
+  const [planLevel, setPlanLevel] = useState<PlanLevel>(1);
+  const [plan, setPlan] = useState("");
+  const [planLoading, setPlanLoading] = useState(false);
+  const [brainstormInput, setBrainstormInput] = useState("");
+  const [brainstormLoading, setBrainstormLoading] = useState(false);
+  const [eleveTexte, setEleveTexte] = useState("");
+  const [corrige, setCorrige] = useState("");
+  const [corrigeLoading, setCorrigeLoading] = useState(false);
+  const [corrigeSubmitted, setCorrigeSubmitted] = useState(false);
+  const brainstormRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { brainstormRef.current?.scrollIntoView({ behavior: "smooth" }); }, [brainstormMessages]);
+
+  useEffect(() => {
+    if (activeTab === "brainstorm" && brainstormMessages.length === 0) onStartBrainstorm();
+  }, [activeTab]);
+
+  const generatePlan = async (level: PlanLevel) => {
+    setPlanLevel(level); setPlan(""); setPlanLoading(true);
+    const levelDesc = {
+      1: "un plan dialectique I/II/III avec sous-parties A, B, C seulement",
+      2: "un plan dialectique I/II/III avec sous-parties et une amorce rédigée pour chacune",
+      3: "un plan dialectique I/II/III avec sous-parties et une question socratique pour chacune",
+      4: "un plan dialectique I/II/III complet avec sous-parties, amorces ET exemples des textes étudiés"
+    }[level];
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
+Sujet : "${sujet}" — Chapitres : ${selectedChapters.join(", ")}
+${contextForAI ? `\nExtraits textes :\n${contextForAI}` : ""}
+Génère ${levelDesc}. Format lisible avec emojis (I → 🔹, II → 🔸, III → 🔺).` }], 1500);
+      setPlan(getText(data));
+    } catch { setPlan("Erreur."); }
+    setPlanLoading(false);
+  };
+
+  const sendBrainstorm = async () => {
+    if (!brainstormInput.trim() || brainstormLoading) return;
+    const userMsg = { role: "user", content: brainstormInput.trim() };
+    const newMsgs = [...brainstormMessages, userMsg];
+    setBrainstormMessages(newMsgs);
+    setBrainstormInput("");
+    setBrainstormLoading(true);
+    try {
+      const data = await callAI([
+        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en brainstorming socratique. Sujet : "${sujet}". Chapitres : ${selectedChapters.join(", ")}. Contexte : ${contextForAI.slice(0, 1000)}. Guide par questions, 3-5 phrases max, une seule question.` },
+        { role: "assistant", content: "Bien sûr, je guide ta réflexion." },
+        ...newMsgs,
+      ], 500);
+      setBrainstormMessages([...newMsgs, { role: "assistant", content: getText(data) }]);
+    } catch { setBrainstormMessages([...newMsgs, { role: "assistant", content: "Continue !" }]); }
+    setBrainstormLoading(false);
+  };
+
+  const submitCorrige = async () => {
+    if (!eleveTexte.trim()) return;
+    setCorrigeLoading(true);
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Sujet : "${sujet}". Chapitres : ${selectedChapters.join(", ")}.
+COPIE : ${eleveTexte}
+Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Forme 5. Suggestion prioritaire 6. Note /20` }], 2000);
+      setCorrige(getText(data)); setCorrigeSubmitted(true);
+    } catch { setCorrige("Erreur."); }
+    setCorrigeLoading(false);
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto py-4 px-4">
+      <div className="flex gap-2 mb-4">
+        {([
+          ["plan", "📋 Plan guidé", "border-indigo-500 bg-indigo-50 text-indigo-700"],
+          ["brainstorm", "💬 Brainstorming", "border-teal-500 bg-teal-50 text-teal-700"],
+          ["corrige", "✏️ Corrigé", "border-amber-500 bg-amber-50 text-amber-700"],
+        ] as [string, string, string][]).map(([tab, label, activeClass]) => (
+          <button key={tab} onClick={() => setActiveTab(tab as any)}
+            className={`flex-1 py-3 rounded-xl border-2 font-bold text-xs transition-all ${activeTab === tab ? activeClass : "border-gray-200 text-gray-600 hover:border-gray-300"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "plan" && (
+        <div>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {([
+              [1, "Squelette", "Plan seul"],
+              [2, "Amorces", "Plan + intro"],
+              [3, "Socratique", "Plan + questions"],
+              [4, "Complet", "Plan + exemples"],
+            ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
+              <button key={lvl} onClick={() => generatePlan(lvl)}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${planLevel === lvl && plan ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:border-indigo-300"}`}>
+                <p className="font-bold text-xs text-indigo-800">Niv.{lvl} — {label}</p>
+                <p className="text-xs text-gray-500">{desc}</p>
+              </button>
+            ))}
+          </div>
+          {planLoading ? (
+            <div className="flex justify-center py-10"><Sparkles className="w-7 h-7 text-indigo-500 animate-spin" /></div>
+          ) : plan ? (
+            <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5">
+              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-400 font-semibold">Choisis un niveau ci-dessus pour générer le plan</div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "brainstorm" && (
+        <div className="bg-white rounded-2xl border-2 border-teal-200 shadow-sm flex flex-col" style={{ minHeight: "400px" }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-96">
+            {brainstormMessages.map((msg: any, i: number) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${msg.role === "assistant" ? "bg-teal-50 border border-teal-200 text-gray-800" : "bg-teal-600 text-white"}`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {brainstormLoading && <div className="flex justify-start"><div className="bg-teal-50 rounded-2xl px-4 py-3 flex items-center gap-2"><Sparkles className="w-4 h-4 text-teal-500 animate-spin" /><span className="text-sm text-gray-600">Réflexion…</span></div></div>}
+            <div ref={brainstormRef} />
+          </div>
+          <div className="p-3 border-t border-teal-100">
+            <div className="flex gap-2">
+              <input value={brainstormInput} onChange={(e) => setBrainstormInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendBrainstorm()}
+                className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-teal-400 focus:outline-none text-gray-800"
+                placeholder="Ta réflexion…" disabled={brainstormLoading} />
+              <button onClick={sendBrainstorm} disabled={!brainstormInput.trim() || brainstormLoading}
+                className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl">
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "corrige" && (
+        <div>
+          {!corrigeSubmitted ? (
+            <>
+              <textarea value={eleveTexte} onChange={(e) => setEleveTexte(e.target.value)}
+                className="w-full h-64 p-4 border-2 border-amber-200 rounded-2xl text-sm text-gray-800 leading-relaxed resize-none focus:outline-none mb-3"
+                placeholder="Rédige ta dissertation ici…" />
+              <button onClick={submitCorrige} disabled={!eleveTexte.trim() || corrigeLoading}
+                className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ${eleveTexte.trim() ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
+                {corrigeLoading ? <><Sparkles className="w-4 h-4 animate-spin" /> Correction…</> : <><Eye className="w-4 h-4" /> Soumettre pour correction</>}
+              </button>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 max-h-96 overflow-y-auto">
+                <h3 className="font-black text-xs text-gray-500 uppercase mb-3">Ta copie</h3>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{eleveTexte}</p>
+              </div>
+              <div className="bg-white rounded-2xl border-2 border-amber-200 p-4 max-h-96 overflow-y-auto">
+                <h3 className="font-black text-xs text-amber-600 uppercase mb-3">Correction IA</h3>
+                <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans">{corrige}</pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -799,10 +1454,7 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
     setLoadingExplan(true); setExplanation("");
     try {
       const data = await callAI([{ role: "user", content:
-        `Question : ${q.question}
-Bonne réponse : ${q.options[q.correctIndex]}
-Réponse de l'élève : ${q.options[chosen]}
-Explique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse. Si l'élève a mal répondu, explique son erreur avec bienveillance.` }], 500);
+        `Question : ${q.question}\nBonne réponse : ${q.options[q.correctIndex]}\nRéponse de l'élève : ${q.options[chosen]}\nExplique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse.` }], 500);
       setExplanation(getText(data));
     } catch { setExplanation("Impossible de générer une explication."); }
     setLoadingExplan(false);
@@ -1011,9 +1663,7 @@ function Dashboard({ onBack }: any) {
               {[
                 ["Quiz effectués", filtered.length, "text-indigo-700"],
                 ["Réussis (≥70%)", filtered.filter((r) => r.pourcentage >= 70).length, "text-green-700"],
-                ["Moyenne générale",
-                  filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + r.pourcentage, 0) / filtered.length) + "%" : "0%",
-                  "text-purple-700"],
+                ["Moyenne générale", filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + r.pourcentage, 0) / filtered.length) + "%" : "0%", "text-purple-700"],
               ].map(([label, val, color]) => (
                 <div key={label as string} className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
                   <div className={`text-3xl font-black ${color}`}>{val}</div>
@@ -1031,14 +1681,8 @@ function Dashboard({ onBack }: any) {
                 <tbody className="divide-y divide-gray-100">
                   {filtered.map((r: any) => (
                     <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 text-gray-700">
-                        {new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
-                          {r.eleve_nom || "Anonyme"}
-                        </span>
-                      </td>
+                      <td className="px-5 py-3 text-gray-700">{new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-5 py-3"><span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{r.eleve_nom || "Anonyme"}</span></td>
                       <td className="px-5 py-3"><span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span></td>
                       <td className="px-5 py-3 font-bold text-gray-800">{r.score}/{r.total}</td>
                       <td className="px-5 py-3">
@@ -1047,9 +1691,7 @@ function Dashboard({ onBack }: any) {
                             <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
                               style={{ width: r.pourcentage + "%" }} />
                           </div>
-                          <span className={`text-sm font-bold ${r.pourcentage >= 70 ? "text-green-700" : r.pourcentage >= 50 ? "text-orange-600" : "text-red-600"}`}>
-                            {r.pourcentage}%
-                          </span>
+                          <span className={`text-sm font-bold ${r.pourcentage >= 70 ? "text-green-700" : r.pourcentage >= 50 ? "text-orange-600" : "text-red-600"}`}>{r.pourcentage}%</span>
                         </div>
                       </td>
                     </tr>
@@ -1072,6 +1714,7 @@ export default function QCMApp() {
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
   const [revisionData, setRevisionData] = useState<any | null>(null);
+  const [dissertationData, setDissertationData] = useState<any | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
 
   const loadLib = async () => {
@@ -1082,8 +1725,34 @@ export default function QCMApp() {
   useEffect(() => { loadLib(); }, []);
 
   const matiere = role === "eleve-HLP" ? "hlp" : role === "eleve-Philosophie" ? "philosophie" : null;
+  const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
   if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} />;
+
+  // Accès direct au mode dissertation depuis l'accueil
+  if (dissertMatiere && !dissertationData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50">
+        <div className="bg-white border-b-2 border-rose-200 shadow-sm sticky top-0 z-30">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <PenLine className="w-6 h-6 text-rose-600" />
+              <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-rose-600">Dissertation</span> — {dissertMatiere === "hlp" ? "📜 HLP" : "🧠 Philosophie"}</h1>
+            </div>
+            <button onClick={() => setRole(null)} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
+              <X className="w-4 h-4" /> Accueil
+            </button>
+          </div>
+        </div>
+        <DissertationMode
+          sharedLib={sharedLib}
+          matiere={dissertMatiere}
+          eleveNom={eleveNom}
+          onBack={() => setRole(null)}
+        />
+      </div>
+    );
+  }
 
   if (quizData) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
@@ -1123,6 +1792,28 @@ export default function QCMApp() {
     </div>
   );
 
+  if (dissertationData) return (
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50">
+      <div className="bg-white border-b-2 border-rose-200 shadow-sm sticky top-0 z-30">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <PenLine className="w-6 h-6 text-rose-600" />
+            <h1 className="text-xl font-bold text-gray-800">Mode <span className="text-rose-600">Dissertation</span></h1>
+          </div>
+          <button onClick={() => setDissertationData(null)} className="text-sm font-semibold text-gray-600 hover:text-gray-800 flex items-center gap-1">
+            <X className="w-4 h-4" /> Quitter
+          </button>
+        </div>
+      </div>
+      <DissertationMode
+        sharedLib={sharedLib}
+        matiere={dissertationData.matiere}
+        eleveNom={eleveNom}
+        onBack={() => setDissertationData(null)}
+      />
+    </div>
+  );
+
   if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
@@ -1130,7 +1821,8 @@ export default function QCMApp() {
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
-      onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData} onRefresh={loadLib} />
+      onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
+      onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib} />
   );
 }
 
@@ -1152,17 +1844,14 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
       <div className="w-full max-w-2xl mb-6">
         <div className="bg-white rounded-2xl border-2 border-gray-200 px-5 py-4 flex items-center gap-3 shadow-sm">
           <User className="w-5 h-5 text-gray-400 flex-shrink-0" />
-          <input
-            value={pseudoInput}
-            onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }}
+          <input value={pseudoInput} onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }}
             className="flex-1 text-sm font-semibold text-gray-800 bg-transparent border-none outline-none placeholder-gray-400"
             placeholder="Ton prénom ou pseudo (optionnel)" />
-          {pseudoInput && (
-            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Enregistré</span>
-          )}
+          {pseudoInput && <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Enregistré</span>}
         </div>
       </div>
 
+      {/* Cartes élèves HLP + Philosophie */}
       <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4">
         <button onClick={() => onSelect("eleve-HLP")}
           className="flex-1 bg-white rounded-3xl border-2 border-emerald-200 shadow-lg p-7 hover:border-emerald-400 hover:shadow-xl transition-all group text-center">
@@ -1177,6 +1866,24 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
           <p className="text-gray-500 text-sm">Terminale générale & STMG</p>
         </button>
       </div>
+
+      {/* Carte Dissertation */}
+      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4">
+        <button onClick={() => onSelect("eleve-HLP-dissertation")}
+          className="flex-1 bg-white rounded-3xl border-2 border-rose-200 shadow-lg p-6 hover:border-rose-400 hover:shadow-xl transition-all group text-center">
+          <div className="text-4xl mb-2">✍️</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-rose-700 transition-colors">Dissertation HLP</h2>
+          <p className="text-gray-500 text-sm">Sujets inédits croisant plusieurs notions</p>
+        </button>
+        <button onClick={() => onSelect("eleve-Philosophie-dissertation")}
+          className="flex-1 bg-white rounded-3xl border-2 border-pink-200 shadow-lg p-6 hover:border-pink-400 hover:shadow-xl transition-all group text-center">
+          <div className="text-4xl mb-2">🖊️</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-pink-700 transition-colors">Dissertation Philo</h2>
+          <p className="text-gray-500 text-sm">Sujets inédits croisant plusieurs notions</p>
+        </button>
+      </div>
+
+      {/* Carte Prof */}
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-3xl border-2 border-purple-200 shadow-lg p-6 hover:border-purple-400 transition-all text-center">
           <div className="text-4xl mb-2">👩‍🏫</div>
@@ -1242,16 +1949,11 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
     if (newType === "cours" && !newChapter) return;
     setSaving(true);
     const entry = {
-      id: uid(),
-      chapter: newChapter || "Non classé",
+      id: uid(), chapter: newChapter || "Non classé",
       author: newType === "cours" ? "" : newAuthor || "",
       workTitle: newType === "cours" ? newChapter || "Cours" : newWorkTitle || "Sans titre",
-      notions: [],
-      content: newContent,
-      createdAt: Date.now(),
-      wordCount: wc(newContent),
-      type: newType,
-      matiere: newMatiere,
+      notions: [], content: newContent, createdAt: Date.now(), wordCount: wc(newContent),
+      type: newType, matiere: newMatiere,
     };
     try {
       await dbAddTexte(entry); await onReload();
@@ -1275,12 +1977,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
         let status = "done";
         try {
           const aiMeta = await extractMetadataWithAI(content, file.name, newChapter);
-          meta = {
-            author: aiMeta.author || "",
-            workTitle: aiMeta.workTitle || file.name.replace(/\.[^.]+$/, ""),
-            chapter: newChapter || aiMeta.chapter || "Non classé",
-            notions: Array.isArray(aiMeta.notions) ? aiMeta.notions : [],
-          };
+          meta = { author: aiMeta.author || "", workTitle: aiMeta.workTitle || file.name.replace(/\.[^.]+$/, ""), chapter: newChapter || aiMeta.chapter || "Non classé", notions: Array.isArray(aiMeta.notions) ? aiMeta.notions : [] };
         } catch { status = "error"; }
         entries.push({ id: uid(), filename: file.name, content, wordCount: wc(content), ...meta, type: "les deux", matiere: newMatiere, status });
       } catch {
@@ -1412,15 +2109,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                         </button>
                       ))}
                     </div>
-                    {newType === "cours" && (
-                      <p className="text-xs text-amber-600 mt-1.5 font-semibold">📌 Visible en révision uniquement</p>
-                    )}
+                    {newType === "cours" && <p className="text-xs text-amber-600 mt-1.5 font-semibold">📌 Visible en révision uniquement</p>}
                     {(newType === "les deux" || newType === "qcm") && (
                       <div className="mt-2 flex gap-2">
-                        {[
-                          ["les deux", "Révision + Quiz"],
-                          ["qcm", "Quiz uniquement"],
-                        ].map(([val, label]) => (
+                        {[["les deux", "Révision + Quiz"], ["qcm", "Quiz uniquement"]].map(([val, label]) => (
                           <button key={val} onClick={() => setNewType(val)}
                             className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all ${newType === val ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}>
                             {label}
@@ -1593,9 +2285,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                     <div className="flex items-start gap-4 p-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${matiereColor(entry.matiere || "hlp")}`}>
-                            {matiereLabel(entry.matiere || "hlp")}
-                          </span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${matiereColor(entry.matiere || "hlp")}`}>{matiereLabel(entry.matiere || "hlp")}</span>
                           <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{entryChapter(entry)}</span>
                           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold">
                             {entry.type === "cours" ? "📖 Cours" : entry.type === "qcm" ? "✅ QCM" : "📖✅ Les deux"}
@@ -1628,7 +2318,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 }
 
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onRefresh, eleveNom }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom }: any) {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [numQ, setNumQ] = useState(10);
@@ -1636,17 +2326,14 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"revision" | "quiz">("revision");
+  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation">("revision");
   const [revisionSubTab, setRevisionSubTab] = useState<"cours" | "textes">("cours");
 
   const isHLP = matiere === "hlp";
   const headerBorder = isHLP ? "border-emerald-200" : "border-blue-200";
   const matiereDisplay = isHLP ? "📜 HLP" : "🧠 Philosophie";
 
-  const filteredLib = useMemo(
-    () => sharedLib.filter((e: any) => matchesMatiere(e, matiere)),
-    [sharedLib, matiere]
-  );
+  const filteredLib = useMemo(() => sharedLib.filter((e: any) => matchesMatiere(e, matiere)), [sharedLib, matiere]);
 
   const chapters = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1697,20 +2384,10 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
           `Génère EXACTEMENT ${batchSize} questions QCM sur le texte littéraire ci-dessous.
 Règle de format : la bonne réponse est TOUJOURS en position 0, suivie de 3 mauvaises réponses. 4 choix au total.
 ${diffHint}${already}
-
 CONSIGNES ABSOLUES pour les mauvaises réponses :
-- Chaque mauvaise réponse doit être IMMÉDIATEMENT et SANS AMBIGUÏTÉ fausse pour tout élève ayant lu le texte.
-- INTERDIT : les nuances, les formulations proches de la bonne réponse, les pièges subtils.
-- OBLIGATOIRE : utilise des erreurs grossières et évidentes parmi ces types :
-  * Mauvais auteur (un auteur d'une autre époque ou d'un autre genre totalement différent)
-  * Mauvaise époque (anachronisme flagrant, ex: "XVIIIe siècle" si le texte est du XXe)
-  * Affirmation directement contraire à ce qui est écrit dans le texte
-  * Œuvre ou personnage sans aucun rapport avec le texte
-  * Notion philosophique ou littéraire complètement hors-sujet
-- Test de validation : un élève qui a lu le texte une seule fois doit pouvoir éliminer les 3 mauvaises réponses en moins de 5 secondes.
-
-Format JSON strict (rien d'autre) : [{"q":"Question ?","r":["Bonne réponse","Mauvaise réponse évidente 1","Mauvaise réponse évidente 2","Mauvaise réponse évidente 3"]}]
-
+- Chaque mauvaise réponse doit être IMMÉDIATEMENT et SANS AMBIGUÏTÉ fausse.
+- OBLIGATOIRE : erreurs grossières (mauvais auteur, mauvaise époque, affirmation contraire, hors-sujet).
+Format JSON strict : [{"q":"Question ?","r":["Bonne réponse","Mauvaise 1","Mauvaise 2","Mauvaise 3"]}]
 Texte source :
 ${allContent}` }]);
         const parsed = parseJSON(getText(data));
@@ -1758,7 +2435,6 @@ ${allContent}` }]);
           <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
             <div className="text-5xl mb-4">📭</div>
             <p className="text-xl font-bold text-gray-600">Aucun texte disponible</p>
-            <p className="text-sm text-gray-500 mt-2">Le professeur n'a pas encore ajouté de contenus pour {matiereDisplay}.</p>
           </div>
         ) : !selectedChapter ? (
           <>
@@ -1768,6 +2444,24 @@ ${allContent}` }]);
               </h2>
               <p className="text-gray-600">Choisis un chapitre pour réviser ou faire un quiz</p>
             </div>
+
+            {/* Bouton dissertation transversal */}
+            <div className="mb-6">
+              <button
+                onClick={() => onStartDissertation({ matiere })}
+                className="w-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold py-5 rounded-2xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all hover:shadow-xl">
+                <PenLine className="w-6 h-6" />
+                ✍️ Travailler un sujet de dissertation inédit
+                <span className="text-xs font-normal opacity-80 bg-white/20 px-2 py-0.5 rounded-full">Croiser plusieurs chapitres</span>
+              </button>
+            </div>
+
+            <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <div className="flex-1 h-px bg-gray-200" />
+              ou réviser / faire un quiz par chapitre
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {chapters.map(([ch, count]) => (
                 <button key={ch} onClick={() => selectChapter(ch)}
@@ -1799,7 +2493,6 @@ ${allContent}` }]);
                 </div>
               ) : (
                 <>
-                  {/* Sous-onglets Cours / Textes */}
                   {coursTexts.length > 0 && litteraireTexts.length > 0 && (
                     <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-xl">
                       <button onClick={() => setRevisionSubTab("cours")}
@@ -1814,7 +2507,6 @@ ${allContent}` }]);
                       </button>
                     </div>
                   )}
-                  {/* Contenu selon sous-onglet */}
                   {(() => {
                     const toRevise = (coursTexts.length > 0 && litteraireTexts.length > 0)
                       ? (revisionSubTab === "cours" ? coursTexts : litteraireTexts)
@@ -1826,7 +2518,7 @@ ${allContent}` }]);
                     ) : (
                       <button onClick={() => onStartRevision({ entries: toRevise, chapter: selectedChapter })}
                         className={`w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-3 text-white text-lg shadow-lg transition-all bg-gradient-to-r ${revisionSubTab === "cours" || coursTexts.length === 0 ? "from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" : "from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"}`}>
-                        {revisionSubTab === "cours" || coursTexts.length === 0 ? <BookOpen className="w-6 h-6" /> : <BookOpen className="w-6 h-6" />}
+                        <BookOpen className="w-6 h-6" />
                         Réviser — {toRevise.length} {revisionSubTab === "textes" && litteraireTexts.length > 0 ? "texte" : "cours"}{toRevise.length > 1 ? "s" : ""}
                       </button>
                     );
@@ -1850,7 +2542,6 @@ ${allContent}` }]);
                     </button>
                   </div>
                   <div className="space-y-3 mb-6">
-                    {/* Cours du prof */}
                     {quizCoursTexts.length > 0 && (
                       <>
                         <div className="flex items-center gap-2 my-2">
@@ -1876,7 +2567,6 @@ ${allContent}` }]);
                         })}
                       </>
                     )}
-                    {/* Textes d'auteurs */}
                     {quizLitteraireTexts.length > 0 && (
                       <>
                         <div className="flex items-center gap-2 my-2">
