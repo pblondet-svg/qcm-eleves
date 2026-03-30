@@ -142,6 +142,38 @@ const dbLoadResultats = async () => {
   return data || [];
 };
 
+// ── Sujets Bac DB ─────────────────────────────────────────────────────────────
+const dbLoadSujetsBac = async (matiere?: string, notions?: string[]) => {
+  let query = supabase.from("sujets_bac").select("*").order("notion_principale");
+  if (matiere) query = query.eq("matiere", matiere);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+const dbInsertSujetBac = async (s: any) => {
+  const { error } = await supabase.from("sujets_bac").insert([{
+    id: s.id || uid(),
+    sujet: s.sujet,
+    matiere: s.matiere,
+    notions: s.notions || [],
+    notion_principale: s.notion_principale || "",
+    source: s.source || "Import prof",
+  }]);
+  if (error) throw error;
+};
+
+const dbDeleteSujetBac = async (id: string) => {
+  const { error } = await supabase.from("sujets_bac").delete().eq("id", id);
+  if (error) throw error;
+};
+
+const dbCountSujetsBac = async () => {
+  const { count, error } = await supabase.from("sujets_bac").select("*", { count: "exact", head: true });
+  if (error) return 0;
+  return count || 0;
+};
+
 // ── File extraction ───────────────────────────────────────────────────────────
 async function extractFile(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase();
@@ -477,7 +509,7 @@ ${entry.content.slice(0, 4000)}` }], 1200);
 }
 
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
-function RevisionMode({ entries, chapter, onBack }: any) {
+function RevisionMode({ entries, chapter, onBack, allTextes }: any) {
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
   const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards">("chat");
   const [messages, setMessages] = useState<{ role: string; content: string; source?: "texte" | "synthese" | "hors_texte" }[]>([]);
@@ -523,15 +555,23 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     setInput("");
     setLoading(true);
     try {
-      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser un texte de cours.
+      // Construire le contexte : texte sélectionné EN PREMIER, puis les autres textes de la matière
+      const autresTextes = (allTextes || [])
+        .filter((t: any) => t.id !== selectedEntry.id)
+        .map((t: any) => `--- ${entryName(t)} (${t.chapter || "Sans chapitre"}) ---\n${t.content.slice(0, 800)}`)
+        .join("\n\n");
+      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser ses cours de ${selectedEntry.matiere === "philosophie" ? "Philosophie" : "HLP"}.
 Tu dois TOUJOURS répondre en JSON valide, rien d'autre. Format strict :
 {"source": "texte" | "synthese" | "hors_texte", "contenu": "ta réponse ici"}
+
 Règles pour choisir la source :
-- "texte" : la réponse s'appuie DIRECTEMENT sur un passage du texte fourni
-- "synthese" : la réponse interprète ou explique le texte fourni sans citation directe
-- "hors_texte" : l'information demandée ne figure PAS dans le texte (commence par "⚠️ Cette information ne figure pas dans le texte fourni.")
-TEXTE DU COURS :
-${selectedEntry.content}`;
+- "texte" : la réponse s'appuie DIRECTEMENT sur un passage d'un des textes fournis (précise lequel entre guillemets)
+- "synthese" : la réponse synthétise ou met en lien plusieurs textes du corpus
+- "hors_texte" : l'information demandée ne figure dans AUCUN des textes fournis (commence par "⚠️ Cette information ne figure pas dans les textes du cours.")
+
+TEXTE PRINCIPAL (celui que l'élève révise) :
+${selectedEntry.content}
+${autresTextes ? \`\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertinent) :\n\${autresTextes}\` : ""}`;
       const historyForAPI = newMessages.map(m => ({ role: m.role, content: m.content }));
       const data = await callAI([
         { role: "user", content: systemPrompt },
@@ -717,6 +757,8 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
   const [sujetAlt, setSujetAlt] = useState(""); // sujet contre-intuitif
   const [activeSujet, setActiveSujet] = useState<"main" | "alt">("main");
   const [isGeneratingSujet, setIsGeneratingSujet] = useState(false);
+  const [isLoadingBac, setIsLoadingBac] = useState(false);
+  const [sujetBacSource, setSujetBacSource] = useState("");
   const [workMode, setWorkMode] = useState<DissWorkMode>("plan");
 
   // Plan guidé
@@ -839,6 +881,31 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
     setIsGeneratingSujet(false);
   };
 
+  // Piocher un vrai sujet de bac dans la banque
+  const piocherSujetBac = async () => {
+    if (selectedChapters.length === 0) return;
+    setIsLoadingBac(true);
+    try {
+      const tous = await dbLoadSujetsBac(matiere || undefined);
+      // Filtrer par chapitres/notions sélectionnés
+      const compatibles = tous.filter((s: any) => {
+        const sNotions = [...(s.notions || []), s.notion_principale || ""].map((n: string) => n.toLowerCase());
+        return selectedChapters.some(ch => 
+          sNotions.some(n => n.includes(ch.toLowerCase().slice(0, 10)) || ch.toLowerCase().includes(n.slice(0, 10)))
+        );
+      });
+      const pool = compatibles.length > 0 ? compatibles : tous;
+      if (pool.length === 0) { alert("Aucun sujet dans la banque pour cette matière. Importez des sujets dans l\'espace Professeur."); setIsLoadingBac(false); return; }
+      // Piocher aléatoirement
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      setSujet(picked.sujet);
+      setSujetBacSource(picked.source || "Bac");
+      setSujetAlt("");
+      setActiveSujet("main");
+    } catch (e) { console.error(e); }
+    setIsLoadingBac(false);
+  };
+
   // Démarrer le travail sur un sujet
   const startWorking = (mode: DissWorkMode) => {
     setWorkMode(mode);
@@ -850,158 +917,227 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
     setCorrigeSubmitted(false);
   };
 
-  // Méthode du prof intégrée dans les prompts de plan
-  const METHODE_INTRO = `MÉTHODE D'INTRODUCTION (à suivre dans cet ordre) :
-1. Opinion commune (doxa) : ce que les gens pensent habituellement du sujet
-2. Définitions : définir clairement les termes clés du sujet
-3. Paradoxe du sujet : montrer le caractère quasi-illogique ou inattendu de la question (tout sujet invite à critiquer un préjugé)
-4. Problématique / Reformulation : reformuler le sujet en soulignant ses paradoxes internes, faire apparaître le problème philosophique
-5. Annonce de plan : "Nous verrons dans un premier temps… puis… enfin…"`;
+  // ── Méthode complète du professeur ──────────────────────────────────────────
+  const METHODE_PROF = `═══ MÉTHODE DE DISSERTATION (à respecter scrupuleusement) ═══
 
-  const METHODE_PLAN = `STRUCTURE DU PLAN DIALECTIQUE (Thèse / Antithèse / Synthèse) :
-- Partie I — LA THÈSE : répond "oui" à la question posée. Hypothèse de réponse initiale.
-- Partie II — L'ANTITHÈSE : répond "non". Examen des limites de la thèse, proposition d'une hypothèse contraire.
-- Partie III — LA SYNTHÈSE : NI un résumé du I et II, NI un compromis, NI une conclusion. C'est un NOUVEL ÉCLAIRAGE qui dépasse l'alternative oui/non en introduisant un concept nouveau et imprévu. La synthèse reformule le problème autrement.
-ASTUCE SYNTHÈSE : recycler l'ouverture de conclusion pour en faire la question traitée au III.
+▶ INTRODUCTION (5 étapes obligatoires dans cet ordre) :
+1. OPINION COMMUNE (doxa) : formuler ce que les gens pensent habituellement du sujet — cette opinion sera progressivement dépassée dans le développement
+2. DÉFINITIONS : définir clairement chaque terme clé du sujet (s'appuyer sur le dictionnaire, les cours, la culture générale)
+3. PARADOXE DU SUJET : montrer pourquoi cette question semble absurde ou évidente de prime abord, puis révéler son caractère paradoxal — tout sujet invite à critiquer un préjugé (para = contre, doxa = opinion commune). Exemples de paradoxes : sujet provocant, contradiction dans les termes, concepts apparemment opposés mis en rapport, distinction inattendue...
+4. PROBLÉMATIQUE : reformuler le sujet en soulignant ses paradoxes internes, en utilisant des synonymes, antonymes, et adverbes comme "vraiment", "nécessairement", "inévitablement". Montrer qu'il y a un vrai problème philosophique là où on n'en voyait pas.
+5. ANNONCE DE PLAN : indiquer clairement les 3 parties — "Nous verrons dans un premier temps… puis nous montrerons… enfin nous tenterons de…"
 
-Chaque partie comporte 2 à 3 sous-parties (A, B, C).`;
+▶ PLAN DIALECTIQUE (Thèse / Antithèse / Synthèse) :
+• PARTIE I — THÈSE : hypothèse de réponse initiale qui répond "oui" à la question. Défendre une première position de façon convaincante.
+• PARTIE II — ANTITHÈSE : examiner les limites de la thèse et proposer l'hypothèse contraire qui répond "non". Montrer en quoi la thèse est insuffisante.
+• PARTIE III — SYNTHÈSE : NI un résumé, NI un compromis "ni oui ni non", NI une conclusion. C'est un NOUVEL ÉCLAIRAGE qui introduit un concept IMPRÉVU pour dépasser l'alternative. La synthèse reformule le problème différemment. ASTUCE : recycler l'ouverture de la conclusion pour en faire la question traitée au III.
 
-  const METHODE_PARAGRAPHE = `MÉTHODE DU PARAGRAPHE ARGUMENTÉ (pour chaque sous-partie) :
-1. Thèse du paragraphe : une idée et une seule, formulée clairement
-2. Argumentation : raisons qui justifient l'idée (pas juste une opinion subjective)
-3. Exemple : fait ou situation concret qui illustre l'argument
-4. Citation : d'un auteur ou du cours, expliquée et commentée
-5. Mini-conclusion : montrer en quoi cela répond au sujet`;
+⚠️ RÈGLE ABSOLUE : L'Introduction et les 3 Parties sont des sections DISTINCTES. Jamais : "I. Introduction", "II. Première partie"...
 
-  const METHODE_CONCLUSION = `MÉTHODE DE CONCLUSION :
-1. Bilan : récapituler la progression (thèse → antithèse → synthèse) et rappeler la réponse au problème posé
-2. Ouverture : poser une nouvelle question qui prolonge la réflexion vers un autre horizon`;
+▶ STRUCTURE D'UN PARAGRAPHE (5 éléments obligatoires) :
+1. THÈSE DU PARAGRAPHE : une idée et une seule, formulée clairement en début de paragraphe
+2. ARGUMENTATION : raisons qui justifient l'idée (jamais une simple opinion subjective "je pense que...")
+3. EXEMPLE : fait concret, situation de la vie quotidienne ou référence culturelle illustrant l'argument — à généraliser
+4. CITATION : d'un auteur, du cours ou du texte étudié — toujours EXPLIQUÉE et commentée (le correcteur ne fait pas ce travail à ta place)
+5. MINI-CONCLUSION : montrer en quoi ce paragraphe répond directement au sujet et permettre la transition vers le suivant
+
+▶ CONCLUSION (2 étapes) :
+1. BILAN : récapituler la progression en 3 temps (thèse → antithèse → synthèse) et formuler la réponse au problème posé
+2. OUVERTURE : poser une nouvelle question qui prolonge la réflexion vers un autre horizon philosophique`;
+
+  // État pour l'explication de la logique du plan
+  const [planLogique, setPlanLogique] = useState("");
+  const [planLogiqueLoading, setPlanLogiqueLoading] = useState(false);
+  const [planLogiqueMessages, setPlanLogiqueMessages] = useState<{role: string; content: string}[]>([]);
+  const [planLogiqueInput, setPlanLogiqueInput] = useState("");
+  const [planLogiqueChatLoading, setPlanLogiqueChatLoading] = useState(false);
+  const [showLogiqueChat, setShowLogiqueChat] = useState(false);
+  const planLogiqueRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { planLogiqueRef.current?.scrollIntoView({ behavior: "smooth" }); }, [planLogiqueMessages]);
+
+  const genererExplicationLogique = async (planTexte: string, currentSujet: string) => {
+    setPlanLogiqueLoading(true);
+    setPlanLogique("");
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
+Voici le plan d'une dissertation sur le sujet : "${currentSujet}"
+
+${planTexte}
+
+Explique en 200 mots maximum, de façon claire et pédagogique pour un lycéen :
+1. Pourquoi ce plan progresse de la Thèse vers l'Antithèse puis la Synthèse (la logique dialectique)
+2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
+3. Un conseil sur la transition la plus délicate à rédiger
+
+Sois direct, encourageant, évite le jargon.` }], 600);
+      setPlanLogique(getText(data));
+      setPlanLogiqueMessages([{ role: "assistant", content: getText(data) }]);
+      setShowLogiqueChat(true);
+    } catch { setPlanLogique("Erreur."); }
+    setPlanLogiqueLoading(false);
+  };
+
+  const sendLogiqueQuestion = async () => {
+    if (!planLogiqueInput.trim() || planLogiqueChatLoading) return;
+    const userMsg = { role: "user", content: planLogiqueInput.trim() };
+    const newMsgs = [...planLogiqueMessages, userMsg];
+    setPlanLogiqueMessages(newMsgs);
+    setPlanLogiqueInput("");
+    setPlanLogiqueChatLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    try {
+      const data = await callAI([
+        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Tu expliques la logique dialectique d'un plan de dissertation sur : "${currentSujet}". Réponds en 3-5 phrases max, de façon claire et bienveillante pour un lycéen.` },
+        { role: "assistant", content: "Je suis prêt à t'expliquer la logique du plan." },
+        ...newMsgs,
+      ], 500);
+      setPlanLogiqueMessages([...newMsgs, { role: "assistant", content: getText(data) }]);
+    } catch {}
+    setPlanLogiqueChatLoading(false);
+  };
 
   // Générer le plan selon le niveau
   const generatePlan = async (level: PlanLevel) => {
     setPlanLevel(level);
     setPlan("");
+    setPlanLogique("");
+    setPlanLogiqueMessages([]);
+    setShowLogiqueChat(false);
     setPlanLoading(true);
     const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
 
     const levelPrompts: Record<PlanLevel, string> = {
-      1: `Génère un SQUELETTE DE PLAN structuré ainsi :
-─ INTRODUCTION (5 étapes numérotées, juste les titres/mots-clés, pas de rédaction) :
-  1. Opinion commune : [idée en quelques mots]
-  2. Définitions : [termes à définir]
-  3. Paradoxe : [le caractère illogique ou inattendu du sujet en une phrase]
-  4. Problématique : [reformulation du problème en une phrase]
-  5. Annonce : [les 3 parties en une ligne chacune]
+      1: `Génère un SQUELETTE DE PLAN en suivant EXACTEMENT cette structure :
 
-─ PARTIE I — THÈSE (répond OUI) : [titre court]
-   A. [sous-partie A — titre]
-   B. [sous-partie B — titre]
-   C. [sous-partie C — titre]
-   → Transition vers II : [une phrase]
+═══ INTRODUCTION ═══
+1️⃣ Opinion commune : [en quelques mots — ce que les gens pensent habituellement]
+2️⃣ Définitions : [liste les termes à définir]
+3️⃣ Paradoxe : [en une phrase — pourquoi le sujet semble absurde ou évident, puis révèle sa tension interne]
+4️⃣ Problématique : [reformulation courte du problème]
+5️⃣ Annonce : Nous verrons dans un premier temps [titre I], puis nous montrerons [titre II], enfin nous tenterons de [titre III].
 
-─ PARTIE II — ANTITHÈSE (répond NON) : [titre court]
-   A. [sous-partie A — titre]
-   B. [sous-partie B — titre]
-   C. [sous-partie C — titre]
-   → Transition vers III : [une phrase]
+═══ PARTIE I — THÈSE (répond OUI) ═══
+Titre : [formulation courte qui soutient le "oui"]
+A. [sous-partie A — titre court]
+B. [sous-partie B — titre court]
+C. [sous-partie C — titre court]
+→ Transition : [une phrase qui montre la limite du "oui" et ouvre vers le "non"]
 
-─ PARTIE III — SYNTHÈSE (nouvel éclairage, dépasse le oui/non) : [titre court]
-   A. [sous-partie A — titre]
-   B. [sous-partie B — titre]
-   C. [sous-partie C — titre]
+═══ PARTIE II — ANTITHÈSE (répond NON) ═══
+Titre : [formulation courte qui soutient le "non"]
+A. [sous-partie A — titre court]
+B. [sous-partie B — titre court]
+C. [sous-partie C — titre court]
+→ Transition : [une phrase qui montre que ni "oui" ni "non" ne suffit, et qu'il faut dépasser]
 
-─ CONCLUSION (2 étapes) :
-   Bilan : [une ligne]
-   Ouverture : [une question vers un nouvel horizon]`,
+═══ PARTIE III — SYNTHÈSE (concept nouveau qui dépasse le oui/non) ═══
+Titre : [formulation qui introduit l'angle nouveau — PAS "entre les deux" mais vraiment nouveau]
+A. [sous-partie A — titre court]
+B. [sous-partie B — titre court]
+C. [sous-partie C — titre court]
 
-      2: `Génère un PLAN AVEC AMORCES DE RÉDACTION structuré ainsi :
-─ INTRODUCTION :
-  1. Opinion commune : [rédigée en 1-2 phrases]
-  2. Définitions : [définir les 2-3 termes clés]
-  3. Paradoxe : [montrer en 1-2 phrases le caractère illogique ou inattendu du sujet]
-  4. Problématique : [reformulation du sujet en une question plus précise]
-  5. Annonce de plan : "Nous verrons dans un premier temps… Puis… Enfin…"
+═══ CONCLUSION ═══
+Bilan : [résumé en une ligne de la progression I → II → III]
+Ouverture : [une nouvelle question vers un autre horizon]`,
 
-─ PARTIE I — THÈSE : [titre — répond OUI]
-   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   → Transition : [1 phrase qui montre la limite de la thèse et annonce l'antithèse]
+      2: `Génère un PLAN AVEC AMORCES DE RÉDACTION en suivant EXACTEMENT cette structure :
 
-─ PARTIE II — ANTITHÈSE : [titre — répond NON]
-   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   → Transition : [1 phrase qui annonce le dépassement par la synthèse]
+═══ INTRODUCTION ═══
+1️⃣ Opinion commune : [rédigée en 1-2 phrases — "On dit souvent que…" / "Il est communément admis que…"]
+2️⃣ Définitions : [définir précisément chaque terme clé du sujet]
+3️⃣ Paradoxe : [montrer en 1-2 phrases pourquoi le sujet est plus complexe qu'il n'y paraît — la tension interne]
+4️⃣ Problématique : [reformulation du sujet avec adverbes : "vraiment", "nécessairement", "inévitablement"]
+5️⃣ Annonce : "Nous verrons dans un premier temps [titre I bref]. Puis nous montrerons [titre II bref]. Enfin, nous tenterons de [titre III bref]."
 
-─ PARTIE III — SYNTHÈSE : [titre — nouvel éclairage, concept imprévu]
-   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
-   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+═══ PARTIE I — THÈSE (OUI) : [titre complet] ═══
+A. [sous-titre]
+   ✏️ Amorce : [1 phrase de début de rédaction pour cette sous-partie]
+B. [sous-titre]
+   ✏️ Amorce : [1 phrase de début de rédaction]
+C. [sous-titre]
+   ✏️ Amorce : [1 phrase de début de rédaction]
+→ Transition : [1 phrase qui montre la limite de la thèse — "Cependant, cette position…"]
 
-─ CONCLUSION :
-   Bilan rédigé : [2-3 phrases qui récapitulent la progression thèse → antithèse → synthèse]
-   Ouverture : [1 question vers un autre horizon]`,
+═══ PARTIE II — ANTITHÈSE (NON) : [titre complet] ═══
+A. [sous-titre] ✏️ Amorce : [1 phrase]
+B. [sous-titre] ✏️ Amorce : [1 phrase]
+C. [sous-titre] ✏️ Amorce : [1 phrase]
+→ Transition : [1 phrase qui annonce que ni I ni II ne suffisent — "Il faut donc aller plus loin…"]
 
-      3: `Génère un PLAN SOCRATIQUE structuré ainsi (chaque sous-partie contient une question pour guider l'élève dans sa réflexion) :
-─ INTRODUCTION :
-  1. Opinion commune : [formulée]
-  2. Définitions : [termes clés définis]
-  3. Paradoxe : [montré]
-  4. Problématique : [formulée]
-  5. Annonce de plan
+═══ PARTIE III — SYNTHÈSE : [titre avec le concept nouveau] ═══
+A. [sous-titre] ✏️ Amorce : [1 phrase]
+B. [sous-titre] ✏️ Amorce : [1 phrase]
+C. [sous-titre] ✏️ Amorce : [1 phrase]
 
-─ PARTIE I — THÈSE : [titre]
-   A. [sous-titre] ❓ Question socratique : [question qui pousse l'élève à développer cet argument]
-   B. [sous-titre] ❓ Question socratique : [question]
-   C. [sous-titre] ❓ Question socratique : [question]
-   → Transition : [question qui fait voir la limite de la thèse]
+═══ CONCLUSION ═══
+Bilan (2-3 phrases) : [récapituler la progression thèse → antithèse → synthèse et la réponse au problème]
+Ouverture : [1 question vers un autre horizon philosophique]`,
 
-─ PARTIE II — ANTITHÈSE : [titre]
-   A. [sous-titre] ❓ Question socratique : [question]
-   B. [sous-titre] ❓ Question socratique : [question]
-   C. [sous-titre] ❓ Question socratique : [question]
-   → Transition : [question qui ouvre vers la synthèse]
+      3: `Génère un PLAN SOCRATIQUE en suivant EXACTEMENT cette structure (une question ❓ par sous-partie pour guider la réflexion de l'élève) :
 
-─ PARTIE III — SYNTHÈSE : [titre — nouveau concept qui dépasse l'opposition]
-   A. [sous-titre] ❓ Question socratique : [question]
-   B. [sous-titre] ❓ Question socratique : [question]
-   C. [sous-titre] ❓ Question socratique : [question]
+═══ INTRODUCTION ═══
+1️⃣ Opinion commune : [formulée]
+2️⃣ Définitions : [termes clés à définir]
+3️⃣ Paradoxe : [tension interne du sujet]
+4️⃣ Problématique : [reformulation]
+5️⃣ Annonce de plan
 
-─ CONCLUSION :
-   Bilan : [résumé de la progression]
-   Ouverture : [question vers un autre horizon]`,
+═══ PARTIE I — THÈSE (OUI) : [titre] ═══
+A. [sous-titre]
+   ❓ Pour développer : [question qui aide l'élève à trouver l'argument — commence par "En quoi…", "Comment…", "Pourquoi peut-on dire que…"]
+B. [sous-titre]
+   ❓ Pour développer : [question]
+C. [sous-titre]
+   ❓ Pour développer : [question]
+→ ❓ Transition : [question qui fait percevoir la limite de la thèse — "Mais peut-on vraiment dire que…"]
 
-      4: `Génère un PLAN COMPLET AVEC EXEMPLES structuré ainsi :
-─ INTRODUCTION :
-  1. Opinion commune : [rédigée]
-  2. Définitions : [rédigées avec précision]
-  3. Paradoxe : [expliqué et justifié]
-  4. Problématique : [reformulée avec synonymes et adverbes comme "vraiment", "nécessairement"]
-  5. Annonce de plan : [rédigée]
+═══ PARTIE II — ANTITHÈSE (NON) : [titre] ═══
+A. [sous-titre] ❓ Pour développer : [question]
+B. [sous-titre] ❓ Pour développer : [question]
+C. [sous-titre] ❓ Pour développer : [question]
+→ ❓ Transition : [question qui ouvre vers le dépassement — "Comment dépasser cette contradiction…"]
 
-─ PARTIE I — THÈSE : [titre — répond OUI]
-   A. [sous-titre]
-      → Argument : [idée principale de la sous-partie]
-      → Exemple tiré des textes : [extrait ou auteur des textes étudiés avec explication]
-      → Citation mobilisable : [auteur et idée]
-   B. [sous-titre]
-      → Argument / Exemple / Citation
-   C. [sous-titre]
-      → Argument / Exemple / Citation
-   → Transition rédigée : [montre la limite de la thèse et annonce l'antithèse]
+═══ PARTIE III — SYNTHÈSE (concept nouveau) : [titre] ═══
+A. [sous-titre] ❓ Pour développer : [question]
+B. [sous-titre] ❓ Pour développer : [question]
+C. [sous-titre] ❓ Pour développer : [question]
 
-─ PARTIE II — ANTITHÈSE : [titre — répond NON]
-   A, B, C : même structure Argument / Exemple des textes / Citation
-   → Transition rédigée : [annonce le dépassement synthétique]
+═══ CONCLUSION ═══
+Bilan : [récapitulation]
+❓ Ouverture : [question vers un autre horizon]`,
 
-─ PARTIE III — SYNTHÈSE : [titre — concept nouveau qui dépasse le oui/non]
-   A, B, C : même structure
-   ATTENTION : la synthèse n'est PAS un résumé — elle introduit un angle inédit
+      4: `Génère un PLAN COMPLET en suivant EXACTEMENT cette structure, en mobilisant les textes étudiés :
 
-─ CONCLUSION :
-   Bilan rédigé : [récapitulation de la progression en 3 temps]
-   Ouverture rédigée : [question vers un autre horizon philosophique]`,
+═══ INTRODUCTION ═══
+1️⃣ Opinion commune (rédigée) : [1-2 phrases — "Il est naturel de penser que…"]
+2️⃣ Définitions (rédigées) : [définir précisément chaque terme clé]
+3️⃣ Paradoxe (rédigé) : [montrer la tension — "Pourtant, si l'on y réfléchit…"]
+4️⃣ Problématique (rédigée) : [reformuler avec "vraiment", "nécessairement" — faire apparaître le problème]
+5️⃣ Annonce de plan (rédigée)
+
+═══ PARTIE I — THÈSE (OUI) : [titre complet] ═══
+A. [sous-titre]
+   📌 Argument : [l'idée principale du paragraphe]
+   📚 Texte/auteur : [extrait des textes étudiés avec explication de pourquoi il illustre l'argument]
+   💬 Citation : [auteur et idée à citer + explication de ce qu'elle apporte]
+   → Mini-conclusion : [montrer en quoi A répond au sujet]
+B. [sous-titre — même structure : Argument / Texte / Citation / Mini-conclusion]
+C. [sous-titre — même structure]
+→ Transition rédigée : ["Si [thèse] semble convaincante, elle ne prend pas en compte…"]
+
+═══ PARTIE II — ANTITHÈSE (NON) : [titre complet] ═══
+A, B, C : même structure 📌 Argument / 📚 Texte / 💬 Citation / Mini-conclusion
+→ Transition rédigée : ["Cependant, se limiter à dire [antithèse] ne suffit pas à rendre compte de…"]
+
+═══ PARTIE III — SYNTHÈSE (concept nouveau imprévu) : [titre — PAS un résumé] ═══
+A, B, C : même structure
+⚠️ RAPPEL : la synthèse introduit un concept NOUVEAU qui n'était pas présent en I et II
+
+═══ CONCLUSION ═══
+Bilan rédigé : [récapituler en 3 temps — "Dans un premier temps… Puis… Enfin…" — et formuler la réponse]
+Ouverture rédigée : [question vers un autre horizon philosophique]`,
     };
 
     try {
@@ -1011,21 +1147,19 @@ Sujet de dissertation : "${currentSujet}"
 Chapitres mobilisés : ${selectedChapters.join(", ")}
 ${contextForAI ? `\nExtraits des textes étudiés :\n${contextForAI}` : ""}
 
-${METHODE_INTRO}
-
-${METHODE_PLAN}
-
-${level >= 2 ? METHODE_PARAGRAPHE : ""}
-${level >= 2 ? METHODE_CONCLUSION : ""}
+${METHODE_PROF}
 
 ${levelPrompts[level]}
 
 RÈGLES ABSOLUES :
-- La Partie I est toujours la THÈSE (oui), la Partie II l'ANTITHÈSE (non), la Partie III la SYNTHÈSE (dépassement)
-- Ne jamais confondre Introduction et Partie I
-- La synthèse n'est PAS un résumé ni un compromis : elle introduit un concept nouveau et imprévu
-- Sois précis et adapté au niveau terminale
-- Respecte exactement le format demandé` }], 2000);
+- L'INTRODUCTION et les PARTIES I, II, III sont des sections ENTIÈREMENT DISTINCTES — ne jamais les confondre
+- La Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau imprévu)
+- La synthèse N'EST PAS un résumé ni un compromis — elle introduit quelque chose d'inédit
+- Respecte EXACTEMENT le format visuel demandé avec les émojis et symboles (═══, 1️⃣, ✏️, ❓, 📌, etc.)
+- Sois précis, pédagogique, adapté au niveau terminale` }], 2500);
+      // Générer aussi l'explication de la logique
+      const planTexte = getText(data);
+      genererExplicationLogique(planTexte, currentSujet);
       setPlan(getText(data));
     } catch { setPlan("Erreur lors de la génération du plan."); }
     setPlanLoading(false);
@@ -1173,19 +1307,34 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
           </h2>
           <p className="text-xs text-gray-500 mb-4">L'IA propose un sujet classique et un sujet surprenant</p>
 
-          <button
-            onClick={generateSujets}
-            disabled={selectedChapters.length === 0 || isGeneratingSujet}
-            className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-              selectedChapters.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" :
-              "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md"
-            }`}>
-            {isGeneratingSujet ? (
-              <><Sparkles className="w-4 h-4 animate-spin" /> Génération du sujet…</>
-            ) : (
-              <><Zap className="w-4 h-4" /> {sujet ? "Regénérer un sujet" : "Génère un sujet inédit"}</>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={generateSujets}
+              disabled={selectedChapters.length === 0 || isGeneratingSujet || isLoadingBac}
+              className={`flex-1 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                selectedChapters.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" :
+                "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md"
+              }`}>
+              {isGeneratingSujet ? (
+                <><Sparkles className="w-4 h-4 animate-spin" /> Génération…</>
+              ) : (
+                <><Zap className="w-4 h-4" /> Sujet inédit IA</>
+              )}
+            </button>
+            <button
+              onClick={piocherSujetBac}
+              disabled={selectedChapters.length === 0 || isLoadingBac || isGeneratingSujet}
+              className={`flex-1 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all border-2 ${
+                selectedChapters.length === 0 ? "border-gray-200 text-gray-400 cursor-not-allowed" :
+                "border-rose-400 text-rose-700 hover:bg-rose-50 bg-white"
+              }`}>
+              {isLoadingBac ? (
+                <><Sparkles className="w-4 h-4 animate-spin" /> Pioche…</>
+              ) : (
+                <><BookOpen className="w-4 h-4" /> Vrai sujet de bac</>
+              )}
+            </button>
+          </div>
 
           {(sujet || sujetAlt) && (
             <div className="mt-4 space-y-3">
@@ -1198,8 +1347,18 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                       {activeSujet === "main" && <div className="w-2 h-2 bg-white rounded-full" />}
                     </div>
                     <div>
-                      <span className="text-xs font-black text-rose-600 uppercase tracking-wide">Sujet classique</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-rose-600 uppercase tracking-wide">Sujet classique</span>
+                        {sujetBacSource && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">📋 {sujetBacSource}</span>}
+                      </div>
                       <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{sujet}</p>
+                      {notionsFromSelected.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {notionsFromSelected.slice(0, 5).map((n: string) => (
+                            <span key={n} className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-semibold">{n}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -1215,6 +1374,13 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                     <div>
                       <span className="text-xs font-black text-amber-600 uppercase tracking-wide">⚡ Sujet surprenant</span>
                       <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{sujetAlt}</p>
+                      {notionsFromSelected.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {notionsFromSelected.slice(0, 5).map((n: string) => (
+                            <span key={n} className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">{n}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -1315,18 +1481,79 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
           )}
 
           {plan && !planLoading && (
-            <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-gray-800 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  Plan — Niveau {planLevel}
-                </h3>
-                <button onClick={() => generatePlan(planLevel)}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
-                  <RotateCcw className="w-3 h-3" /> Regénérer
-                </button>
+            <div className="space-y-4">
+              {/* Plan généré */}
+              <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-black text-gray-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    Plan — Niveau {planLevel}
+                  </h3>
+                  <button onClick={() => generatePlan(planLevel)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> Regénérer
+                  </button>
+                </div>
+                <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
               </div>
-              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
+
+              {/* Explication de la logique */}
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5">
+                <h3 className="font-black text-indigo-800 mb-3 flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4" /> Comprendre la logique de ce plan
+                </h3>
+                {planLogiqueLoading ? (
+                  <div className="flex items-center gap-2 text-indigo-600 text-sm">
+                    <Sparkles className="w-4 h-4 animate-spin" /> Analyse de la progression…
+                  </div>
+                ) : planLogique ? (
+                  <p className="text-sm text-indigo-900 leading-relaxed">{planLogique}</p>
+                ) : null}
+
+                {/* Chat sur la logique */}
+                {showLogiqueChat && (
+                  <div className="mt-4 bg-white rounded-xl border border-indigo-200 overflow-hidden">
+                    <div className="max-h-48 overflow-y-auto p-3 space-y-2">
+                      {planLogiqueMessages.slice(1).map((msg, i) => (
+                        <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${msg.role === "user" ? "bg-indigo-600 text-white" : "bg-indigo-50 border border-indigo-200 text-indigo-900"}`}>
+                            {msg.content}
+                          </div>
+                        </div>
+                      ))}
+                      {planLogiqueChatLoading && (
+                        <div className="flex justify-start">
+                          <div className="bg-indigo-50 rounded-xl px-3 py-2 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 animate-spin text-indigo-500" />
+                            <span className="text-xs text-indigo-600">Réflexion…</span>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={planLogiqueRef} />
+                    </div>
+                    <div className="border-t border-indigo-100 p-2 flex gap-2">
+                      <input
+                        value={planLogiqueInput}
+                        onChange={e => setPlanLogiqueInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendLogiqueQuestion()}
+                        className="flex-1 px-3 py-2 text-sm border border-indigo-200 rounded-lg focus:outline-none focus:border-indigo-400 text-gray-800"
+                        placeholder="Pose une question sur la logique du plan…"
+                        disabled={planLogiqueChatLoading}
+                      />
+                      <button onClick={sendLogiqueQuestion} disabled={!planLogiqueInput.trim() || planLogiqueChatLoading}
+                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white px-3 py-2 rounded-lg text-sm font-bold transition-all">
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!showLogiqueChat && planLogique && (
+                  <button onClick={() => setShowLogiqueChat(true)}
+                    className="mt-3 text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1.5 border border-indigo-300 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all">
+                    <MessageCircle className="w-3.5 h-3.5" /> Poser une question sur ce plan
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1979,7 +2206,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} />
+        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} />
       </div>
     </div>
   );
@@ -2105,8 +2332,288 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
   );
 }
 
+
+// ── BANQUE SUJETS PROF ────────────────────────────────────────────────────────
+function BanqueSujetsProf() {
+  const [sujets, setSujets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [filterMatiere, setFilterMatiere] = useState("all");
+  const [filterNotion, setFilterNotion] = useState("all");
+  const [importText, setImportText] = useState("");
+  const [importMatiere, setImportMatiere] = useState("philosophie");
+  const [importNotion, setImportNotion] = useState("");
+  const [importSource, setImportSource] = useState("Bac");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pendingImport, setPendingImport] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const PHILO_NOTIONS_LIST = [
+    "L'art","Le bonheur","La conscience","Le devoir","L'État",
+    "L'inconscient","La justice","Le langage","La liberté","La nature",
+    "La raison","La religion","La science","La technique","Le temps",
+    "Le travail","La vérité",
+  ];
+  const HLP_CHAPITRES_LIST = [
+    "Éducation, transmission et émancipation",
+    "Les expressions de la sensibilité",
+    "Les métamorphoses du moi",
+    "Création, continuités et ruptures",
+    "Histoire et violence",
+    "L'humain et ses limites",
+  ];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await dbLoadSujetsBac(filterMatiere === "all" ? undefined : filterMatiere);
+      setSujets(data);
+      const t = await dbCountSujetsBac();
+      setTotal(t);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [filterMatiere]);
+
+  const notions = filterMatiere === "philosophie" ? PHILO_NOTIONS_LIST : filterMatiere === "hlp" ? HLP_CHAPITRES_LIST : [...PHILO_NOTIONS_LIST, ...HLP_CHAPITRES_LIST];
+
+  const filtered = sujets.filter(s => {
+    const matchNotion = filterNotion === "all" || (s.notion_principale || "") === filterNotion;
+    const matchSearch = !searchTerm || s.sujet.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchNotion && matchSearch;
+  });
+
+  // Analyse IA des sujets collés
+  const analyzeAndImport = async () => {
+    const lines = importText.split("\n").map(l => l.trim()).filter(l => l.length > 5 && l.includes("?"));
+    if (!lines.length) return;
+    setIsAnalyzing(true);
+    try {
+      const notionsList = importMatiere === "philosophie" ? PHILO_NOTIONS_LIST.join(", ") : HLP_CHAPITRES_LIST.join(", ");
+      const data = await callAI([{ role: "user", content:
+        `Tu es un expert en ${importMatiere === "philosophie" ? "Philosophie" : "HLP"} au bac.
+Voici une liste de sujets de dissertation. Pour chacun, identifie la ou les notions principales parmi : ${notionsList}
+
+Sujets :
+${lines.map((l, i) => `${i+1}. ${l}`).join("\n")}
+
+Réponds UNIQUEMENT en JSON (tableau) :
+[{"sujet":"...","notions":["notion1","notion2"],"notion_principale":"notion principale"}]
+Un objet par sujet, dans le même ordre.` }], 2000);
+      const parsed = parseJSON(getText(data));
+      const prepared = parsed.map((item: any, i: number) => ({
+        id: `import-${Date.now()}-${i}`,
+        sujet: item.sujet || lines[i],
+        matiere: importMatiere,
+        notions: item.notions || [],
+        notion_principale: item.notion_principale || importNotion || "",
+        source: importSource || "Import prof",
+      }));
+      setPendingImport(prepared);
+    } catch (e) { console.error(e); }
+    setIsAnalyzing(false);
+  };
+
+  const saveImport = async () => {
+    setIsSaving(true);
+    let ok = 0;
+    for (const s of pendingImport) {
+      try { await dbInsertSujetBac({ ...s, id: uid() }); ok++; } catch {}
+    }
+    setPendingImport([]);
+    setImportText("");
+    await load();
+    setIsSaving(false);
+    alert(`${ok} sujet${ok > 1 ? "s" : ""} importé${ok > 1 ? "s" : ""} avec succès !`);
+  };
+
+  const deleteSujet = async (id: string) => {
+    if (!confirm("Supprimer ce sujet ?")) return;
+    try { await dbDeleteSujetBac(id); setSujets(prev => prev.filter(s => s.id !== id)); } catch {}
+  };
+
+  const updatePending = (i: number, field: string, val: any) => {
+    setPendingImport(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Statistiques */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          ["Total sujets", total, "text-rose-700"],
+          ["Philosophie", sujets.filter(s => s.matiere === "philosophie").length, "text-blue-700"],
+          ["HLP", sujets.filter(s => s.matiere === "hlp").length, "text-emerald-700"],
+        ].map(([label, val, color]) => (
+          <div key={label as string} className="bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm">
+            <div className={`text-2xl font-black ${color}`}>{val}</div>
+            <div className="text-xs font-semibold text-gray-600 mt-0.5">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Zone d'import */}
+      <div className="bg-white rounded-2xl border-2 border-rose-100 shadow-sm p-5">
+        <h3 className="font-black text-gray-800 mb-4 flex items-center gap-2">
+          <Plus className="w-4 h-4 text-rose-600" /> Importer des sujets en masse
+        </h3>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div>
+            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Matière</label>
+            <div className="flex gap-2">
+              {[["philosophie","🧠 Philo","border-blue-400 bg-blue-50 text-blue-700"],
+                ["hlp","📜 HLP","border-emerald-400 bg-emerald-50 text-emerald-700"]].map(([val,label,ac]) => (
+                <button key={val} onClick={() => { setImportMatiere(val); setImportNotion(""); }}
+                  className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition-all ${importMatiere === val ? ac : "border-gray-200 text-gray-500"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Notion / Chapitre par défaut</label>
+            <select value={importNotion} onChange={e => setImportNotion(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-rose-400 focus:outline-none text-gray-800">
+              <option value="">— L'IA détectera —</option>
+              {(importMatiere === "philosophie" ? PHILO_NOTIONS_LIST : HLP_CHAPITRES_LIST).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Source</label>
+            <input value={importSource} onChange={e => setImportSource(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-rose-400 focus:outline-none text-gray-800"
+              placeholder="Ex: Bac 2023 Métropole" />
+          </div>
+        </div>
+        <textarea value={importText} onChange={e => setImportText(e.target.value)}
+          className="w-full h-32 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm resize-none focus:border-rose-400 focus:outline-none text-gray-800 mb-3"
+          placeholder={"Collez vos sujets ici, un par ligne :\nLa conscience fait-elle obstacle au bonheur ?\nPeut-on être esclave de soi-même ?\nFaut-il préférer la vérité au bonheur ?"} />
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            {importText.split("\n").filter(l => l.trim().includes("?")).length} sujets détectés
+          </p>
+          <button onClick={analyzeAndImport}
+            disabled={!importText.trim() || isAnalyzing}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${importText.trim() && !isAnalyzing ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
+            {isAnalyzing ? <><Sparkles className="w-4 h-4 animate-spin" /> Analyse IA…</> : <><Sparkles className="w-4 h-4" /> Analyser et préparer l'import</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Prévisualisation avant import */}
+      {pendingImport.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-black text-amber-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" /> {pendingImport.length} sujet{pendingImport.length > 1 ? "s" : ""} prêt{pendingImport.length > 1 ? "s" : ""} à importer
+            </h3>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingImport([])}
+                className="px-3 py-2 border border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100">
+                Annuler
+              </button>
+              <button onClick={saveImport} disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold">
+                {isSaving ? <><Sparkles className="w-3 h-3 animate-spin" /> Enregistrement…</> : <><Check className="w-3 h-3" /> Confirmer l'import</>}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {pendingImport.map((s, i) => (
+              <div key={i} className="bg-white rounded-xl border border-amber-200 p-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 mb-1.5">{s.sujet}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.matiere === "hlp" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                      {s.matiere === "hlp" ? "📜 HLP" : "🧠 Philo"}
+                    </span>
+                    <select value={s.notion_principale}
+                      onChange={e => updatePending(i, "notion_principale", e.target.value)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-gray-700 focus:outline-none">
+                      <option value="">— Notion —</option>
+                      {(s.matiere === "philosophie" ? PHILO_NOTIONS_LIST : HLP_CHAPITRES_LIST).map((n: string) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                    {(s.notions || []).map((n: string, ni: number) => (
+                      <span key={ni} className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">{n}</span>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => setPendingImport(prev => prev.filter((_, idx) => idx !== i))}
+                  className="text-gray-400 hover:text-red-500 flex-shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Liste des sujets existants */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <div className="p-4 border-b border-gray-100 flex gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-40">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-rose-400 focus:outline-none text-gray-800"
+              placeholder="Rechercher un sujet…" />
+          </div>
+          <select value={filterMatiere} onChange={e => { setFilterMatiere(e.target.value); setFilterNotion("all"); }}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none">
+            <option value="all">Toutes matières</option>
+            <option value="philosophie">🧠 Philosophie</option>
+            <option value="hlp">📜 HLP</option>
+          </select>
+          <select value={filterNotion} onChange={e => setFilterNotion(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none">
+            <option value="all">Toutes notions</option>
+            {notions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        {loading ? (
+          <div className="text-center py-10 text-gray-500 font-semibold">Chargement…</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 font-semibold">Aucun sujet trouvé</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {filtered.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{s.sujet}</p>
+                  <div className="flex gap-2 mt-1 flex-wrap">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.matiere === "hlp" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                      {s.matiere === "hlp" ? "📜 HLP" : "🧠 Philo"}
+                    </span>
+                    {s.notion_principale && (
+                      <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">{s.notion_principale}</span>
+                    )}
+                    <span className="text-xs text-gray-400">{s.source}</span>
+                  </div>
+                </div>
+                <button onClick={() => deleteSujet(s.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 text-center">
+          {filtered.length} sujet{filtered.length > 1 ? "s" : ""} affichés sur {total} au total
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
 function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard }: any) {
+  const [profTab, setProfTab] = useState<"textes" | "sujets">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
@@ -2250,6 +2757,16 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex gap-2">
+              <button onClick={() => setProfTab("textes")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "textes" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-700 border-gray-200 hover:border-purple-300"}`}>
+                📚 Textes
+              </button>
+              <button onClick={() => setProfTab("sujets")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "sujets" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"}`}>
+                ✍️ Banque de sujets
+              </button>
+            </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
               📊 Tableau de bord
             </button>
@@ -2260,6 +2777,11 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
           </div>
         </div>
       </div>
+      {profTab === "sujets" ? (
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <BanqueSujetsProf />
+        </div>
+      ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
         <div className="w-80 flex-shrink-0">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -2505,6 +3027,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -2660,7 +3183,22 @@ ${allContent}` }]);
                   className={`bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 text-left hover:shadow-lg transition-all group ${isHLP ? "hover:border-emerald-400" : "hover:border-blue-400"}`}>
                   <div className="text-3xl mb-3">📖</div>
                   <h3 className={`font-bold text-gray-800 text-lg mb-1 line-clamp-2 ${isHLP ? "group-hover:text-emerald-700" : "group-hover:text-blue-700"}`}>{ch}</h3>
-                  <p className="text-sm text-gray-600">{count} texte{count > 1 ? "s" : ""}</p>
+                  <p className="text-sm text-gray-600 mb-2">{count} texte{count > 1 ? "s" : ""}</p>
+                  {/* Étiquettes de notions du chapitre */}
+                  {(() => {
+                    const notions = [...new Set(
+                      filteredLib.filter((e: any) => entryChapter(e) === ch)
+                        .flatMap((e: any) => e.notions || [])
+                        .filter(Boolean)
+                    )].slice(0, 4);
+                    return notions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {notions.map((n: string) => (
+                          <span key={n} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isHLP ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200"}`}>{n}</span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                 </button>
               ))}
             </div>
