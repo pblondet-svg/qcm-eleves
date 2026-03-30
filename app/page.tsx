@@ -783,20 +783,52 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
         ? `Notions clés identifiées : ${notionsFromSelected.join(", ")}.`
         : "";
       const chapitresStr = selectedChapters.join(", ");
+      const isPhilo = matiere === "philosophie";
+      const philoExamples = `Exemples du BON style (vrais sujets bac philosophie) :
+"La conscience fait-elle obstacle au bonheur ?"
+"Peut-on être esclave de soi-même ?"
+"L'artiste travaille-t-il ?"
+"Faut-il préférer la vérité au bonheur ?"
+"La technique nous libère-t-elle ?"
+"Suffit-il de faire son devoir pour être juste ?"`;
+      const hlpExamples = `Exemples du BON style (vrais sujets bac HLP) :
+"Parvient-on jamais à être soi-même ?"
+"La nature me parle-t-elle de moi ?"
+"L'art peut-il sublimer la souffrance ?"
+"Nos sentiments résistent-ils au temps ?"
+"La souffrance transforme-t-elle le sujet ?"
+"La littérature libère-t-elle de l'assignation à une identité ?"`;
+      const styleInstructions = isPhilo
+        ? `STYLE PHILOSOPHIE — imite exactement les vrais sujets du baccalauréat de philosophie :
+- TRÈS COURT : 5 à 10 mots maximum
+- Une seule question directe
+- Commence souvent par : "Peut-on...", "Faut-il...", "Est-il...", "La... est-elle...", "Le... est-il...", "Suffit-il de...", "Doit-on..."
+- JAMAIS : "comment", "dans quelle mesure", "en quoi", "pourquoi" au début
+- INTERDITS : formulations longues, méta-questions, périphrases
+${philoExamples}`
+        : `STYLE HLP — imite exactement les vrais sujets du baccalauréat HLP :
+- COURT : 6 à 12 mots maximum
+- Une seule question directe, littéraire ou philosophique
+- Formulations typiques : "Parvient-on jamais à...", "La... est-elle...", "L'art peut-il...", "Nos... résistent-ils au...", "Peut-on... sans..."
+- Le sujet doit mettre en lien une notion littéraire/humaine et un enjeu philosophique
+- JAMAIS de formulations scolaires ou académiques lourdes
+${hlpExamples}`;
       const data = await callAI([{ role: "user", content:
-        `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP (Humanités, Littérature et Philosophie)"} en terminale.
-Tu dois générer deux sujets de dissertation INÉDITS qui croisent les thèmes et notions suivants :
-Chapitres/thèmes sélectionnés : ${chapitresStr}
+        `Tu es un professeur de ${isPhilo ? "Philosophie" : "HLP (Humanités, Littérature et Philosophie)"} en terminale.
+Tu dois formuler deux sujets de dissertation INÉDITS qui croisent les notions suivantes :
+Chapitres/notions : ${chapitresStr}
 ${notionsStr}
 
-CONTRAINTE ABSOLUE : ces sujets ne doivent PAS avoir été traités en classe. Ils doivent CROISER les notions de manière inattendue.
+CONTRAINTE ABSOLUE : ces sujets doivent CROISER au moins deux chapitres/notions différents de façon inattendue. Ils ne doivent pas avoir été traités en classe.
+
+${styleInstructions}
 
 Génère exactement 2 sujets :
-1. "classique" : un sujet rigoureux et classique au format dissertation, qui croise les notions de façon cohérente.
-2. "surprenant" : un sujet provocateur, paradoxal ou contre-intuitif qui pousse à raisonner autrement. Peut être formulé de façon surprenante.
+1. "classique" : rigoureux, format bac, croise les notions sélectionnées
+2. "surprenant" : paradoxal ou contre-intuitif, même format bac court, formulation qui surprend
 
-Réponds UNIQUEMENT en JSON :
-{"classique":"Sujet classique complet ?","surprenant":"Sujet surprenant complet ?"}` }], 600);
+Réponds UNIQUEMENT en JSON (rien d'autre) :
+{"classique":"Sujet classique ?","surprenant":"Sujet surprenant ?"}` }], 500);
       const parsed = parseJSON(getText(data));
       setSujet(parsed.classique || "");
       setSujetAlt(parsed.surprenant || "");
