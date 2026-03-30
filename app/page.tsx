@@ -850,18 +850,160 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
     setCorrigeSubmitted(false);
   };
 
+  // Méthode du prof intégrée dans les prompts de plan
+  const METHODE_INTRO = `MÉTHODE D'INTRODUCTION (à suivre dans cet ordre) :
+1. Opinion commune (doxa) : ce que les gens pensent habituellement du sujet
+2. Définitions : définir clairement les termes clés du sujet
+3. Paradoxe du sujet : montrer le caractère quasi-illogique ou inattendu de la question (tout sujet invite à critiquer un préjugé)
+4. Problématique / Reformulation : reformuler le sujet en soulignant ses paradoxes internes, faire apparaître le problème philosophique
+5. Annonce de plan : "Nous verrons dans un premier temps… puis… enfin…"`;
+
+  const METHODE_PLAN = `STRUCTURE DU PLAN DIALECTIQUE (Thèse / Antithèse / Synthèse) :
+- Partie I — LA THÈSE : répond "oui" à la question posée. Hypothèse de réponse initiale.
+- Partie II — L'ANTITHÈSE : répond "non". Examen des limites de la thèse, proposition d'une hypothèse contraire.
+- Partie III — LA SYNTHÈSE : NI un résumé du I et II, NI un compromis, NI une conclusion. C'est un NOUVEL ÉCLAIRAGE qui dépasse l'alternative oui/non en introduisant un concept nouveau et imprévu. La synthèse reformule le problème autrement.
+ASTUCE SYNTHÈSE : recycler l'ouverture de conclusion pour en faire la question traitée au III.
+
+Chaque partie comporte 2 à 3 sous-parties (A, B, C).`;
+
+  const METHODE_PARAGRAPHE = `MÉTHODE DU PARAGRAPHE ARGUMENTÉ (pour chaque sous-partie) :
+1. Thèse du paragraphe : une idée et une seule, formulée clairement
+2. Argumentation : raisons qui justifient l'idée (pas juste une opinion subjective)
+3. Exemple : fait ou situation concret qui illustre l'argument
+4. Citation : d'un auteur ou du cours, expliquée et commentée
+5. Mini-conclusion : montrer en quoi cela répond au sujet`;
+
+  const METHODE_CONCLUSION = `MÉTHODE DE CONCLUSION :
+1. Bilan : récapituler la progression (thèse → antithèse → synthèse) et rappeler la réponse au problème posé
+2. Ouverture : poser une nouvelle question qui prolonge la réflexion vers un autre horizon`;
+
   // Générer le plan selon le niveau
   const generatePlan = async (level: PlanLevel) => {
     setPlanLevel(level);
     setPlan("");
     setPlanLoading(true);
     const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
-    const levelDesc = {
-      1: "un plan dialectique I/II/III avec sous-parties A, B, C seulement (titres courts, pas de contenu rédigé)",
-      2: "un plan dialectique I/II/III avec sous-parties A, B, C ET une amorce de rédaction d'une phrase pour chaque sous-partie",
-      3: "un plan dialectique I/II/III avec sous-parties A, B, C ET pour chaque sous-partie, une question socratique qui guide la réflexion",
-      4: "un plan dialectique I/II/III complet avec sous-parties A, B, C, une amorce rédigée ET des exemples tirés des textes étudiés"
-    }[level];
+
+    const levelPrompts: Record<PlanLevel, string> = {
+      1: `Génère un SQUELETTE DE PLAN structuré ainsi :
+─ INTRODUCTION (5 étapes numérotées, juste les titres/mots-clés, pas de rédaction) :
+  1. Opinion commune : [idée en quelques mots]
+  2. Définitions : [termes à définir]
+  3. Paradoxe : [le caractère illogique ou inattendu du sujet en une phrase]
+  4. Problématique : [reformulation du problème en une phrase]
+  5. Annonce : [les 3 parties en une ligne chacune]
+
+─ PARTIE I — THÈSE (répond OUI) : [titre court]
+   A. [sous-partie A — titre]
+   B. [sous-partie B — titre]
+   C. [sous-partie C — titre]
+   → Transition vers II : [une phrase]
+
+─ PARTIE II — ANTITHÈSE (répond NON) : [titre court]
+   A. [sous-partie A — titre]
+   B. [sous-partie B — titre]
+   C. [sous-partie C — titre]
+   → Transition vers III : [une phrase]
+
+─ PARTIE III — SYNTHÈSE (nouvel éclairage, dépasse le oui/non) : [titre court]
+   A. [sous-partie A — titre]
+   B. [sous-partie B — titre]
+   C. [sous-partie C — titre]
+
+─ CONCLUSION (2 étapes) :
+   Bilan : [une ligne]
+   Ouverture : [une question vers un nouvel horizon]`,
+
+      2: `Génère un PLAN AVEC AMORCES DE RÉDACTION structuré ainsi :
+─ INTRODUCTION :
+  1. Opinion commune : [rédigée en 1-2 phrases]
+  2. Définitions : [définir les 2-3 termes clés]
+  3. Paradoxe : [montrer en 1-2 phrases le caractère illogique ou inattendu du sujet]
+  4. Problématique : [reformulation du sujet en une question plus précise]
+  5. Annonce de plan : "Nous verrons dans un premier temps… Puis… Enfin…"
+
+─ PARTIE I — THÈSE : [titre — répond OUI]
+   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   → Transition : [1 phrase qui montre la limite de la thèse et annonce l'antithèse]
+
+─ PARTIE II — ANTITHÈSE : [titre — répond NON]
+   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   → Transition : [1 phrase qui annonce le dépassement par la synthèse]
+
+─ PARTIE III — SYNTHÈSE : [titre — nouvel éclairage, concept imprévu]
+   A. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   B. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+   C. [sous-titre] → Amorce : [1 phrase de début de rédaction]
+
+─ CONCLUSION :
+   Bilan rédigé : [2-3 phrases qui récapitulent la progression thèse → antithèse → synthèse]
+   Ouverture : [1 question vers un autre horizon]`,
+
+      3: `Génère un PLAN SOCRATIQUE structuré ainsi (chaque sous-partie contient une question pour guider l'élève dans sa réflexion) :
+─ INTRODUCTION :
+  1. Opinion commune : [formulée]
+  2. Définitions : [termes clés définis]
+  3. Paradoxe : [montré]
+  4. Problématique : [formulée]
+  5. Annonce de plan
+
+─ PARTIE I — THÈSE : [titre]
+   A. [sous-titre] ❓ Question socratique : [question qui pousse l'élève à développer cet argument]
+   B. [sous-titre] ❓ Question socratique : [question]
+   C. [sous-titre] ❓ Question socratique : [question]
+   → Transition : [question qui fait voir la limite de la thèse]
+
+─ PARTIE II — ANTITHÈSE : [titre]
+   A. [sous-titre] ❓ Question socratique : [question]
+   B. [sous-titre] ❓ Question socratique : [question]
+   C. [sous-titre] ❓ Question socratique : [question]
+   → Transition : [question qui ouvre vers la synthèse]
+
+─ PARTIE III — SYNTHÈSE : [titre — nouveau concept qui dépasse l'opposition]
+   A. [sous-titre] ❓ Question socratique : [question]
+   B. [sous-titre] ❓ Question socratique : [question]
+   C. [sous-titre] ❓ Question socratique : [question]
+
+─ CONCLUSION :
+   Bilan : [résumé de la progression]
+   Ouverture : [question vers un autre horizon]`,
+
+      4: `Génère un PLAN COMPLET AVEC EXEMPLES structuré ainsi :
+─ INTRODUCTION :
+  1. Opinion commune : [rédigée]
+  2. Définitions : [rédigées avec précision]
+  3. Paradoxe : [expliqué et justifié]
+  4. Problématique : [reformulée avec synonymes et adverbes comme "vraiment", "nécessairement"]
+  5. Annonce de plan : [rédigée]
+
+─ PARTIE I — THÈSE : [titre — répond OUI]
+   A. [sous-titre]
+      → Argument : [idée principale de la sous-partie]
+      → Exemple tiré des textes : [extrait ou auteur des textes étudiés avec explication]
+      → Citation mobilisable : [auteur et idée]
+   B. [sous-titre]
+      → Argument / Exemple / Citation
+   C. [sous-titre]
+      → Argument / Exemple / Citation
+   → Transition rédigée : [montre la limite de la thèse et annonce l'antithèse]
+
+─ PARTIE II — ANTITHÈSE : [titre — répond NON]
+   A, B, C : même structure Argument / Exemple des textes / Citation
+   → Transition rédigée : [annonce le dépassement synthétique]
+
+─ PARTIE III — SYNTHÈSE : [titre — concept nouveau qui dépasse le oui/non]
+   A, B, C : même structure
+   ATTENTION : la synthèse n'est PAS un résumé — elle introduit un angle inédit
+
+─ CONCLUSION :
+   Bilan rédigé : [récapitulation de la progression en 3 temps]
+   Ouverture rédigée : [question vers un autre horizon philosophique]`,
+    };
+
     try {
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
@@ -869,9 +1011,21 @@ Sujet de dissertation : "${currentSujet}"
 Chapitres mobilisés : ${selectedChapters.join(", ")}
 ${contextForAI ? `\nExtraits des textes étudiés :\n${contextForAI}` : ""}
 
-Génère ${levelDesc}.
-Format lisible avec des emojis pour les parties (I → 🔹, II → 🔸, III → 🔺).
-Sois précis et adapté au niveau terminale.` }], 1500);
+${METHODE_INTRO}
+
+${METHODE_PLAN}
+
+${level >= 2 ? METHODE_PARAGRAPHE : ""}
+${level >= 2 ? METHODE_CONCLUSION : ""}
+
+${levelPrompts[level]}
+
+RÈGLES ABSOLUES :
+- La Partie I est toujours la THÈSE (oui), la Partie II l'ANTITHÈSE (non), la Partie III la SYNTHÈSE (dépassement)
+- Ne jamais confondre Introduction et Partie I
+- La synthèse n'est PAS un résumé ni un compromis : elle introduit un concept nouveau et imprévu
+- Sois précis et adapté au niveau terminale
+- Respecte exactement le format demandé` }], 2000);
       setPlan(getText(data));
     } catch { setPlan("Erreur lors de la génération du plan."); }
     setPlanLoading(false);
@@ -1139,10 +1293,10 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
             <p className="text-xs text-indigo-600 mb-4">Choisis ton niveau de détail :</p>
             <div className="grid grid-cols-2 gap-2">
               {([
-                [1, "Niveau 1 — Squelette", "Plan I/II/III + sous-parties uniquement"],
-                [2, "Niveau 2 — Amorces", "Plan + amorce rédigée pour chaque sous-partie"],
-                [3, "Niveau 3 — Socratique", "Plan + questions pour guider ta réflexion"],
-                [4, "Niveau 4 — Complet", "Plan + amorces + exemples tirés de tes textes"],
+                [1, "Niveau 1 — Squelette", "Intro (5 étapes) + Thèse / Antithèse / Synthèse + titres de sous-parties + Conclusion"],
+                [2, "Niveau 2 — Amorces rédigées", "Structure complète + amorces de rédaction pour chaque sous-partie + transitions"],
+                [3, "Niveau 3 — Socratique", "Structure complète + questions socratiques ❓ pour guider ta réflexion"],
+                [4, "Niveau 4 — Complet", "Structure + amorces + arguments + exemples des textes + citations + conclusion rédigée"],
               ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
                 <button key={lvl} onClick={() => generatePlan(lvl)}
                   className={`text-left p-3 rounded-xl border-2 transition-all ${planLevel === lvl && plan ? "border-indigo-500 bg-white ring-2 ring-indigo-100" : "border-indigo-200 bg-white hover:border-indigo-400"}`}>
@@ -1303,20 +1457,26 @@ function CombinedDissView({ sujet, selectedChapters, matiere, contextForAI, brai
     if (activeTab === "brainstorm" && brainstormMessages.length === 0) onStartBrainstorm();
   }, [activeTab]);
 
+  const METHODE_INTRO_C = `MÉTHODE D'INTRODUCTION : 1. Opinion commune (doxa) → 2. Définitions des termes → 3. Paradoxe du sujet → 4. Problématique (reformulation) → 5. Annonce de plan`;
+  const METHODE_PLAN_C = `PLAN DIALECTIQUE : Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau qui dépasse le oui/non — pas un résumé ni un compromis).`;
+
   const generatePlan = async (level: PlanLevel) => {
     setPlanLevel(level); setPlan(""); setPlanLoading(true);
-    const levelDesc = {
-      1: "un plan dialectique I/II/III avec sous-parties A, B, C seulement",
-      2: "un plan dialectique I/II/III avec sous-parties et une amorce rédigée pour chacune",
-      3: "un plan dialectique I/II/III avec sous-parties et une question socratique pour chacune",
-      4: "un plan dialectique I/II/III complet avec sous-parties, amorces ET exemples des textes étudiés"
-    }[level];
+    const levelPrompts: Record<PlanLevel, string> = {
+      1: `Squelette : INTRODUCTION (5 étapes numérotées) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE, chacune avec sous-parties A, B, C (titres courts) + transitions + CONCLUSION (bilan + ouverture). Pas de rédaction.`,
+      2: `Plan avec amorces : INTRODUCTION rédigée (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + une amorce rédigée (1 phrase) par sous-partie + transitions rédigées + CONCLUSION rédigée.`,
+      3: `Plan socratique : INTRODUCTION (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + une question socratique ❓ par sous-partie pour guider l'élève + transitions sous forme de questions + CONCLUSION.`,
+      4: `Plan complet : INTRODUCTION rédigée (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + argument + exemple des textes étudiés + citation par sous-partie + transitions rédigées + CONCLUSION rédigée (bilan + ouverture).`,
+    };
     try {
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
 Sujet : "${sujet}" — Chapitres : ${selectedChapters.join(", ")}
 ${contextForAI ? `\nExtraits textes :\n${contextForAI}` : ""}
-Génère ${levelDesc}. Format lisible avec emojis (I → 🔹, II → 🔸, III → 🔺).` }], 1500);
+${METHODE_INTRO_C}
+${METHODE_PLAN_C}
+${levelPrompts[level]}
+RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un concept NOUVEAU et IMPRÉVU.` }], 2000);
       setPlan(getText(data));
     } catch { setPlan("Erreur."); }
     setPlanLoading(false);
@@ -1372,9 +1532,9 @@ Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Fo
         <div>
           <div className="grid grid-cols-4 gap-2 mb-4">
             {([
-              [1, "Squelette", "Plan seul"],
-              [2, "Amorces", "Plan + intro"],
-              [3, "Socratique", "Plan + questions"],
+              [1, "Squelette", "Titres seuls"],
+              [2, "Amorces", "Plan + rédaction"],
+              [3, "Socratique", "Plan + questions ❓"],
               [4, "Complet", "Plan + exemples"],
             ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
               <button key={lvl} onClick={() => generatePlan(lvl)}
