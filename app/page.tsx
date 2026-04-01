@@ -1068,6 +1068,7 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
   const [isGeneratingSujet, setIsGeneratingSujet] = useState(false);
   const [isLoadingBac, setIsLoadingBac] = useState(false);
   const [sujetBacSource, setSujetBacSource] = useState("");
+  const [sujetBacNotions, setSujetBacNotions] = useState<string[]>([]);
   const [workMode, setWorkMode] = useState<DissWorkMode>("plan");
 
   // Plan guidé
@@ -1783,7 +1784,11 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
             <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">2</span>
             Génère ton sujet
           </h2>
-          <p className="text-xs text-gray-500 mb-4">L'IA propose un sujet classique et un sujet surprenant</p>
+          <p className="text-xs text-gray-500 mb-4">
+            {selectionMode === "notions" && selectedNotions.length > 0
+              ? `Sujets de bac liés à : ${selectedNotions.join(", ")}`
+              : "L'IA propose un sujet classique et un sujet surprenant"}
+          </p>
 
           <div className="flex gap-2">
             <button
@@ -1828,11 +1833,15 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-rose-600 uppercase tracking-wide">Sujet classique</span>
                         {sujetBacSource && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">📋 {sujetBacSource}</span>}
+                        {sujetBacNotions.length > 0 && sujetBacNotions[0] && (
+                          <span className="text-xs text-gray-400 italic">classé sous : {sujetBacNotions[0]}</span>
+                        )}
                       </div>
                       <p className="text-sm font-bold text-gray-800 mt-1 leading-snug">{sujet}</p>
-                      {notionsFromSelected.length > 0 && (
+                      {/* Notions réelles du sujet (si vrai sujet de bac) ou notions sélectionnées */}
+                      {(sujetBacNotions.length > 0 ? sujetBacNotions : notionsFromSelected).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
-                          {notionsFromSelected.slice(0, 5).map((n: string) => (
+                          {(sujetBacNotions.length > 0 ? sujetBacNotions : notionsFromSelected).slice(0, 5).map((n: string) => (
                             <span key={n} className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-semibold">{n}</span>
                           ))}
                         </div>
