@@ -3084,12 +3084,6 @@ function Dashboard({ onBack, sharedLib }: any) {
                 )}
               </div>
             )}
-          {activeTab === "carte" && (
-            <CarteMentaleNotions filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} />
-          )}
-          {activeTab === "colle" && (
-            <ModeColle filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} eleveNom={eleveNom} />
-          )}
           </>
         )}
       </div>
