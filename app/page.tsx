@@ -36,7 +36,7 @@ const entryName = (e: any) =>
   e.author && e.work_title ? `${e.author} — ${e.work_title}` : e.work_title || "Sans titre";
 const entryChapter = (e: any) => e.chapter?.trim() || "Non classé";
 
-const PROF_CODE = "prof1234";
+// Code prof chargé dynamiquement depuis Supabase (voir vérification dans ProfMode)
 
 // ── Programme HLP ─────────────────────────────────────────────────────────────
 const HLP_CHAPITRES = [
@@ -60,7 +60,23 @@ const HLP_CHAPITRES = [
   },
 ];
 
+// ── Notions officielles du programme de Philosophie ──────────────────────────
+const PHILO_NOTIONS_PROGRAMME = [
+  "L'art", "Le bonheur", "La conscience", "Le devoir", "L'État",
+  "L'inconscient", "La justice", "Le langage", "La liberté", "La nature",
+  "La raison", "La religion", "La science", "La technique", "Le temps",
+  "Le travail", "La vérité",
+];
+
 // ── Programme Philosophie ─────────────────────────────────────────────────────
+// ── Notions officielles du programme de Philosophie ──────────────────────────
+const PHILO_NOTIONS_PROGRAMME = [
+  "L'art", "Le bonheur", "La conscience", "Le devoir", "L'État",
+  "L'inconscient", "La justice", "Le langage", "La liberté", "La nature",
+  "La raison", "La religion", "La science", "La technique", "Le temps",
+  "Le travail", "La vérité",
+];
+
 const PHILO_CHAPITRES = [
   "Sujet 1 - Peut-on être esclave de soi-même ?",
   "Sujet 2 - Pour être juste, suffit-il d'être juste ?",
@@ -101,6 +117,8 @@ const dbAddTexte = async (entry: any) => {
     created_at: entry.createdAt || entry.created_at || Date.now(),
     type: entry.type || "les deux",
     matiere: entry.matiere || "hlp",
+    notion_principale: entry.notion_principale || "",
+    notions_secondaires: entry.notions_secondaires || [],
   }]);
   if (error) throw error;
 };
@@ -119,6 +137,8 @@ const dbUpdateTexte = async (id: string, fields: any) => {
     word_count: wc(fields.content || ""),
     type: fields.type || "les deux",
     matiere: fields.matiere || "hlp",
+    notion_principale: fields.notion_principale || "",
+    notions_secondaires: fields.notions_secondaires || [],
   }).eq("id", id);
   if (error) throw error;
 };
@@ -172,6 +192,73 @@ const dbCountSujetsBac = async () => {
   const { count, error } = await supabase.from("sujets_bac").select("*", { count: "exact", head: true });
   if (error) return 0;
   return count || 0;
+};
+
+// ── Config DB (code prof) ─────────────────────────────────────────────────────
+const dbGetConfig = async (key: string) => {
+  const { data, error } = await supabase.from("config").select("value").eq("key", key).single();
+  if (error) return null;
+  return data?.value || null;
+};
+
+const dbSetConfig = async (key: string, value: string) => {
+  const { error } = await supabase.from("config").upsert({ key, value }, { onConflict: "key" });
+  if (error) throw error;
+};
+
+// ── Dissertations DB ──────────────────────────────────────────────────────────
+const dbSaveDissertation = async (d: any) => {
+  const { error } = await supabase.from("dissertations").insert([{
+    id: uid(),
+    eleve_nom: d.eleveNom || "Anonyme",
+    sujet: d.sujet,
+    matiere: d.matiere || "philosophie",
+    notions: d.notions || [],
+    notion_principale: d.notion_principale || "",
+    texte_eleve: d.texte_eleve || "",
+    corrige_ia: d.corrige_ia || "",
+    mode_travail: d.mode_travail || "corrige",
+    created_at: Date.now(),
+  }]);
+  if (error) throw error;
+};
+
+const dbLoadDissertations = async () => {
+  const { data, error } = await supabase
+    .from("dissertations").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// ── Sessions révision DB ──────────────────────────────────────────────────────
+const dbSaveSession = async (s: any) => {
+  const { error } = await supabase.from("sessions_revision").insert([{
+    id: uid(),
+    eleve_nom: s.eleveNom || "Anonyme",
+    texte_id: s.texte_id,
+    texte_titre: s.texte_titre || "",
+    chapitre: s.chapitre || "",
+    matiere: s.matiere || "hlp",
+    notion_principale: s.notion_principale || "",
+    duree_secondes: s.duree_secondes || 0,
+    nb_messages: s.nb_messages || 0,
+    created_at: Date.now(),
+  }]);
+  if (error) throw error;
+};
+
+const dbLoadSessions = async () => {
+  const { data, error } = await supabase
+    .from("sessions_revision").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const dbLoadResultatsAll = async () => {
+  const { data, error } = await supabase
+    .from("resultats").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 };
 
 // ── File extraction ───────────────────────────────────────────────────────────
@@ -509,9 +596,9 @@ ${entry.content.slice(0, 4000)}` }], 1200);
 }
 
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
-function RevisionMode({ entries, chapter, onBack, allTextes }: any) {
+function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom }: any) {
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
-  const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards" | "interrogation">("chat");
   const [messages, setMessages] = useState<{ role: string; content: string; source?: "texte" | "synthese" | "hors_texte" }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -519,7 +606,38 @@ function RevisionMode({ entries, chapter, onBack, allTextes }: any) {
   const [ficheLoading, setFicheLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // États mode interrogation
+  const [interrogMessages, setInterrogMessages] = useState<{role: string; content: string; correct?: boolean; explication?: string}[]>([]);
+  const [interrogInput, setInterrogInput] = useState("");
+  const [interrogLoading, setInterrogLoading] = useState(false);
+  const [interrogScore, setInterrogScore] = useState({ correct: 0, total: 0 });
+  const [interrogStarted, setInterrogStarted] = useState(false);
+  const interrogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { interrogRef.current?.scrollIntoView({ behavior: "smooth" }); }, [interrogMessages]);
+  const sessionStart = useRef<number>(Date.now());
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // Sauvegarder la session quand l'élève quitte ou change de texte
+  useEffect(() => {
+    if (!selectedEntry) return;
+    sessionStart.current = Date.now();
+    return () => {
+      const duree = Math.round((Date.now() - sessionStart.current) / 1000);
+      if (duree > 10) {
+        dbSaveSession({
+          eleveNom: eleveNom || "Anonyme",
+          texte_id: selectedEntry.id,
+          texte_titre: selectedEntry.work_title || selectedEntry.author || "Sans titre",
+          chapitre: selectedEntry.chapter || "",
+          matiere: selectedEntry.matiere || "hlp",
+          notion_principale: selectedEntry.notion_principale || "",
+          duree_secondes: duree,
+          nb_messages: messages.length,
+        }).catch(() => {});
+      }
+    };
+  }, [selectedEntry?.id]);
 
   const loadFiche = async () => {
     if (fiche || ficheLoading || !selectedEntry) return;
@@ -542,9 +660,95 @@ ${selectedEntry.content.slice(0, 5000)}` }], 1000);
     setFicheLoading(false);
   };
 
-  const handleTabChange = (tab: "chat" | "fiche" | "flashcards") => {
+  const handleTabChange = (tab: "chat" | "fiche" | "flashcards" | "interrogation") => {
     setActiveTab(tab);
     if (tab === "fiche") loadFiche();
+    if (tab === "interrogation" && !interrogStarted) startInterrogation();
+  };
+
+  const startInterrogation = async () => {
+    if (!selectedEntry || interrogStarted) return;
+    setInterrogStarted(true);
+    setInterrogLoading(true);
+    setInterrogMessages([]);
+    setInterrogScore({ correct: 0, total: 0 });
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es un professeur de ${selectedEntry.matiere === "philosophie" ? "Philosophie" : "HLP"} qui interroge un élève sur un texte.
+TEXTE ÉTUDIÉ :
+${selectedEntry.content.slice(0, 4000)}
+
+Pose une première question ouverte sur ce texte pour vérifier la compréhension de l'élève. La question doit :
+- Être précise et porter sur un point essentiel du texte
+- Être formulée de façon claire pour un lycéen
+- Ne pas être un simple "oui/non" mais demander une explication
+
+Commence directement par la question, sans introduction.` }], 400);
+      setInterrogMessages([{ role: "assistant", content: getText(data) }]);
+    } catch { setInterrogMessages([{ role: "assistant", content: "Explique-moi en quelques mots ce que dit l'auteur dans ce texte." }]); }
+    setInterrogLoading(false);
+  };
+
+  const sendInterrogResponse = async () => {
+    if (!interrogInput.trim() || interrogLoading) return;
+    const userMsg = { role: "user", content: interrogInput.trim() };
+    const newMsgs = [...interrogMessages, userMsg];
+    setInterrogMessages(newMsgs);
+    setInterrogInput("");
+    setInterrogLoading(true);
+    try {
+      const data = await callAI([
+        { role: "user", content:
+          `Tu es un professeur de ${selectedEntry?.matiere === "philosophie" ? "Philosophie" : "HLP"} qui interroge un élève.
+TEXTE ÉTUDIÉ :
+${selectedEntry?.content.slice(0, 3000)}
+
+Historique de l'interrogation :
+${newMsgs.map(m => `${m.role === "user" ? "Élève" : "Professeur"} : ${m.content}`).join("
+")}
+
+Réponds en JSON UNIQUEMENT :
+{
+  "evaluation": "correct" | "partiel" | "incorrect",
+  "feedback": "correction courte et bienveillante (2-3 phrases max) — ce qui est juste, ce qui manque",
+  "prochaine_question": "nouvelle question sur un autre aspect du texte (si évaluation correct ou partiel) OU reformulation de la même question (si incorrect)"
+}` },
+        { role: "assistant", content: '{"evaluation":"' }
+      ], 600);
+      const raw = getText(data);
+      let parsed: any = {};
+      try { parsed = parseJSON('{"evaluation":"' + raw); } catch { parsed = parseJSON(raw); }
+      const isCorrect = parsed.evaluation === "correct";
+      const isPartiel = parsed.evaluation === "partiel";
+      const newScore = {
+        correct: interrogScore.correct + (isCorrect ? 1 : isPartiel ? 0.5 : 0),
+        total: interrogScore.total + 1,
+      };
+      setInterrogScore(newScore);
+      const assistantMsg = {
+        role: "assistant",
+        content: parsed.feedback || "Continuons.",
+        correct: isCorrect,
+        explication: parsed.prochaine_question || "",
+      };
+      const withFeedback = [...newMsgs, assistantMsg];
+      setInterrogMessages(withFeedback);
+      // Ajouter la prochaine question après un délai
+      if (parsed.prochaine_question && newScore.total < 8) {
+        setTimeout(() => {
+          setInterrogMessages(prev => [...prev, { role: "assistant", content: parsed.prochaine_question }]);
+        }, 300);
+      } else if (newScore.total >= 8) {
+        const pct = Math.round((newScore.correct / newScore.total) * 100);
+        setTimeout(() => {
+          setInterrogMessages(prev => [...prev, {
+            role: "assistant",
+            content: `🎓 Interrogation terminée ! Tu as obtenu ${newScore.correct}/${newScore.total} (${pct}%). ${pct >= 70 ? "Très bon travail !" : pct >= 50 ? "Pas mal, continue à réviser !" : "Continue tes révisions sur ce texte."}`,
+          }]);
+        }, 300);
+      }
+    } catch { setInterrogMessages(prev => [...prev, { role: "assistant", content: "Bonne tentative, continuons." }]); }
+    setInterrogLoading(false);
   };
 
   const sendMessage = async () => {
@@ -656,6 +860,7 @@ ${autresTextes ? \`\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertine
         <div className="flex gap-2 mb-3 flex-shrink-0">
           {([
             ["chat", "💬 Chat IA", "border-indigo-500 bg-indigo-50 text-indigo-700"],
+            ["interrogation", "🎓 Interrogation", "border-rose-500 bg-rose-50 text-rose-700"],
             ["fiche", "📋 Fiche", "border-amber-500 bg-amber-50 text-amber-700"],
             ["flashcards", "🃏 Flashcards", "border-purple-500 bg-purple-50 text-purple-700"],
           ] as [string, string, string][]).map(([tab, label, activeClass]) => (
@@ -665,15 +870,126 @@ ${autresTextes ? \`\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertine
             </button>
           ))}
         </div>
-        {activeTab === "fiche" && (
-          <div className="flex-1 bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-y-auto p-5">
+        {activeTab === "interrogation" && (
+          <div className="flex-1 bg-white rounded-2xl border-2 border-rose-200 shadow-sm flex flex-col overflow-hidden">
+            {/* Header score */}
+            <div className="flex items-center justify-between px-4 py-3 bg-rose-50 border-b border-rose-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-black text-rose-800 text-sm">🎓 Interrogation orale</span>
+                <span className="text-xs text-rose-600">L'IA te pose des questions sur le texte</span>
+              </div>
+              {interrogScore.total > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-rose-700 bg-rose-100 px-2 py-1 rounded-full">
+                    {interrogScore.correct}/{interrogScore.total} ({Math.round((interrogScore.correct / interrogScore.total) * 100)}%)
+                  </span>
+                  <button onClick={() => { setInterrogStarted(false); setInterrogMessages([]); setInterrogScore({ correct: 0, total: 0 }); startInterrogation(); }}
+                    className="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> Recommencer
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {interrogLoading && interrogMessages.length === 0 && (
+                <div className="flex justify-center items-center h-full">
+                  <div className="flex items-center gap-2 text-rose-600">
+                    <Sparkles className="w-5 h-5 animate-spin" />
+                    <span className="font-semibold text-sm">Préparation des questions…</span>
+                  </div>
+                </div>
+              )}
+              {interrogMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" ? (
+                    <div className="max-w-[85%] space-y-1">
+                      {/* Badge évaluation */}
+                      {msg.correct !== undefined && (
+                        <div className="flex items-center gap-1 px-1">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${msg.correct ? "bg-green-100 text-green-700 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`}>
+                            {msg.correct ? "✅ Correct" : "❌ À retravailler"}
+                          </span>
+                        </div>
+                      )}
+                      <div className={`rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed border ${msg.correct === true ? "bg-green-50 border-green-200" : msg.correct === false ? "bg-red-50 border-red-200" : "bg-rose-50 border-rose-200"}`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="max-w-[85%] rounded-2xl rounded-br-sm px-4 py-3 text-sm leading-relaxed bg-indigo-600 text-white">
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {interrogLoading && interrogMessages.length > 0 && (
+                <div className="flex justify-start">
+                  <div className="bg-rose-50 rounded-2xl rounded-bl-sm px-4 py-3 border border-rose-200 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-rose-500 animate-spin" />
+                    <span className="text-sm text-rose-600">Correction en cours…</span>
+                  </div>
+                </div>
+              )}
+              <div ref={interrogRef} />
+            </div>
+            {/* Input */}
+            {interrogScore.total < 8 && (
+              <div className="p-3 border-t border-rose-100 flex-shrink-0">
+                <div className="flex gap-2">
+                  <input value={interrogInput} onChange={e => setInterrogInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendInterrogResponse()}
+                    className="flex-1 px-4 py-2.5 border-2 border-rose-200 rounded-xl text-sm focus:border-rose-400 focus:outline-none text-gray-800"
+                    placeholder="Ta réponse…" disabled={interrogLoading} />
+                  <button onClick={sendInterrogResponse} disabled={!interrogInput.trim() || interrogLoading}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white p-2.5 rounded-xl transition-all">
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+                {activeTab === "fiche" && (
+          <div className="flex-1 bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-y-auto flex flex-col">
             {ficheLoading ? (
               <div className="flex flex-col items-center justify-center h-full py-16">
                 <Sparkles className="w-8 h-8 text-amber-500 animate-spin mb-3" />
                 <p className="text-gray-600 font-semibold text-sm">Génération de la fiche…</p>
               </div>
             ) : fiche ? (
-              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{fiche}</pre>
+              <>
+                <div className="flex items-center justify-between px-5 pt-4 pb-2 border-b border-amber-100 flex-shrink-0">
+                  <span className="text-xs font-bold text-amber-700 uppercase">📋 Fiche de révision</span>
+                  <button onClick={() => {
+                    const w = window.open("", "_blank");
+                    if (!w) return;
+                    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fiche — ${entryName(selectedEntry)}</title><style>
+                      body { font-family: Georgia, serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.7; }
+                      h1 { font-size: 1.3rem; color: #92400e; border-bottom: 2px solid #f59e0b; padding-bottom: 8px; margin-bottom: 20px; }
+                      h2 { font-size: 1rem; color: #374151; margin-top: 20px; margin-bottom: 6px; }
+                      strong { color: #1e40af; }
+                      p, li { margin: 4px 0; }
+                      ul { padding-left: 20px; }
+                      .footer { margin-top: 30px; font-size: 0.75rem; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+                      @media print { body { margin: 20px; } }
+                    </style></head><body>
+                      <h1>📋 ${entryName(selectedEntry)}</h1>
+                      <pre style="white-space:pre-wrap;font-family:Georgia,serif;font-size:0.95rem;line-height:1.8">${(fiche || "").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+                      <div class="footer">Généré par QCM Entraînement — ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
+                    </body></html>`);
+                    w.document.close();
+                    setTimeout(() => w.print(), 500);
+                  }}
+                    className="flex items-center gap-1.5 text-xs font-bold text-amber-700 border border-amber-300 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-all">
+                    <FileText className="w-3.5 h-3.5" /> Imprimer / PDF
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-5">
+                  <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{fiche}</pre>
+                </div>
+              </>
             ) : null}
           </div>
         )}
@@ -752,7 +1068,9 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
   const [step, setStep] = useState<"select" | "working">("select");
 
   // Sélection des notions
+  const [selectionMode, setSelectionMode] = useState<"chapitres" | "notions">("chapitres");
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
+  const [selectedNotions, setSelectedNotions] = useState<string[]>([]);
   const [sujet, setSujet] = useState("");
   const [sujetAlt, setSujetAlt] = useState(""); // sujet contre-intuitif
   const [activeSujet, setActiveSujet] = useState<"main" | "alt">("main");
@@ -791,14 +1109,42 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
     return Array.from(set).sort();
   }, [filteredLib]);
 
-  // Notions extraites des textes sélectionnés
+  // Notions extraites des textes sélectionnés (chapitres OU notions du programme)
   const notionsFromSelected = useMemo(() => {
     const notions = new Set<string>();
-    filteredLib
-      .filter((e: any) => selectedChapters.includes(entryChapter(e)))
-      .forEach((e: any) => (e.notions || []).forEach((n: string) => notions.add(n)));
-    return Array.from(notions);
-  }, [filteredLib, selectedChapters]);
+    if (selectionMode === "chapitres") {
+      filteredLib
+        .filter((e: any) => selectedChapters.includes(entryChapter(e)))
+        .forEach((e: any) => {
+          (e.notions || []).forEach((n: string) => notions.add(n));
+          if (e.notion_principale) notions.add(e.notion_principale);
+          (e.notions_secondaires || []).forEach((n: string) => notions.add(n));
+        });
+    } else {
+      selectedNotions.forEach(n => notions.add(n));
+    }
+    return Array.from(notions).filter(Boolean);
+  }, [filteredLib, selectedChapters, selectedNotions, selectionMode]);
+
+  // Textes correspondant aux notions sélectionnées (mode notions)
+  const textesForNotions = useMemo(() => {
+    if (selectionMode !== "notions" || selectedNotions.length === 0) return [];
+    return filteredLib.filter((e: any) => {
+      const eNotions = [
+        e.notion_principale || "",
+        ...(e.notions_secondaires || []),
+        ...(e.notions || []),
+      ].map((n: string) => n.toLowerCase());
+      return selectedNotions.some(n =>
+        eNotions.some(en => en.includes(n.toLowerCase().slice(0, 8)) || n.toLowerCase().includes(en.slice(0, 8)))
+      );
+    });
+  }, [filteredLib, selectedNotions, selectionMode]);
+
+  // Chapitres actifs selon le mode de sélection
+  const activeChaptersForContext = selectionMode === "chapitres"
+    ? selectedChapters
+    : [...new Set(textesForNotions.map((e: any) => entryChapter(e)))];
 
   // Textes sélectionnés (pour contexte IA)
   const selectedTextes = useMemo(
@@ -806,7 +1152,11 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
     [filteredLib, selectedChapters]
   );
 
-  const contextForAI = selectedTextes
+  const activeTextes = selectionMode === "chapitres"
+    ? filteredLib.filter((e: any) => selectedChapters.includes(entryChapter(e)))
+    : textesForNotions;
+
+  const contextForAI = activeTextes
     .map((e: any) => `=== ${entryName(e)} (${entryChapter(e)}) ===\n${e.content.slice(0, 1500)}`)
     .join("\n\n");
 
@@ -824,7 +1174,9 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
       const notionsStr = notionsFromSelected.length > 0
         ? `Notions clés identifiées : ${notionsFromSelected.join(", ")}.`
         : "";
-      const chapitresStr = selectedChapters.join(", ");
+      const chapitresStr = selectionMode === "chapitres"
+        ? selectedChapters.join(", ")
+        : selectedNotions.join(", ");
       const isPhilo = matiere === "philosophie";
       const philoExamples = `Exemples du BON style (vrais sujets bac philosophie) :
 "La conscience fait-elle obstacle au bonheur ?"
@@ -881,27 +1233,33 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
     setIsGeneratingSujet(false);
   };
 
-  // Piocher un vrai sujet de bac dans la banque
+  // Piocher dans la BDD — BDD en priorité, fallback IA si vide
   const piocherSujetBac = async () => {
-    if (selectedChapters.length === 0) return;
+    const hasSelection = selectionMode === "chapitres" ? selectedChapters.length > 0 : selectedNotions.length > 0;
+    if (!hasSelection) return;
     setIsLoadingBac(true);
     try {
       const tous = await dbLoadSujetsBac(matiere || undefined);
-      // Filtrer par chapitres/notions sélectionnés
+      const termes = selectionMode === "chapitres" ? selectedChapters : selectedNotions;
+      // Filtrer par notions/chapitres sélectionnés
       const compatibles = tous.filter((s: any) => {
         const sNotions = [...(s.notions || []), s.notion_principale || ""].map((n: string) => n.toLowerCase());
-        return selectedChapters.some(ch => 
-          sNotions.some(n => n.includes(ch.toLowerCase().slice(0, 10)) || ch.toLowerCase().includes(n.slice(0, 10)))
+        return termes.some((t: string) =>
+          sNotions.some(n => n.includes(t.toLowerCase().slice(0, 8)) || t.toLowerCase().includes(n.slice(0, 8)))
         );
       });
-      const pool = compatibles.length > 0 ? compatibles : tous;
-      if (pool.length === 0) { alert("Aucun sujet dans la banque pour cette matière. Importez des sujets dans l\'espace Professeur."); setIsLoadingBac(false); return; }
-      // Piocher aléatoirement
-      const picked = pool[Math.floor(Math.random() * pool.length)];
-      setSujet(picked.sujet);
-      setSujetBacSource(picked.source || "Bac");
-      setSujetAlt("");
-      setActiveSujet("main");
+      if (compatibles.length > 0) {
+        // ✅ On a des vrais sujets — on pioche dedans
+        const picked = compatibles[Math.floor(Math.random() * compatibles.length)];
+        setSujet(picked.sujet);
+        setSujetBacSource(picked.source || "Bac");
+        setSujetAlt("");
+        setActiveSujet("main");
+      } else {
+        // 🔄 Fallback IA — aucun sujet en BDD pour ces notions
+        setSujetBacSource("");
+        await generateSujets();
+      }
     } catch (e) { console.error(e); }
     setIsLoadingBac(false);
   };
@@ -954,7 +1312,52 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
   const [showLogiqueChat, setShowLogiqueChat] = useState(false);
   const planLogiqueRef = useRef<HTMLDivElement>(null);
 
+  // États rédaction assistée
+  const [showRedaction, setShowRedaction] = useState(false);
+  const [redacStep, setRedacStep] = useState<"intro"|"partie1"|"partie2"|"partie3"|"conclusion">("intro");
+  const [redacTextes, setRedacTextes] = useState<Record<string, string>>({});
+  const [redacFeedbacks, setRedacFeedbacks] = useState<Record<string, string>>({});
+  const [redacLoading, setRedacLoading] = useState(false);
+  const [redacInput, setRedacInput] = useState("");
+
   useEffect(() => { planLogiqueRef.current?.scrollIntoView({ behavior: "smooth" }); }, [planLogiqueMessages]);
+
+  const REDAC_STEPS = [
+    { key: "intro", label: "Introduction", icon: "1️⃣", desc: "Opinion commune → Définitions → Paradoxe → Problématique → Annonce" },
+    { key: "partie1", label: "Partie I — Thèse", icon: "🔹", desc: "3 paragraphes (Thèse/Argument/Exemple/Citation/Mini-conclusion) + transition" },
+    { key: "partie2", label: "Partie II — Antithèse", icon: "🔸", desc: "3 paragraphes + transition vers la synthèse" },
+    { key: "partie3", label: "Partie III — Synthèse", icon: "🔺", desc: "Concept nouveau — PAS un résumé du I et II" },
+    { key: "conclusion", label: "Conclusion", icon: "✅", desc: "Bilan de la progression + Ouverture" },
+  ] as const;
+
+  const corrigerPartie = async (step: string, texte: string) => {
+    if (!texte.trim()) return;
+    setRedacLoading(true);
+    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
+    const stepInfo = REDAC_STEPS.find(s => s.key === step);
+    try {
+      const data = await callAI([{ role: "user", content:
+        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
+Sujet : "${currentSujet}"
+${plan ? \`Plan de l'élève :\n\${plan.slice(0, 1000)}\` : ""}
+${contextForAI ? \`Textes étudiés :\n\${contextForAI.slice(0, 1500)}\` : ""}
+
+L'élève a rédigé la partie suivante : **\${stepInfo?.label}**
+Méthode attendue : \${stepInfo?.desc}
+
+TEXTE RÉDIGÉ PAR L'ÉLÈVE :
+\${texte}
+
+Corrige en 150 mots max, de façon bienveillante et précise :
+1. ✅ Ce qui est bien réussi (1-2 points)
+2. ⚠️ Ce qui manque ou peut être amélioré (1-2 points concrets)
+3. 💡 Conseil prioritaire pour améliorer cette partie
+
+Sois direct et encourageant.` }], 700);
+      setRedacFeedbacks(prev => ({ ...prev, [step]: getText(data) }));
+    } catch { setRedacFeedbacks(prev => ({ ...prev, [step]: "Erreur lors de la correction." })); }
+    setRedacLoading(false);
+  };
 
   const genererExplicationLogique = async (planTexte: string, currentSujet: string) => {
     setPlanLogiqueLoading(true);
@@ -1005,6 +1408,10 @@ Sois direct, encourageant, évite le jargon.` }], 600);
     setPlanLogique("");
     setPlanLogiqueMessages([]);
     setShowLogiqueChat(false);
+    setShowRedaction(false);
+    setRedacTextes({});
+    setRedacFeedbacks({});
+    setRedacStep("intro");
     setPlanLoading(true);
     const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
 
@@ -1231,8 +1638,22 @@ Fournis une correction bienveillante et détaillée :
 6. **Note indicative** /20 avec justification courte
 
 Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
-      setCorrige(getText(data));
+      const corrigeTexte = getText(data);
+      setCorrige(corrigeTexte);
       setCorrigeSubmitted(true);
+      // Sauvegarder la dissertation
+      try {
+        await dbSaveDissertation({
+          eleveNom: eleveNom || "Anonyme",
+          sujet: currentSujet,
+          matiere: matiere || "philosophie",
+          notions: notionsFromSelected,
+          notion_principale: (selectionMode === "notions" ? selectedNotions[0] : selectedChapters[0]) || "",
+          texte_eleve: eleveTexte,
+          corrige_ia: corrigeTexte,
+          mode_travail: "corrige",
+        });
+      } catch (e) { console.error("Erreur sauvegarde dissertation:", e); }
     } catch { setCorrige("Erreur lors de la correction."); }
     setCorrigeLoading(false);
   };
@@ -1254,47 +1675,113 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
           </div>
         </div>
 
-        {/* Étape 1 : choix des chapitres */}
+        {/* Étape 1 : choix des notions/chapitres */}
         <div className="bg-white rounded-2xl border-2 border-rose-100 shadow-sm p-6 mb-5">
-          <h2 className="text-base font-black text-gray-800 mb-1 flex items-center gap-2">
+          <h2 className="text-base font-black text-gray-800 mb-3 flex items-center gap-2">
             <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">1</span>
-            Choisis les notions à croiser
+            Choisis les notions à travailler
           </h2>
-          <p className="text-xs text-gray-500 mb-4">Sélectionne 2 à 3 chapitres pour un sujet transversal inédit</p>
 
-          {allChapters.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-              <p className="text-gray-500 font-semibold text-sm">Aucun chapitre disponible</p>
-              <p className="text-gray-400 text-xs mt-1">Le professeur doit d'abord ajouter des textes.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {allChapters.map((ch) => {
-                const isSel = selectedChapters.includes(ch);
-                const count = filteredLib.filter((e: any) => entryChapter(e) === ch).length;
-                return (
-                  <button key={ch} onClick={() => toggleChapter(ch)}
-                    className={`text-left p-4 rounded-xl border-2 transition-all ${isSel ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300 bg-white"}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
+          {/* Toggle mode sélection */}
+          <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-xl">
+            <button onClick={() => { setSelectionMode("chapitres"); setSelectedNotions([]); }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${selectionMode === "chapitres" ? "bg-white shadow text-rose-700 border border-rose-200" : "text-gray-500 hover:text-gray-700"}`}>
+              📖 Par chapitres travaillés en classe
+            </button>
+            <button onClick={() => { setSelectionMode("notions"); setSelectedChapters([]); }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${selectionMode === "notions" ? "bg-white shadow text-rose-700 border border-rose-200" : "text-gray-500 hover:text-gray-700"}`}>
+              🎯 Par notions du programme
+            </button>
+          </div>
+
+          {/* Mode Chapitres */}
+          {selectionMode === "chapitres" && (
+            allChapters.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <p className="text-gray-500 font-semibold text-sm">Aucun chapitre disponible</p>
+                <p className="text-gray-400 text-xs mt-1">Le professeur doit d'abord ajouter des textes.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {allChapters.map((ch) => {
+                  const isSel = selectedChapters.includes(ch);
+                  const textesCh = filteredLib.filter((e: any) => entryChapter(e) === ch);
+                  const notionsPrinc = [...new Set(textesCh.map((e: any) => e.notion_principale).filter(Boolean))];
+                  const notionsSec = [...new Set(textesCh.flatMap((e: any) => e.notions_secondaires || []).filter(Boolean))];
+                  return (
+                    <button key={ch} onClick={() => toggleChapter(ch)}
+                      className={`text-left p-4 rounded-xl border-2 transition-all ${isSel ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300 bg-white"}`}>
+                      <div className="flex items-start gap-2 min-w-0 mb-2">
                         <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center ${isSel ? "bg-rose-500 border-rose-500" : "border-gray-300"}`}>
                           {isSel && <Check className="w-3 h-3 text-white" />}
                         </div>
                         <span className={`text-sm font-bold leading-snug ${isSel ? "text-rose-700" : "text-gray-700"}`}>{ch}</span>
                       </div>
-                      <span className="flex-shrink-0 text-xs text-gray-400 font-semibold">{count}t</span>
-                    </div>
-                  </button>
-                );
-              })}
+                      {/* Étiquettes notions du chapitre */}
+                      {(notionsPrinc.length > 0 || notionsSec.length > 0) && (
+                        <div className="flex flex-wrap gap-1 ml-7">
+                          {notionsPrinc.map((n: string) => (
+                            <span key={n} className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">🎯 {n}</span>
+                          ))}
+                          {notionsSec.map((n: string) => (
+                            <span key={n} className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{n}</span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* Mode Notions du programme */}
+          {selectionMode === "notions" && (
+            <div>
+              <p className="text-xs text-gray-500 mb-3">Sélectionne 1 à 3 notions — les sujets du bac correspondants seront proposés en priorité</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(matiere === "philosophie" ? PHILO_NOTIONS_PROGRAMME : [
+                  "Éducation, transmission et émancipation",
+                  "Les expressions de la sensibilité",
+                  "Les métamorphoses du moi",
+                  "Création, continuités et ruptures",
+                  "Histoire et violence",
+                  "L'humain et ses limites",
+                ]).map((notion) => {
+                  const isSel = selectedNotions.includes(notion);
+                  // Compter les textes et sujets disponibles pour cette notion
+                  const nbTextes = filteredLib.filter((e: any) =>
+                    e.notion_principale === notion || (e.notions_secondaires || []).includes(notion) || (e.notions || []).includes(notion)
+                  ).length;
+                  return (
+                    <button key={notion} onClick={() => setSelectedNotions(prev =>
+                      prev.includes(notion) ? prev.filter(n => n !== notion) : [...prev, notion]
+                    )}
+                      className={`text-left p-3 rounded-xl border-2 transition-all ${isSel ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300 bg-white"}`}>
+                      <div className="flex items-start gap-2">
+                        <div className={`flex-shrink-0 mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center ${isSel ? "bg-rose-500 border-rose-500" : "border-gray-300"}`}>
+                          {isSel && <Check className="w-2.5 h-2.5 text-white" />}
+                        </div>
+                        <div className="min-w-0">
+                          <span className={`text-xs font-bold leading-snug block ${isSel ? "text-rose-700" : "text-gray-700"}`}>{notion}</span>
+                          {nbTextes > 0 && <span className="text-xs text-gray-400">{nbTextes} texte{nbTextes > 1 ? "s" : ""}</span>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          {selectedChapters.length > 0 && (
+          {/* Récap sélection */}
+          {(selectedChapters.length > 0 || selectedNotions.length > 0) && (
             <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-semibold text-rose-700">
               <Check className="w-3.5 h-3.5" />
-              {selectedChapters.length} chapitre{selectedChapters.length > 1 ? "s" : ""} sélectionné{selectedChapters.length > 1 ? "s" : ""}
-              {notionsFromSelected.length > 0 && ` · ${notionsFromSelected.length} notions disponibles`}
+              {selectionMode === "chapitres"
+                ? `${selectedChapters.length} chapitre${selectedChapters.length > 1 ? "s" : ""} sélectionné${selectedChapters.length > 1 ? "s" : ""}`
+                : `${selectedNotions.length} notion${selectedNotions.length > 1 ? "s" : ""} sélectionnée${selectedNotions.length > 1 ? "s" : ""}`}
+              {notionsFromSelected.length > 0 && ` · ${notionsFromSelected.length} notion${notionsFromSelected.length > 1 ? "s" : ""} mobilisée${notionsFromSelected.length > 1 ? "s" : ""}`}
             </div>
           )}
         </div>
@@ -1310,7 +1797,7 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
           <div className="flex gap-2">
             <button
               onClick={generateSujets}
-              disabled={selectedChapters.length === 0 || isGeneratingSujet || isLoadingBac}
+              disabled={(selectedChapters.length === 0 && selectedNotions.length === 0) || isGeneratingSujet || isLoadingBac}
               className={`flex-1 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
                 selectedChapters.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" :
                 "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md"
@@ -1323,9 +1810,9 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
             </button>
             <button
               onClick={piocherSujetBac}
-              disabled={selectedChapters.length === 0 || isLoadingBac || isGeneratingSujet}
+              disabled={(selectedChapters.length === 0 && selectedNotions.length === 0) || isLoadingBac || isGeneratingSujet}
               className={`flex-1 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all border-2 ${
-                selectedChapters.length === 0 ? "border-gray-200 text-gray-400 cursor-not-allowed" :
+                (selectedChapters.length === 0 && selectedNotions.length === 0) ? "border-gray-200 text-gray-400 cursor-not-allowed" :
                 "border-rose-400 text-rose-700 hover:bg-rose-50 bg-white"
               }`}>
               {isLoadingBac ? (
@@ -1396,7 +1883,13 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
               <span className="w-6 h-6 bg-rose-600 text-white rounded-full text-xs flex items-center justify-center font-black">3</span>
               Choisis ton mode de travail
             </h2>
-            <p className="text-xs text-gray-500 mb-4">Sujet retenu : <span className="font-bold text-gray-700 italic">"{currentSujetText}"</span></p>
+            <p className="text-xs text-gray-500 mb-2">Sujet retenu : <span className="font-bold text-gray-700 italic">"{currentSujetText}"</span></p>
+          {/* Étiquettes notions actives */}
+          <div className="flex flex-wrap gap-1 mb-4">
+            {(selectionMode === "notions" ? selectedNotions : selectedChapters).map((n: string) => (
+              <span key={n} className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-semibold">{n}</span>
+            ))}
+          </div>
 
             <div className="grid grid-cols-2 gap-3">
               {([
@@ -1480,7 +1973,89 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
             </div>
           )}
 
-          {plan && !planLoading && (
+          {plan && !planLoading && !showRedaction && (
+            <button onClick={() => setShowRedaction(true)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md">
+              <PenLine className="w-4 h-4" /> Rédiger partie par partie avec l'IA
+            </button>
+          )}
+
+          {plan && !planLoading && showRedaction && (
+            <div className="bg-white rounded-2xl border-2 border-violet-200 shadow-sm overflow-hidden">
+              {/* Navigation étapes */}
+              <div className="flex border-b border-violet-100 overflow-x-auto">
+                {([
+                  ["intro","1️⃣ Introduction"],
+                  ["partie1","🔹 Thèse"],
+                  ["partie2","🔸 Antithèse"],
+                  ["partie3","🔺 Synthèse"],
+                  ["conclusion","✅ Conclusion"],
+                ] as [string,string][]).map(([key, label]) => (
+                  <button key={key} onClick={() => setRedacStep(key as any)}
+                    className={`flex-shrink-0 px-4 py-3 text-xs font-bold border-b-2 transition-all ${redacStep === key ? "border-violet-600 text-violet-700 bg-violet-50" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+                    {label}
+                    {redacFeedbacks[key] && <span className="ml-1 text-green-500">✓</span>}
+                  </button>
+                ))}
+              </div>
+              {/* Contenu de l'étape */}
+              <div className="p-5">
+                {(() => {
+                  const stepInfo = ([
+                    { key: "intro", label: "Introduction", desc: "Rédige ton introduction en suivant les 5 étapes : Opinion commune → Définitions → Paradoxe → Problématique → Annonce de plan" },
+                    { key: "partie1", label: "Partie I — Thèse", desc: "Rédige ta première partie (réponse OUI). Pour chaque sous-partie : Thèse → Argumentation → Exemple → Citation → Mini-conclusion. Pense à la transition vers l'antithèse." },
+                    { key: "partie2", label: "Partie II — Antithèse", desc: "Rédige ta deuxième partie (réponse NON). Montre les limites de la thèse. Même structure par paragraphe. Transition vers la synthèse." },
+                    { key: "partie3", label: "Partie III — Synthèse", desc: "Rédige ta synthèse. ATTENTION : ce n'est PAS un résumé du I et II. Introduis un concept NOUVEAU qui dépasse l'alternative oui/non." },
+                    { key: "conclusion", label: "Conclusion", desc: "Rédige ta conclusion : Bilan de la progression (I→II→III) puis Ouverture vers un autre horizon philosophique." },
+                  ] as const).find(s => s.key === redacStep)!;
+                  return (
+                    <div className="space-y-4">
+                      <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
+                        <p className="text-xs font-bold text-violet-800 mb-1">{stepInfo.label}</p>
+                        <p className="text-xs text-violet-700">{stepInfo.desc}</p>
+                      </div>
+                      <textarea
+                        value={redacTextes[redacStep] || ""}
+                        onChange={e => setRedacTextes(prev => ({ ...prev, [redacStep]: e.target.value }))}
+                        className="w-full h-40 px-4 py-3 border-2 border-gray-200 rounded-xl text-sm resize-none focus:border-violet-400 focus:outline-none text-gray-800 leading-relaxed"
+                        placeholder={`Rédige ta ${stepInfo.label.toLowerCase()} ici…`}
+                      />
+                      <button onClick={() => corrigerPartie(redacStep, redacTextes[redacStep] || "")}
+                        disabled={!redacTextes[redacStep]?.trim() || redacLoading}
+                        className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:bg-gray-200 text-white font-bold text-sm flex items-center justify-center gap-2">
+                        {redacLoading ? <><Sparkles className="w-4 h-4 animate-spin" /> Correction en cours…</> : <><Sparkles className="w-4 h-4" /> Corriger cette partie</>}
+                      </button>
+                      {redacFeedbacks[redacStep] && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <p className="text-xs font-black text-amber-800 uppercase mb-2">📝 Retour du professeur</p>
+                          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{redacFeedbacks[redacStep]}</p>
+                          {redacStep !== "conclusion" && (
+                            <button onClick={() => {
+                              const steps = ["intro","partie1","partie2","partie3","conclusion"];
+                              const next = steps[steps.indexOf(redacStep) + 1];
+                              if (next) setRedacStep(next as any);
+                            }}
+                              className="mt-3 text-xs font-bold text-amber-700 flex items-center gap-1 hover:text-amber-900">
+                              Passer à la partie suivante →
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="px-5 pb-4 flex justify-between items-center border-t border-violet-100 pt-3">
+                <button onClick={() => setShowRedaction(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700 font-semibold">← Retour au plan</button>
+                <span className="text-xs text-gray-400">
+                  {Object.keys(redacFeedbacks).length}/5 parties corrigées
+                </span>
+              </div>
+            </div>
+          )}
+
+          {plan && !planLoading && !showRedaction && (
             <div className="space-y-4">
               {/* Plan généré */}
               <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
@@ -2037,87 +2612,479 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
   );
 }
 
-// ── TABLEAU DE BORD ───────────────────────────────────────────────────────────
-function Dashboard({ onBack }: any) {
+// ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
+function Dashboard({ onBack, sharedLib }: any) {
+  const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision">("qcm");
   const [resultats, setResultats] = useState<any[]>([]);
+  const [dissertations, setDissertations] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  const [periodeFilter, setPeriodeFilter] = useState<"semaine" | "mois" | "tout">("tout");
+  const [matiereFilter, setMatiereFilter] = useState("all");
+
+  const PHILO = PHILO_NOTIONS_PROGRAMME;
+  const HLP_CH = [
+    "Éducation, transmission et émancipation",
+    "Les expressions de la sensibilité","Les métamorphoses du moi",
+    "Création, continuités et ruptures","Histoire et violence","L'humain et ses limites",
+  ];
 
   useEffect(() => {
-    dbLoadResultats().then((data) => { setResultats(data); setLoading(false); }).catch(() => setLoading(false));
+    Promise.all([dbLoadResultatsAll(), dbLoadDissertations(), dbLoadSessions()])
+      .then(([r, d, s]) => { setResultats(r); setDissertations(d); setSessions(s); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
-  const chapters = [...new Set(resultats.map((r) => r.chapter))].sort();
-  const filtered = filter === "all" ? resultats : resultats.filter((r) => r.chapter === filter);
+  const now = Date.now();
+  const filtreTemps = (ts: number) => {
+    if (periodeFilter === "semaine") return ts > now - 7 * 24 * 3600 * 1000;
+    if (periodeFilter === "mois") return ts > now - 30 * 24 * 3600 * 1000;
+    return true;
+  };
+
+  const rFiltered = resultats.filter(r => filtreTemps(r.created_at) && (matiereFilter === "all" || true));
+  const dFiltered = dissertations.filter(d => filtreTemps(d.created_at));
+  const sFiltered = sessions.filter(s => filtreTemps(s.created_at));
+
+  // Stats globales
+  const moyenneGenerale = rFiltered.length > 0
+    ? Math.round(rFiltered.reduce((s, r) => s + r.pourcentage, 0) / rFiltered.length)
+    : 0;
+
+  // Stats par notion (QCM) — basées sur chapter du résultat
+  const statsByNotion = (notions: string[]) => notions.map(notion => {
+    const matching = rFiltered.filter(r =>
+      r.chapter && (r.chapter.toLowerCase().includes(notion.toLowerCase().slice(0, 8)) ||
+      notion.toLowerCase().includes((r.chapter || "").toLowerCase().slice(0, 8)))
+    );
+    const avg = matching.length > 0
+      ? Math.round(matching.reduce((s, r) => s + r.pourcentage, 0) / matching.length)
+      : null;
+    return { notion, avg, count: matching.length };
+  }).filter(s => s.count > 0 || true);
+
+  // Textes les plus/moins révisés
+  const textesStats = (() => {
+    const map: Record<string, { titre: string; count: number; msgs: number }> = {};
+    sFiltered.forEach(s => {
+      if (!map[s.texte_id]) map[s.texte_id] = { titre: s.texte_titre, count: 0, msgs: 0 };
+      map[s.texte_id].count++;
+      map[s.texte_id].msgs += s.nb_messages || 0;
+    });
+    return Object.entries(map).sort((a, b) => b[1].count - a[1].count);
+  })();
+
+  // Progression dans le temps (QCM par semaine)
+  const progressionParSemaine = (() => {
+    const semaines: Record<string, number[]> = {};
+    rFiltered.forEach(r => {
+      const d = new Date(r.created_at);
+      const key = `S${Math.ceil(d.getDate() / 7)} ${d.toLocaleString("fr-FR", { month: "short" })}`;
+      if (!semaines[key]) semaines[key] = [];
+      semaines[key].push(r.pourcentage);
+    });
+    return Object.entries(semaines).map(([sem, scores]) => ({
+      sem,
+      avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+      count: scores.length,
+    }));
+  })();
+
+  // Comparaison élèves anonymisée
+  const statsParEleve = (() => {
+    const map: Record<string, number[]> = {};
+    rFiltered.forEach(r => {
+      const nom = r.eleve_nom || "Anonyme";
+      if (!map[nom]) map[nom] = [];
+      map[nom].push(r.pourcentage);
+    });
+    return Object.entries(map)
+      .map(([nom, scores]) => ({
+        nom,
+        avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        count: scores.length,
+      }))
+      .sort((a, b) => b.avg - a.avg);
+  })();
+
+  const tabs = [
+    ["qcm", "✅ QCM", rFiltered.length],
+    ["notions", "🎯 Notions", null],
+    ["dissertations", "✍️ Dissertations", dFiltered.length],
+    ["revision", "📖 Révision", sFiltered.length],
+  ] as [string, string, number | null][];
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={onBack} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+            <button onClick={onBack} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <h1 className="text-lg font-bold text-gray-800">📊 Tableau de bord</h1>
-            <span className="text-xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">
-              {resultats.length} résultat{resultats.length > 1 ? "s" : ""}
-            </span>
           </div>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none">
-            <option value="all">Tous les chapitres</option>
-            {chapters.map((ch) => <option key={ch as string} value={ch as string}>{ch as string}</option>)}
-          </select>
+          {/* Filtres période */}
+          <div className="flex gap-2">
+            {([["semaine","7 jours"],["mois","30 jours"],["tout","Tout"]] as [string,string][]).map(([val, label]) => (
+              <button key={val} onClick={() => setPeriodeFilter(val as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${periodeFilter === val ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Onglets */}
+        <div className="max-w-6xl mx-auto px-6 flex gap-1 pb-0">
+          {tabs.map(([tab, label, count]) => (
+            <button key={tab} onClick={() => setActiveTab(tab as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-all ${activeTab === tab ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+              {label}
+              {count !== null && count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600"}`}>{count}</span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-6 py-6">
+
+      <div className="max-w-6xl mx-auto px-6 py-6">
         {loading ? (
           <div className="text-center py-20 text-gray-600 font-semibold">Chargement…</div>
-        ) : resultats.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-            <div className="text-5xl mb-4">📭</div>
-            <p className="text-xl font-bold text-gray-600">Aucun résultat pour l'instant</p>
-          </div>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {[
-                ["Quiz effectués", filtered.length, "text-indigo-700"],
-                ["Réussis (≥70%)", filtered.filter((r) => r.pourcentage >= 70).length, "text-green-700"],
-                ["Moyenne générale", filtered.length > 0 ? Math.round(filtered.reduce((s, r) => s + r.pourcentage, 0) / filtered.length) + "%" : "0%", "text-purple-700"],
-              ].map(([label, val, color]) => (
-                <div key={label as string} className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
-                  <div className={`text-3xl font-black ${color}`}>{val}</div>
-                  <div className="text-sm font-semibold text-gray-700 mt-1">{label}</div>
-                </div>
-              ))}
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>{["Date", "Élève", "Chapitre", "Score", "Résultat"].map((h) => (
-                    <th key={h} className="text-left px-5 py-3 font-bold text-gray-700">{h}</th>
-                  ))}</tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filtered.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 text-gray-700">{new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                      <td className="px-5 py-3"><span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{r.eleve_nom || "Anonyme"}</span></td>
-                      <td className="px-5 py-3"><span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span></td>
-                      <td className="px-5 py-3 font-bold text-gray-800">{r.score}/{r.total}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 bg-gray-200 rounded-full h-2">
-                            <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
-                              style={{ width: r.pourcentage + "%" }} />
-                          </div>
-                          <span className={`text-sm font-bold ${r.pourcentage >= 70 ? "text-green-700" : r.pourcentage >= 50 ? "text-orange-600" : "text-red-600"}`}>{r.pourcentage}%</span>
-                        </div>
-                      </td>
-                    </tr>
+            {/* ── ONGLET QCM ── */}
+            {activeTab === "qcm" && (
+              <div className="space-y-6">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    ["Quiz effectués", rFiltered.length, "text-indigo-700", "bg-indigo-50"],
+                    ["Moyenne générale", moyenneGenerale + "%", moyenneGenerale >= 70 ? "text-green-700" : moyenneGenerale >= 50 ? "text-orange-600" : "text-red-600", "bg-white"],
+                    ["Réussis (≥70%)", rFiltered.filter(r => r.pourcentage >= 70).length, "text-green-700", "bg-green-50"],
+                    ["Élèves actifs", new Set(rFiltered.map(r => r.eleve_nom)).size, "text-purple-700", "bg-purple-50"],
+                  ].map(([label, val, color, bg]) => (
+                    <div key={label as string} className={`${bg} rounded-2xl border border-gray-200 p-5 text-center shadow-sm`}>
+                      <div className={`text-3xl font-black ${color}`}>{val}</div>
+                      <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+
+                {/* Progression dans le temps */}
+                {progressionParSemaine.length > 1 && (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                    <h3 className="font-black text-gray-800 mb-4">📈 Progression dans le temps</h3>
+                    <div className="flex items-end gap-2 h-32">
+                      {progressionParSemaine.map(({ sem, avg, count }) => (
+                        <div key={sem} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs font-bold text-gray-700">{avg}%</span>
+                          <div className="w-full rounded-t-lg transition-all"
+                            style={{
+                              height: `${(avg / 100) * 100}px`,
+                              backgroundColor: avg >= 70 ? "#22c55e" : avg >= 50 ? "#f97316" : "#ef4444",
+                            }} />
+                          <span className="text-xs text-gray-400">{sem}</span>
+                          <span className="text-xs text-gray-400">{count} quiz</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Comparaison élèves */}
+                {statsParEleve.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                    <h3 className="font-black text-gray-800 mb-4">👥 Comparaison élèves (anonymisée)</h3>
+                    <div className="space-y-2">
+                      {statsParEleve.map(({ nom, avg, count }, i) => (
+                        <div key={nom} className="flex items-center gap-3">
+                          <span className="w-6 text-xs font-black text-gray-400 text-right">{i + 1}</span>
+                          <span className="w-32 text-sm font-bold text-gray-700 truncate">{nom}</span>
+                          <div className="flex-1 bg-gray-100 rounded-full h-3">
+                            <div className="h-3 rounded-full transition-all"
+                              style={{ width: `${avg}%`, backgroundColor: avg >= 70 ? "#22c55e" : avg >= 50 ? "#f97316" : "#ef4444" }} />
+                          </div>
+                          <span className={`text-sm font-black w-12 text-right ${avg >= 70 ? "text-green-700" : avg >= 50 ? "text-orange-600" : "text-red-600"}`}>{avg}%</span>
+                          <span className="text-xs text-gray-400 w-16">{count} quiz</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tableau détaillé */}
+                {rFiltered.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>{["Date", "Élève", "Chapitre", "Score", "Résultat"].map(h => (
+                          <th key={h} className="text-left px-5 py-3 font-bold text-gray-700">{h}</th>
+                        ))}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {rFiltered.slice(0, 50).map((r: any) => (
+                          <tr key={r.id} className="hover:bg-gray-50">
+                            <td className="px-5 py-3 text-gray-700 text-xs">
+                              {new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="px-5 py-3"><span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{r.eleve_nom || "Anonyme"}</span></td>
+                            <td className="px-5 py-3"><span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{r.chapter}</span></td>
+                            <td className="px-5 py-3 font-bold text-gray-800">{r.score}/{r.total}</td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 bg-gray-200 rounded-full h-2">
+                                  <div className={`h-2 rounded-full ${r.pourcentage >= 70 ? "bg-green-500" : r.pourcentage >= 50 ? "bg-orange-500" : "bg-red-500"}`}
+                                    style={{ width: r.pourcentage + "%" }} />
+                                </div>
+                                <span className={`text-sm font-bold ${r.pourcentage >= 70 ? "text-green-700" : r.pourcentage >= 50 ? "text-orange-600" : "text-red-600"}`}>{r.pourcentage}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {rFiltered.length === 0 && (
+                  <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <div className="text-5xl mb-4">📭</div>
+                    <p className="text-xl font-bold text-gray-600">Aucun quiz pour cette période</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── ONGLET NOTIONS ── */}
+            {activeTab === "notions" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                  <h3 className="font-black text-gray-800 mb-2">🎯 Maîtrise par notion — Philosophie</h3>
+                  <p className="text-xs text-gray-500 mb-4">Basé sur les QCM. Les cases grises = aucun QCM sur cette notion.</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {statsByNotion(PHILO).map(({ notion, avg, count }) => (
+                      <div key={notion} className={`p-3 rounded-xl border-2 ${
+                        avg === null ? "border-gray-200 bg-gray-50" :
+                        avg >= 70 ? "border-green-300 bg-green-50" :
+                        avg >= 50 ? "border-orange-300 bg-orange-50" :
+                        "border-red-300 bg-red-50"
+                      }`}>
+                        <p className="text-xs font-bold text-gray-700 mb-1 truncate">{notion}</p>
+                        {avg !== null ? (
+                          <>
+                            <p className={`text-2xl font-black ${avg >= 70 ? "text-green-700" : avg >= 50 ? "text-orange-600" : "text-red-600"}`}>{avg}%</p>
+                            <p className="text-xs text-gray-500">{count} quiz</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-400 font-semibold">— aucun quiz</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                  <h3 className="font-black text-gray-800 mb-2">📜 Maîtrise par chapitre — HLP</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {statsByNotion(HLP_CH).map(({ notion, avg, count }) => (
+                      <div key={notion} className={`p-3 rounded-xl border-2 ${
+                        avg === null ? "border-gray-200 bg-gray-50" :
+                        avg >= 70 ? "border-green-300 bg-green-50" :
+                        avg >= 50 ? "border-orange-300 bg-orange-50" :
+                        "border-red-300 bg-red-50"
+                      }`}>
+                        <p className="text-xs font-bold text-gray-700 mb-1">{notion}</p>
+                        {avg !== null ? (
+                          <>
+                            <p className={`text-2xl font-black ${avg >= 70 ? "text-green-700" : avg >= 50 ? "text-orange-600" : "text-red-600"}`}>{avg}%</p>
+                            <p className="text-xs text-gray-500">{count} quiz</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-400 font-semibold">— aucun quiz</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notions les moins bien maîtrisées */}
+                {(() => {
+                  const weak = statsByNotion([...PHILO, ...HLP_CH])
+                    .filter(s => s.avg !== null && s.avg < 60)
+                    .sort((a, b) => (a.avg || 0) - (b.avg || 0))
+                    .slice(0, 5);
+                  return weak.length > 0 ? (
+                    <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5">
+                      <h3 className="font-black text-red-800 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" /> Notions à renforcer en priorité
+                      </h3>
+                      <div className="space-y-2">
+                        {weak.map(({ notion, avg, count }) => (
+                          <div key={notion} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-red-200">
+                            <span className="flex-1 text-sm font-bold text-gray-800">{notion}</span>
+                            <span className="text-xs text-gray-500">{count} quiz</span>
+                            <span className="text-lg font-black text-red-600">{avg}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+
+            {/* ── ONGLET DISSERTATIONS ── */}
+            {activeTab === "dissertations" && (
+              <div className="space-y-4">
+                {/* KPIs */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    ["Dissertations soumises", dFiltered.length, "text-rose-700"],
+                    ["Notions travaillées", new Set(dFiltered.map(d => d.notion_principale).filter(Boolean)).size, "text-purple-700"],
+                    ["Élèves actifs", new Set(dFiltered.map(d => d.eleve_nom)).size, "text-indigo-700"],
+                  ].map(([label, val, color]) => (
+                    <div key={label as string} className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                      <div className={`text-3xl font-black ${color}`}>{val}</div>
+                      <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Dissertations par notion */}
+                {dFiltered.length > 0 && (() => {
+                  const byNotion: Record<string, number> = {};
+                  dFiltered.forEach(d => {
+                    const n = d.notion_principale || "Non classée";
+                    byNotion[n] = (byNotion[n] || 0) + 1;
+                  });
+                  return (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                      <h3 className="font-black text-gray-800 mb-3">Dissertations par notion</h3>
+                      <div className="space-y-2">
+                        {Object.entries(byNotion).sort((a, b) => b[1] - a[1]).map(([notion, count]) => (
+                          <div key={notion} className="flex items-center gap-3">
+                            <span className="flex-1 text-sm font-semibold text-gray-700">{notion}</span>
+                            <div className="w-32 bg-gray-100 rounded-full h-2">
+                              <div className="h-2 rounded-full bg-rose-400"
+                                style={{ width: `${(count / dFiltered.length) * 100}%` }} />
+                            </div>
+                            <span className="text-sm font-black text-rose-700 w-8 text-right">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Liste des dissertations */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-100">
+                    <h3 className="font-black text-gray-800">Copies soumises</h3>
+                  </div>
+                  {dFiltered.length === 0 ? (
+                    <div className="text-center py-12 text-gray-400 font-semibold">Aucune dissertation soumise pour cette période</div>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {dFiltered.map((d: any) => (
+                        <div key={d.id} className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-gray-800 italic">"{d.sujet}"</p>
+                              <div className="flex gap-2 mt-1 flex-wrap">
+                                <span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{d.eleve_nom || "Anonyme"}</span>
+                                {d.notion_principale && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">🎯 {d.notion_principale}</span>}
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${d.matiere === "philosophie" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {d.matiere === "philosophie" ? "🧠 Philo" : "📜 HLP"}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-gray-400 flex-shrink-0">
+                              {new Date(d.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+                            </span>
+                          </div>
+                          {d.texte_eleve && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-indigo-600 font-semibold cursor-pointer hover:text-indigo-800">Voir la copie ({d.texte_eleve.split(" ").length} mots)</summary>
+                              <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-700 whitespace-pre-wrap max-h-32 overflow-y-auto">{d.texte_eleve}</div>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── ONGLET RÉVISION ── */}
+            {activeTab === "revision" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    ["Sessions de révision", sFiltered.length, "text-green-700"],
+                    ["Messages échangés", sFiltered.reduce((s, r) => s + (r.nb_messages || 0), 0), "text-teal-700"],
+                    ["Textes consultés", new Set(sFiltered.map(s => s.texte_id)).size, "text-indigo-700"],
+                  ].map(([label, val, color]) => (
+                    <div key={label as string} className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                      <div className={`text-3xl font-black ${color}`}>{val}</div>
+                      <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Textes les plus révisés */}
+                {textesStats.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                    <h3 className="font-black text-gray-800 mb-3">📚 Textes les plus révisés</h3>
+                    <div className="space-y-2">
+                      {textesStats.slice(0, 10).map(([id, { titre, count, msgs }]) => (
+                        <div key={id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-800 truncate">{titre || "Texte sans titre"}</p>
+                          </div>
+                          <span className="text-xs text-gray-500">{msgs} messages</span>
+                          <div className="w-24 bg-gray-100 rounded-full h-2">
+                            <div className="h-2 rounded-full bg-teal-400"
+                              style={{ width: `${(count / textesStats[0][1].count) * 100}%` }} />
+                          </div>
+                          <span className="text-sm font-black text-teal-700 w-12 text-right">{count} sess.</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Textes jamais révisés */}
+                {(() => {
+                  const revisesIds = new Set(sessions.map(s => s.texte_id));
+                  const nonRevises = (sharedLib || []).filter((t: any) => !revisesIds.has(t.id));
+                  return nonRevises.length > 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                      <h3 className="font-black text-amber-800 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" /> Textes jamais révisés ({nonRevises.length})
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {nonRevises.slice(0, 15).map((t: any) => (
+                          <span key={t.id} className="text-xs bg-white border border-amber-200 text-amber-800 px-2 py-1 rounded-lg font-semibold">
+                            {t.work_title || t.author || "Sans titre"}
+                          </span>
+                        ))}
+                        {nonRevises.length > 15 && <span className="text-xs text-amber-600 font-semibold">+{nonRevises.length - 15} autres</span>}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {sFiltered.length === 0 && (
+                  <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <div className="text-5xl mb-4">📭</div>
+                    <p className="text-xl font-bold text-gray-600">Aucune session de révision enregistrée</p>
+                    <p className="text-sm text-gray-400 mt-1">Les sessions seront enregistrées automatiquement quand les élèves utiliseront le mode révision</p>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -2128,7 +3095,9 @@ function Dashboard({ onBack }: any) {
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function QCMApp() {
   const [role, setRole] = useState<string | null>(null);
-  const [eleveNom, setEleveNom] = useState<string>("");
+  const [eleveNom, setEleveNom] = useState<string>(() => {
+    try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; }
+  });
   const [sharedLib, setSharedLib] = useState<any[]>([]);
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
@@ -2143,10 +3112,16 @@ export default function QCMApp() {
 
   useEffect(() => { loadLib(); }, []);
 
+  // Mémoriser le nom élève dans localStorage
+  const saveEleveNom = (nom: string) => {
+    setEleveNom(nom);
+    try { if (nom.trim()) localStorage.setItem("qcm_eleve_nom", nom.trim()); } catch {}
+  };
+
   const matiere = role === "eleve-HLP" ? "hlp" : role === "eleve-Philosophie" ? "philosophie" : null;
   const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
-  if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} />;
+  if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} />;
 
   // Accès direct au mode dissertation depuis l'accueil
   if (dissertMatiere && !dissertationData) {
@@ -2206,7 +3181,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} />
+        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} eleveNom={eleveNom} />
       </div>
     </div>
   );
@@ -2246,11 +3221,33 @@ export default function QCMApp() {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
+function HomeScreen({ onSelect, eleveNom, setEleveNom, saveEleveNom }: any) {
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
+  const [checking, setChecking] = useState(false);
   const [pseudoInput, setPseudoInput] = useState(eleveNom || "");
+
+  const verifyProfCode = async () => {
+    if (!code.trim()) return;
+    setChecking(true);
+    setErr("");
+    try {
+      // Vérifier d'abord en BDD, fallback sur "prof1234" si config absente
+      const storedCode = await dbGetConfig("prof_code");
+      const validCode = storedCode || "prof1234";
+      if (code === validCode) {
+        onSelect("prof");
+      } else {
+        setErr("Code incorrect");
+      }
+    } catch {
+      // En cas d'erreur Supabase, fallback local
+      if (code === "prof1234") { onSelect("prof"); }
+      else { setErr("Code incorrect"); }
+    }
+    setChecking(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6">
@@ -2263,7 +3260,7 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
       <div className="w-full max-w-2xl mb-6">
         <div className="bg-white rounded-2xl border-2 border-gray-200 px-5 py-4 flex items-center gap-3 shadow-sm">
           <User className="w-5 h-5 text-gray-400 flex-shrink-0" />
-          <input value={pseudoInput} onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }}
+          <input value={pseudoInput} onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }} onBlur={(e) => saveEleveNom && saveEleveNom(e.target.value)}
             className="flex-1 text-sm font-semibold text-gray-800 bg-transparent border-none outline-none placeholder-gray-400"
             placeholder="Ton prénom ou pseudo (optionnel)" />
           {pseudoInput && <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Enregistré</span>}
@@ -2316,13 +3313,13 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
           ) : (
             <div className="max-w-xs mx-auto">
               <input type="password" value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }}
-                onKeyDown={(e) => e.key === "Enter" && (code === PROF_CODE ? onSelect("prof") : setErr("Code incorrect"))}
+                onKeyDown={(e) => e.key === "Enter" && verifyProfCode()}
                 className="w-full p-2.5 border-2 border-purple-300 rounded-xl text-sm text-center mb-2 focus:border-purple-500 focus:outline-none text-gray-800"
                 placeholder="Code professeur" autoFocus />
               {err && <p className="text-red-500 text-xs mb-2">{err}</p>}
-              <button onClick={() => (code === PROF_CODE ? onSelect("prof") : setErr("Code incorrect"))}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all">
-                Entrer
+              <button onClick={verifyProfCode} disabled={checking}
+                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                {checking ? <><Sparkles className="w-4 h-4 animate-spin" /> Vérification…</> : "Entrer"}
               </button>
             </div>
           )}
@@ -2332,6 +3329,253 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom }: any) {
   );
 }
 
+
+
+// ── GESTION NOTIONS PROF ──────────────────────────────────────────────────────
+function GestionNotionsProf({ sharedLib, onReload }: any) {
+  const [saving, setSaving] = useState<string | null>(null);
+  const [filterMatiere, setFilterMatiere] = useState("all");
+  const [filterNotion, setFilterNotion] = useState("all");
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNotionPrincipale, setEditNotionPrincipale] = useState("");
+  const [editNotionsSecondaires, setEditNotionsSecondaires] = useState<string[]>([]);
+
+  const PHILO = PHILO_NOTIONS_PROGRAMME;
+  const HLP = [
+    "Éducation, transmission et émancipation",
+    "Les expressions de la sensibilité",
+    "Les métamorphoses du moi",
+    "Création, continuités et ruptures",
+    "Histoire et violence",
+    "L'humain et ses limites",
+  ];
+
+  const filtered = sharedLib.filter((e: any) => {
+    const matchMat = filterMatiere === "all" || (e.matiere || "hlp") === filterMatiere;
+    const matchNotion = filterNotion === "all"
+      || e.notion_principale === filterNotion
+      || (e.notions_secondaires || []).includes(filterNotion);
+    const matchSearch = !search || (e.work_title || "").toLowerCase().includes(search.toLowerCase())
+      || (e.author || "").toLowerCase().includes(search.toLowerCase());
+    return matchMat && matchNotion && matchSearch;
+  });
+
+  const notions = filterMatiere === "philosophie" ? PHILO : filterMatiere === "hlp" ? HLP : [...PHILO, ...HLP];
+
+  const startEdit = (entry: any) => {
+    setEditingId(entry.id);
+    setEditNotionPrincipale(entry.notion_principale || "");
+    setEditNotionsSecondaires(entry.notions_secondaires || []);
+  };
+
+  const saveNotions = async (entry: any) => {
+    setSaving(entry.id);
+    try {
+      await dbUpdateTexte(entry.id, {
+        chapter: entry.chapter,
+        author: entry.author,
+        workTitle: entry.work_title,
+        content: entry.content,
+        type: entry.type,
+        matiere: entry.matiere,
+        notion_principale: editNotionPrincipale,
+        notions_secondaires: editNotionsSecondaires,
+      });
+      await onReload();
+      setEditingId(null);
+    } catch (e) { console.error(e); }
+    setSaving(null);
+  };
+
+  const toggleSecondaire = (n: string) => {
+    setEditNotionsSecondaires(prev =>
+      prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n]
+    );
+  };
+
+  // Compte des textes par notion
+  const countByNotion = (notion: string) =>
+    sharedLib.filter((e: any) =>
+      e.notion_principale === notion || (e.notions_secondaires || []).includes(notion)
+    ).length;
+
+  return (
+    <div className="space-y-5">
+      {/* Vue d'ensemble : couverture des notions */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+        <h3 className="font-black text-gray-800 mb-3 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-indigo-600" /> Couverture des notions du programme
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {PHILO.map(n => {
+            const count = countByNotion(n);
+            return (
+              <div key={n} className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${count > 0 ? "border-indigo-200 bg-indigo-50 text-indigo-800" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+                <span className="truncate">{n}</span>
+                <span className={`flex-shrink-0 font-black px-1.5 py-0.5 rounded-full text-xs ${count > 0 ? "bg-indigo-200 text-indigo-800" : "bg-gray-200 text-gray-500"}`}>{count}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <p className="text-xs font-black text-emerald-700 mb-2">Chapitres HLP</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {HLP.map(n => {
+              const count = countByNotion(n);
+              return (
+                <div key={n} className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${count > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+                  <span className="truncate">{n}</span>
+                  <span className={`flex-shrink-0 font-black px-1.5 py-0.5 rounded-full text-xs ${count > 0 ? "bg-emerald-200 text-emerald-800" : "bg-gray-200 text-gray-500"}`}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-40">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none text-gray-800"
+            placeholder="Rechercher un texte…" />
+        </div>
+        <select value={filterMatiere} onChange={e => { setFilterMatiere(e.target.value); setFilterNotion("all"); }}
+          className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none">
+          <option value="all">Toutes matières</option>
+          <option value="philosophie">🧠 Philosophie</option>
+          <option value="hlp">📜 HLP</option>
+        </select>
+        <select value={filterNotion} onChange={e => setFilterNotion(e.target.value)}
+          className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none">
+          <option value="all">Toutes notions</option>
+          <optgroup label="Sans notion assignée">
+            <option value="__aucune__">⚠️ Sans notion principale</option>
+          </optgroup>
+          <optgroup label="Notions">
+            {notions.map(n => <option key={n} value={n}>{n}</option>)}
+          </optgroup>
+        </select>
+      </div>
+
+      {/* Alerte textes sans notion */}
+      {(() => {
+        const sansNotion = sharedLib.filter((e: any) => !e.notion_principale).length;
+        return sansNotion > 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2 text-sm text-amber-800 font-semibold">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            {sansNotion} texte{sansNotion > 1 ? "s" : ""} sans notion principale — ils ne seront pas trouvés par les élèves en mode "Par notions"
+            <button onClick={() => setFilterNotion("__aucune__")} className="ml-auto text-xs underline hover:no-underline">Voir</button>
+          </div>
+        ) : null;
+      })()}
+
+      {/* Liste des textes */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span className="text-sm font-bold text-gray-700">{filtered.length} texte{filtered.length > 1 ? "s" : ""}</span>
+          <span className="text-xs text-gray-400">Clique sur un texte pour assigner ses notions</span>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {filtered
+            .filter((e: any) => filterNotion !== "__aucune__" || !e.notion_principale)
+            .map((entry: any) => (
+            <div key={entry.id} className="p-4 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${(entry.matiere || "hlp") === "hlp" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                      {(entry.matiere || "hlp") === "hlp" ? "📜 HLP" : "🧠 Philo"}
+                    </span>
+                    <span className="text-xs text-gray-500 font-semibold">{entry.chapter || "Sans chapitre"}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-800">{entry.work_title || entry.author || "Sans titre"}</p>
+                  {entry.author && <p className="text-xs text-gray-500">{entry.author}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {entry.notion_principale && (
+                    <span className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">🎯 {entry.notion_principale}</span>
+                  )}
+                  {!entry.notion_principale && (
+                    <span className="text-xs bg-amber-100 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">⚠️ Non assigné</span>
+                  )}
+                  <button onClick={() => editingId === entry.id ? setEditingId(null) : startEdit(entry)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${editingId === entry.id ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600"}`}>
+                    {editingId === entry.id ? "✕ Fermer" : "✏️ Assigner"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Panel d'édition inline */}
+              {editingId === entry.id && (
+                <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Notion principale */}
+                    <div>
+                      <label className="text-xs font-black text-rose-700 uppercase mb-2 block">🎯 Notion principale</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {((entry.matiere || "hlp") === "philosophie" ? PHILO : HLP).map(n => (
+                          <button key={n} onClick={() => setEditNotionPrincipale(editNotionPrincipale === n ? "" : n)}
+                            className={`text-left text-xs px-2.5 py-2 rounded-lg border-2 font-semibold transition-all ${editNotionPrincipale === n ? "border-rose-500 bg-rose-50 text-rose-700" : "border-gray-200 bg-white text-gray-600 hover:border-rose-300"}`}>
+                            {editNotionPrincipale === n && "✓ "}{n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Notions secondaires */}
+                    <div>
+                      <label className="text-xs font-black text-gray-600 uppercase mb-2 block">Notions secondaires</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {((entry.matiere || "hlp") === "philosophie" ? PHILO : HLP)
+                          .filter(n => n !== editNotionPrincipale)
+                          .map(n => {
+                            const isSel = editNotionsSecondaires.includes(n);
+                            return (
+                              <button key={n} onClick={() => toggleSecondaire(n)}
+                                className={`text-left text-xs px-2.5 py-2 rounded-lg border-2 font-semibold transition-all ${isSel ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-500 hover:border-indigo-300"}`}>
+                                {isSel && "✓ "}{n}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Récap + bouton sauvegarder */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1">
+                      {editNotionPrincipale && (
+                        <span className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">🎯 {editNotionPrincipale}</span>
+                      )}
+                      {editNotionsSecondaires.map(n => (
+                        <span key={n} className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                      ))}
+                    </div>
+                    <button onClick={() => saveNotions(entry)}
+                      disabled={saving === entry.id}
+                      className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all">
+                      {saving === entry.id ? <><Sparkles className="w-3 h-3 animate-spin" /> Enregistrement…</> : <><Check className="w-3 h-3" /> Sauvegarder</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Affichage notions secondaires existantes */}
+              {editingId !== entry.id && (entry.notions_secondaires || []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {(entry.notions_secondaires || []).map((n: string) => (
+                    <span key={n} className="text-xs bg-indigo-100 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── BANQUE SUJETS PROF ────────────────────────────────────────────────────────
 function BanqueSujetsProf() {
@@ -2611,9 +3855,84 @@ Un objet par sujet, dans le même ordre.` }], 2000);
   );
 }
 
+
+// ── CHANGER CODE PROF ─────────────────────────────────────────────────────────
+function ChangerCodeProf() {
+  const [open, setOpen] = useState(false);
+  const [ancien, setAncien] = useState("");
+  const [nouveau, setNouveau] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [msg, setMsg] = useState<{type: "ok"|"err"; text: string} | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setMsg(null);
+    if (!ancien || !nouveau || !confirm) { setMsg({ type: "err", text: "Tous les champs sont requis" }); return; }
+    if (nouveau.length < 6) { setMsg({ type: "err", text: "Le nouveau code doit faire au moins 6 caractères" }); return; }
+    if (nouveau !== confirm) { setMsg({ type: "err", text: "Les deux nouveaux codes ne correspondent pas" }); return; }
+    setSaving(true);
+    try {
+      const storedCode = await dbGetConfig("prof_code");
+      const validCode = storedCode || "prof1234";
+      if (ancien !== validCode) { setMsg({ type: "err", text: "Ancien code incorrect" }); setSaving(false); return; }
+      await dbSetConfig("prof_code", nouveau);
+      setMsg({ type: "ok", text: "Code modifié avec succès !" });
+      setAncien(""); setNouveau(""); setConfirm("");
+      setTimeout(() => { setOpen(false); setMsg(null); }, 2000);
+    } catch { setMsg({ type: "err", text: "Erreur lors de la sauvegarde" }); }
+    setSaving(false);
+  };
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-purple-700 px-3 py-2 rounded-xl border border-gray-200 hover:border-purple-300 transition-all">
+        <Lock className="w-3.5 h-3.5" /> Code
+      </button>
+      {open && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-black text-gray-800 flex items-center gap-2"><Lock className="w-4 h-4 text-purple-600" /> Changer le code prof</h3>
+              <button onClick={() => { setOpen(false); setMsg(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              {[
+                ["Ancien code", ancien, setAncien, "Ton code actuel"],
+                ["Nouveau code (min. 6 car.)", nouveau, setNouveau, "Au moins 6 caractères"],
+                ["Confirmer le nouveau code", confirm, setConfirm, "Répète le nouveau code"],
+              ].map(([label, val, setter, ph]) => (
+                <div key={label as string}>
+                  <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">{label}</label>
+                  <input type="password" value={val as string} onChange={e => (setter as any)(e.target.value)}
+                    className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800"
+                    placeholder={ph as string} />
+                </div>
+              ))}
+            </div>
+            {msg && (
+              <div className={`mt-3 p-3 rounded-xl text-sm font-semibold text-center ${msg.type === "ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {msg.type === "ok" ? "✅ " : "❌ "}{msg.text}
+              </div>
+            )}
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => { setOpen(false); setMsg(null); }}
+                className="flex-1 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Annuler</button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                {saving ? <><Sparkles className="w-4 h-4 animate-spin" /> Sauvegarde…</> : "Changer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
 function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard }: any) {
-  const [profTab, setProfTab] = useState<"textes" | "sujets">("textes");
+  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
@@ -2766,11 +4085,16 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "sujets" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"}`}>
                 ✍️ Banque de sujets
               </button>
+              <button onClick={() => setProfTab("notions")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "notions" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
+                🎯 Notions des textes
+              </button>
             </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
               📊 Tableau de bord
             </button>
             <button onClick={onReload} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
+            <ChangerCodeProf />
             <button onClick={onLogout} className="text-sm text-gray-600 hover:text-red-600 font-semibold flex items-center gap-1.5">
               <LogOut className="w-4 h-4" /> Déconnexion
             </button>
@@ -2780,6 +4104,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
       {profTab === "sujets" ? (
         <div className="max-w-5xl mx-auto px-6 py-6">
           <BanqueSujetsProf />
+        </div>
+      ) : profTab === "notions" ? (
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <GestionNotionsProf sharedLib={sharedLib} onReload={onReload} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -2986,6 +4314,42 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                           </div>
                         )}
                       </div>
+                      {/* Notions principale et secondaires */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-rose-700 uppercase mb-1">🎯 Notion principale</label>
+                          <select value={editFields.notion_principale || ""} onChange={(e) => setEditFields((f: any) => ({ ...f, notion_principale: e.target.value }))}
+                            className="w-full px-3 py-2 border-2 border-rose-200 rounded-lg text-xs focus:border-rose-400 focus:outline-none text-gray-800">
+                            <option value="">— Aucune —</option>
+                            {((editFields.matiere || "hlp") === "philosophie" ? PHILO_NOTIONS_PROGRAMME : [
+                              "Éducation, transmission et émancipation","Les expressions de la sensibilité","Les métamorphoses du moi",
+                              "Création, continuités et ruptures","Histoire et violence","L'humain et ses limites",
+                            ]).map((n: string) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Notions secondaires</label>
+                          <div className="flex flex-wrap gap-1 min-h-8 p-1.5 border-2 border-gray-200 rounded-lg bg-white">
+                            {((editFields.matiere || "hlp") === "philosophie" ? PHILO_NOTIONS_PROGRAMME : [
+                              "Éducation, transmission et émancipation","Les expressions de la sensibilité","Les métamorphoses du moi",
+                              "Création, continuités et ruptures","Histoire et violence","L'humain et ses limites",
+                            ]).map((n: string) => {
+                              const isSel = (editFields.notions_secondaires || []).includes(n);
+                              return (
+                                <button key={n} type="button" onClick={() => setEditFields((f: any) => ({
+                                  ...f,
+                                  notions_secondaires: isSel
+                                    ? (f.notions_secondaires || []).filter((x: string) => x !== n)
+                                    : [...(f.notions_secondaires || []), n]
+                                }))}
+                                  className={`text-xs px-1.5 py-0.5 rounded-full border transition-all ${isSel ? "bg-gray-600 text-white border-gray-600" : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400"}`}>
+                                  {n}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                       <textarea value={editFields.content || ""} onChange={(e) => setEditFields((f: any) => ({ ...f, content: e.target.value }))}
                         className="w-full h-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm resize-none focus:outline-none text-gray-800" />
                       <div className="flex gap-2">
@@ -3004,6 +4368,12 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold">
                             {entry.type === "cours" ? "📖 Cours" : entry.type === "qcm" ? "✅ QCM" : "📖✅ Les deux"}
                           </span>
+                          {entry.notion_principale && (
+                            <span className="text-xs bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">🎯 {entry.notion_principale}</span>
+                          )}
+                          {(entry.notions_secondaires || []).slice(0, 2).map((n: string, i: number) => (
+                            <span key={i} className="text-xs bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full">{n}</span>
+                          ))}
                           {(entry.notions || []).slice(0, 2).map((n: string, i: number) => (
                             <span key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">{n}</span>
                           ))}
@@ -3015,7 +4385,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                       <div className="flex gap-1.5 flex-shrink-0">
                         <button onClick={() => {
                           setEditingId(entry.id);
-                          setEditFields({ chapter: entryChapter(entry) === "Non classé" ? "" : entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content, type: entry.type || "les deux", matiere: entry.matiere || "hlp" });
+                          setEditFields({ chapter: entryChapter(entry) === "Non classé" ? "" : entryChapter(entry), author: entry.author || "", workTitle: entry.work_title || "", content: entry.content, type: entry.type || "les deux", matiere: entry.matiere || "hlp", notion_principale: entry.notion_principale || "", notions_secondaires: entry.notions_secondaires || [] });
                         }} className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                         <button onClick={() => deleteEntry(entry.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
