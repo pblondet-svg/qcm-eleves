@@ -986,9 +986,16 @@ ${autresTextes ? "\n\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertin
         )}
         {activeTab === "chat" && (
           <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 shadow-sm flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-              <MessageCircle className="w-4 h-4 text-gray-600" />
-              <h3 className="font-bold text-gray-700 text-sm">Chat IA — questions sur le texte</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-gray-600" />
+                <h3 className="font-bold text-gray-700 text-sm">Chat IA — questions sur le cours</h3>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="bg-yellow-100 text-yellow-700 border border-yellow-300 px-1.5 py-0.5 rounded-full font-bold">🟡 Cours</span>
+                <span className="bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-bold">🔵 IA</span>
+                <span className="bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded-full font-bold">🟠 Général</span>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.length === 0 && (
@@ -1004,9 +1011,9 @@ ${autresTextes ? "\n\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertin
                     <div className="max-w-[85%] flex flex-col gap-1">
                       {msg.source && (
                         <div className="flex items-center gap-1.5 px-1">
-                          {msg.source === "texte" && <span className="flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🟡 Extrait du texte</span>}
-                          {msg.source === "synthese" && <span className="flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">🔵 Synthèse IA du cours</span>}
-                          {msg.source === "hors_texte" && <span className="flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">🟠 Hors texte — connaissance générale</span>}
+                          {msg.source === "texte" && <span className="flex items-center gap-1 text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🟡 Extrait de tes cours</span>}
+                          {msg.source === "synthese" && <span className="flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">🔵 Synthèse IA (basée sur tes cours)</span>}
+                          {msg.source === "hors_texte" && <span className="flex items-center gap-1 text-xs font-bold text-orange-700 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded-full">🟠 Connaissance générale (hors tes cours)</span>}
                         </div>
                       )}
                       <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed rounded-bl-sm border ${msg.source === "texte" ? "bg-yellow-50 border-yellow-200 text-gray-800" : msg.source === "hors_texte" ? "bg-orange-50 border-orange-200 text-gray-800" : "bg-gray-100 border-gray-200 text-gray-800"}`}>
@@ -2058,7 +2065,7 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
             <div className="space-y-4">
               {/* Plan généré */}
               <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="font-black text-gray-800 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-600" />
                     Plan — Niveau {planLevel}
@@ -2067,6 +2074,11 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
                     <RotateCcw className="w-3 h-3" /> Regénérer
                   </button>
+                </div>
+                <div className="flex gap-2 mb-3 flex-wrap">
+                  <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">🔵 Généré par l'IA Groq</span>
+                  {contextForAI && <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full font-semibold">🟡 Basé sur tes textes du cours</span>}
+                  <span className="text-xs bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">⚠️ À vérifier et personnaliser</span>
                 </div>
                 <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
               </div>
@@ -2222,7 +2234,16 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                   <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{eleveTexte}</p>
                 </div>
                 <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm p-4 overflow-y-auto max-h-96">
-                  <h3 className="font-black text-amber-700 text-xs uppercase mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Correction IA</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-black text-amber-700 text-xs uppercase flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Correction IA</h3>
+                    <div className="flex gap-1.5">
+                      <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">🔵 Évaluation IA</span>
+                      <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">📋 Grille Éduscol</span>
+                    </div>
+                  </div>
+                  <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-semibold">
+                    ⚠️ Cette correction est générée par IA et applique la grille officielle Éduscol. Elle ne remplace pas l'appréciation de ton professeur.
+                  </div>
                   <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{corrige}</pre>
                 </div>
               </div>
@@ -4523,16 +4544,22 @@ Commence directement par ta réaction au plan, sans introduction formelle.` }], 
           `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} qui vient de faire passer une colle.
 Sujet : "${sujet}"
 Plan de l\'élève : ${planEleve || "(non fourni)"}
+Échange oral : ${newMsgs.slice(-6).map(m => `${m.role === "user" ? "Élève" : "Prof"} : ${m.content.slice(0, 150)}`).join(" | ")}
 
-Échange de l\'oral :
-${newMsgs.map(m => `${m.role === "user" ? eleveNom || "Élève" : "Professeur"} : ${m.content}`).join("\n")}
+GRILLE ÉDUSCOL (appliquer strictement) :
+• 0-5 : copie inintelligible/vide/refus
+• 6-9 : intelligible mais sans traitement philosophique du sujet
+• ≥10 : effort réel de problématisation et cohérence globale
+• ≥12 : + exemples et références pertinents
+• ≥14 : + raisonnement construit et affirmations justifiées
+• ≥16 : + maîtrise de concepts philosophiques et culture au service du sujet
 
-Génère un bilan de colle structuré :
-1. 🎯 **Note indicative** : X/20 avec justification (2 lignes)
-2. ✅ **Points forts** (2-3 points précis observés durant l\'oral)
-3. ⚠️ **Points à améliorer** (2-3 points concrets avec conseils)
-4. 📚 **Conseil prioritaire** pour la prochaine colle (1 conseil actionnable)
-5. 💬 **Mot de conclusion** bienveillant (1 phrase d\'encouragement)` }], 800);
+Génère un bilan de colle :
+1. 📊 **Note /20** : note précise + palier Éduscol atteint + justification (2 lignes)
+2. ✅ **Points forts** (2-3 points observés durant l\'oral)
+3. ⚠️ **Points à améliorer** (2-3 conseils concrets)
+4. 💡 **Conseil prioritaire** pour la prochaine colle
+5. 💬 **Encouragement** (1 phrase)` }], 800);
         setBilan(getText(data));
       } catch { setBilan("Erreur lors de la génération du bilan."); }
       setBilanLoading(false);
