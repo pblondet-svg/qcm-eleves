@@ -3888,16 +3888,16 @@ function ChangerCodeProf() {
               <button onClick={() => { setOpen(false); setMsg(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
-              {[
+              {([
                 ["Ancien code", ancien, setAncien, "Ton code actuel"],
                 ["Nouveau code (min. 6 car.)", nouveau, setNouveau, "Au moins 6 caractères"],
                 ["Confirmer le nouveau code", confirm, setConfirm, "Répète le nouveau code"],
-              ].map(([label, val, setter, ph]) => (
-                <div key={label as string}>
+              ] as [string, string, (v: string) => void, string][]).map(([label, val, setter, ph]) => (
+                <div key={label}>
                   <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">{label}</label>
-                  <input type="password" value={val as string} onChange={e => (setter as any)(e.target.value)}
+                  <input type="password" value={val} onChange={e => setter(e.target.value)}
                     className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:outline-none text-gray-800"
-                    placeholder={ph as string} />
+                    placeholder={ph} />
                 </div>
               ))}
             </div>
