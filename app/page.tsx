@@ -69,14 +69,6 @@ const PHILO_NOTIONS_PROGRAMME = [
 ];
 
 // ── Programme Philosophie ─────────────────────────────────────────────────────
-// ── Notions officielles du programme de Philosophie ──────────────────────────
-const PHILO_NOTIONS_PROGRAMME = [
-  "L'art", "Le bonheur", "La conscience", "Le devoir", "L'État",
-  "L'inconscient", "La justice", "Le langage", "La liberté", "La nature",
-  "La raison", "La religion", "La science", "La technique", "Le temps",
-  "Le travail", "La vérité",
-];
-
 const PHILO_CHAPITRES = [
   "Sujet 1 - Peut-on être esclave de soi-même ?",
   "Sujet 2 - Pour être juste, suffit-il d'être juste ?",
