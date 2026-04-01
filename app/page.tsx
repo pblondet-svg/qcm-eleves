@@ -704,8 +704,7 @@ TEXTE ÉTUDIÉ :
 ${selectedEntry?.content.slice(0, 3000)}
 
 Historique de l'interrogation :
-${newMsgs.map(m => `${m.role === "user" ? "Élève" : "Professeur"} : ${m.content}`).join("
-")}
+${newMsgs.map(m => `${m.role === "user" ? "Élève" : "Professeur"} : ${m.content}`).join("\n")}
 
 Réponds en JSON UNIQUEMENT :
 {
