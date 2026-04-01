@@ -1135,7 +1135,7 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
   // Chapitres actifs selon le mode de sélection
   const activeChaptersForContext = selectionMode === "chapitres"
     ? selectedChapters
-    : [...new Set(textesForNotions.map((e: any) => entryChapter(e)))];
+    : [...new Set(textesForNotions.map((e: any) => entryChapter(e)))] as string[];
 
   // Textes sélectionnés (pour contexte IA)
   const selectedTextes = useMemo(
@@ -1697,8 +1697,8 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                 {allChapters.map((ch) => {
                   const isSel = selectedChapters.includes(ch);
                   const textesCh = filteredLib.filter((e: any) => entryChapter(e) === ch);
-                  const notionsPrinc = [...new Set(textesCh.map((e: any) => e.notion_principale).filter(Boolean))];
-                  const notionsSec = [...new Set(textesCh.flatMap((e: any) => e.notions_secondaires || []).filter(Boolean))];
+                  const notionsPrinc = [...new Set(textesCh.map((e: any) => e.notion_principale).filter(Boolean))] as string[];
+                  const notionsSec = [...new Set(textesCh.flatMap((e: any) => e.notions_secondaires || []).filter(Boolean))] as string[];
                   return (
                     <button key={ch} onClick={() => toggleChapter(ch)}
                       className={`text-left p-4 rounded-xl border-2 transition-all ${isSel ? "border-rose-500 bg-rose-50 ring-2 ring-rose-100" : "border-gray-200 hover:border-rose-300 bg-white"}`}>
@@ -4547,11 +4547,11 @@ ${allContent}` }]);
                   <p className="text-sm text-gray-600 mb-2">{count} texte{count > 1 ? "s" : ""}</p>
                   {/* Étiquettes de notions du chapitre */}
                   {(() => {
-                    const notions = [...new Set(
+                    const notions = ([...new Set(
                       filteredLib.filter((e: any) => entryChapter(e) === ch)
                         .flatMap((e: any) => e.notions || [])
                         .filter(Boolean)
-                    )].slice(0, 4);
+                    )] as string[]).slice(0, 4);
                     return notions.length > 0 ? (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {notions.map((n: string) => (
