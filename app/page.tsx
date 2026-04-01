@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const callAI = async (messages: { role: string; content: string }[], max_tokens = 4000) => {
+const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000) => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1332,7 +1332,7 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
 Sujet : "${currentSujet}"
 ${plan ? "\n\nPlan de l'élève :\n" + plan.slice(0, 1000) : ""}
-${contextForAI ? "\n\nTextes étudiés :\n" + contextForAI.slice(0, 1500) : ""}
+${contextForAI ? "\n\nTextes étudiés :\n" + contextForAI.slice(0, 800).slice(0, 1500) : ""}
 
 L'élève a rédigé la partie suivante : **\${stepInfo?.label}**
 Méthode attendue : \${stepInfo?.desc}
@@ -1357,11 +1357,10 @@ Sois direct et encourageant.` }], 700);
     try {
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
-Voici le plan d'une dissertation sur le sujet : "${currentSujet}"
+Sujet : "${currentSujet}"
+Plan : ${planTexte.slice(0, 1500)}
 
-${planTexte}
-
-Explique en 200 mots maximum, de façon claire et pédagogique pour un lycéen :
+Explique en 150 mots maximum, de façon claire et pédagogique pour un lycéen :
 1. Pourquoi ce plan progresse de la Thèse vers l'Antithèse puis la Synthèse (la logique dialectique)
 2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
 3. Un conseil sur la transition la plus délicate à rédiger
@@ -1544,7 +1543,7 @@ Ouverture rédigée : [question vers un autre horizon philosophique]`,
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
 Sujet de dissertation : "${currentSujet}"
 Chapitres mobilisés : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nExtraits des textes étudiés :\n" + contextForAI : ""}
+${contextForAI ? "\n\nExtraits (résumés) :\n" + contextForAI.slice(0, 1500) : ""}
 
 ${METHODE_PROF}
 
@@ -1555,7 +1554,7 @@ RÈGLES ABSOLUES :
 - La Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau imprévu)
 - La synthèse N'EST PAS un résumé ni un compromis — elle introduit quelque chose d'inédit
 - Respecte EXACTEMENT le format visuel demandé avec les émojis et symboles (═══, 1️⃣, ✏️, ❓, 📌, etc.)
-- Sois précis, pédagogique, adapté au niveau terminale` }], 2500);
+- Sois précis, pédagogique, adapté au niveau terminale` }], 1800);
       // Générer aussi l'explication de la logique
       const planTexte = getText(data);
       genererExplicationLogique(planTexte, currentSujet);
@@ -1574,7 +1573,7 @@ RÈGLES ABSOLUES :
         `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale qui guide un élève en brainstorming socratique.
 Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nContexte des textes étudiés :\n" + contextForAI.slice(0, 2000) : ""}
+${contextForAI ? "\n\nContexte :\n" + contextForAI.slice(0, 800).slice(0, 800) : ""}
 
 Lance le brainstorming par une question ouverte qui pousse l'élève à définir les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500);
       setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
@@ -1596,7 +1595,7 @@ Lance le brainstorming par une question ouverte qui pousse l'élève à définir
           `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale en session de brainstorming socratique avec un élève.
 Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nContexte textes : " + contextForAI.slice(0, 1500) : ""}
+${contextForAI ? "\n\nContexte : " + contextForAI.slice(0, 800).slice(0, 1500) : ""}
 Règles : guide par des questions, ne donne pas de plan tout fait, encourage la réflexion autonome, sois bienveillant. Pose une seule question à la fois. Réponds en 3-5 phrases max.` },
         { role: "assistant", content: "Bien sûr, je suis prêt à guider ta réflexion." },
         ...newMsgs,
@@ -1616,7 +1615,7 @@ Règles : guide par des questions, ne donne pas de plan tout fait, encourage la 
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Corrige et commente la copie d'un élève.
 Sujet : "${currentSujet}"
 Chapitres mobilisés : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nExtraits des textes étudiés :\n" + contextForAI.slice(0, 2000) : ""}
+${contextForAI ? "\n\nExtraits :\n" + contextForAI.slice(0, 800).slice(0, 800) : ""}
 
 COPIE DE L'ÉLÈVE :
 ${eleveTexte}
@@ -2274,7 +2273,7 @@ function CombinedDissView({ sujet, selectedChapters, matiere, contextForAI, brai
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
 Sujet : "${sujet}" — Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nExtraits textes :\n" + contextForAI : ""}
+${contextForAI ? "\n\nExtraits :\n" + contextForAI.slice(0, 800) : ""}
 ${METHODE_INTRO_C}
 ${METHODE_PLAN_C}
 ${levelPrompts[level]}
