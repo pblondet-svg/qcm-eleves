@@ -198,6 +198,58 @@ const dbSetConfig = async (key: string, value: string) => {
   if (error) throw error;
 };
 
+// ── Features Config ────────────────────────────────────────────────────────────
+type FeaturesConfig = {
+  // Onglets Mode Élève
+  tab_revision: boolean;
+  tab_quiz: boolean;
+  tab_dissertation: boolean;
+  tab_carte: boolean;
+  tab_colle: boolean;
+  // Modes Dissertation
+  diss_plan: boolean;
+  diss_brainstorm: boolean;
+  diss_corrige: boolean;
+  diss_combined: boolean;
+  // Onglets Révision
+  rev_chat: boolean;
+  rev_fiche: boolean;
+  rev_flashcards: boolean;
+  rev_interrogation: boolean;
+  // Général
+  show_dashboard: boolean;
+};
+
+const DEFAULT_FEATURES: FeaturesConfig = {
+  tab_revision: true,
+  tab_quiz: true,
+  tab_dissertation: true,
+  tab_carte: true,
+  tab_colle: true,
+  diss_plan: true,
+  diss_brainstorm: true,
+  diss_corrige: true,
+  diss_combined: true,
+  rev_chat: true,
+  rev_fiche: true,
+  rev_flashcards: true,
+  rev_interrogation: true,
+  show_dashboard: true,
+};
+
+const loadFeaturesConfig = async (): Promise<FeaturesConfig> => {
+  try {
+    const val = await dbGetConfig("features_config");
+    if (!val) return DEFAULT_FEATURES;
+    const parsed = JSON.parse(val);
+    return { ...DEFAULT_FEATURES, ...parsed };
+  } catch { return DEFAULT_FEATURES; }
+};
+
+const saveFeaturesConfig = async (cfg: FeaturesConfig) => {
+  await dbSetConfig("features_config", JSON.stringify(cfg));
+};
+
 // ── Dissertations DB ──────────────────────────────────────────────────────────
 const dbSaveDissertation = async (d: any) => {
   const { error } = await supabase.from("dissertations").insert([{
@@ -588,9 +640,11 @@ ${entry.content.slice(0, 4000)}` }], 1200);
 }
 
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
-function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom }: any) {
+function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom, featuresConfig }: any) {
+  const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
+  const firstEnabledRevTab = (["chat","fiche","flashcards","interrogation"] as const).find(t => feat[("rev_" + t) as keyof FeaturesConfig] !== false) || "chat";
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
-  const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards" | "interrogation">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "fiche" | "flashcards" | "interrogation">(firstEnabledRevTab);
   const [messages, setMessages] = useState<{ role: string; content: string; source?: "texte" | "synthese" | "hors_texte" }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -854,7 +908,7 @@ ${autresTextes ? "\n\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertin
             ["interrogation", "🎓 Interrogation", "border-rose-500 bg-rose-50 text-rose-700"],
             ["fiche", "📋 Fiche", "border-amber-500 bg-amber-50 text-amber-700"],
             ["flashcards", "🃏 Flashcards", "border-purple-500 bg-purple-50 text-purple-700"],
-          ] as [string, string, string][]).map(([tab, label, activeClass]) => (
+          ] as [string, string, string][]).filter(([tab]) => feat[("rev_" + tab) as keyof FeaturesConfig] !== false).map(([tab, label, activeClass]) => (
             <button key={tab} onClick={() => handleTabChange(tab as any)}
               className={`flex-1 py-2.5 rounded-xl border-2 font-bold text-xs transition-all ${activeTab === tab ? activeClass : "border-gray-200 text-gray-600 hover:border-gray-300"}`}>
               {label}
@@ -1061,7 +1115,8 @@ ${autresTextes ? "\n\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertin
 type DissWorkMode = "plan" | "brainstorm" | "corrige" | "combined";
 type PlanLevel = 1 | 2 | 3 | 4;
 
-function DissertationMode({ sharedLib, matiere, eleveNom, onBack }: any) {
+function DissertationMode({ sharedLib, matiere, eleveNom, onBack, featuresConfig }: any) {
+  const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   // Étape : "select" | "working"
   const [step, setStep] = useState<"select" | "working">("select");
 
@@ -1903,7 +1958,7 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
                 ["brainstorm", "💬 Brainstorming", "L'IA te guide par des questions socratiques pour développer ta réflexion", "border-teal-300 hover:border-teal-500", "bg-teal-600", "text-teal-700 bg-teal-50"],
                 ["corrige", "✏️ Corrigé différé", "Rédige ta dissertation, puis l'IA la corrige et la commente", "border-amber-300 hover:border-amber-500", "bg-amber-600", "text-amber-700 bg-amber-50"],
                 ["combined", "🔀 Vue combinée", "Accède aux 3 modes en simultané dans des onglets", "border-purple-300 hover:border-purple-500", "bg-purple-600", "text-purple-700 bg-purple-50"],
-              ] as [DissWorkMode, string, string, string, string, string][]).map(([mode, label, desc, border, btnBg, activeBg]) => (
+              ] as [DissWorkMode, string, string, string, string, string][]).filter(([mode]) => feat[("diss_" + mode) as keyof FeaturesConfig] !== false).map(([mode, label, desc, border, btnBg, activeBg]) => (
                 <button key={mode} onClick={() => { if (mode === "brainstorm") startBrainstorm(); startWorking(mode); }}
                   className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md ${border} bg-white`}>
                   <p className="font-black text-gray-800 text-sm mb-1">{label}</p>
@@ -3124,13 +3179,17 @@ export default function QCMApp() {
   const [revisionData, setRevisionData] = useState<any | null>(null);
   const [dissertationData, setDissertationData] = useState<any | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
 
   const loadLib = async () => {
     try { const data = await dbLoadTextes(); setSharedLib(data); } catch (e) { console.error(e); }
     setLibLoaded(true);
   };
 
-  useEffect(() => { loadLib(); }, []);
+  useEffect(() => {
+    loadLib();
+    loadFeaturesConfig().then(setFeaturesConfig);
+  }, []);
 
   // Mémoriser le nom élève dans localStorage
   const saveEleveNom = (nom: string) => {
@@ -3163,6 +3222,7 @@ export default function QCMApp() {
           matiere={dissertMatiere}
           eleveNom={eleveNom}
           onBack={() => setRole(null)}
+          featuresConfig={featuresConfig}
         />
       </div>
     );
@@ -3201,7 +3261,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} eleveNom={eleveNom} />
+        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} eleveNom={eleveNom} featuresConfig={featuresConfig} />
       </div>
     </div>
   );
@@ -3224,6 +3284,7 @@ export default function QCMApp() {
         matiere={dissertationData.matiere}
         eleveNom={eleveNom}
         onBack={() => setDissertationData(null)}
+        featuresConfig={featuresConfig}
       />
     </div>
   );
@@ -3231,12 +3292,14 @@ export default function QCMApp() {
   if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
-      libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)} />
+      libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
+      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} />
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
-      onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib} />
+      onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
+      featuresConfig={featuresConfig} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -3950,9 +4013,146 @@ function ChangerCodeProf() {
   );
 }
 
+// ── FEATURES PANEL ────────────────────────────────────────────────────────────
+function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: FeaturesConfig; setFeaturesConfig: (c: FeaturesConfig) => void }) {
+  const [saved, setSaved] = useState(false);
+
+  const toggle = (key: keyof FeaturesConfig) => {
+    setFeaturesConfig({ ...featuresConfig, [key]: !featuresConfig[key] });
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveFeaturesConfig(featuresConfig);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch { alert("Erreur lors de la sauvegarde."); }
+  };
+
+  const resetAll = () => {
+    setFeaturesConfig({ ...DEFAULT_FEATURES });
+    setSaved(false);
+  };
+
+  type ToggleItem = { key: keyof FeaturesConfig; label: string; desc: string };
+  type Section = { title: string; color: string; bg: string; border: string; items: ToggleItem[] };
+
+  const sections: Section[] = [
+    {
+      title: "Onglets Mode Élève",
+      color: "text-emerald-800",
+      bg: "bg-emerald-50",
+      border: "border-emerald-200",
+      items: [
+        { key: "tab_revision", label: "📖 Réviser", desc: "Accès au mode révision avec l'IA" },
+        { key: "tab_quiz", label: "✅ Quiz", desc: "Génération de QCM sur les textes" },
+        { key: "tab_dissertation", label: "✍️ Dissertation", desc: "Mode dissertation (plan, brainstorming…)" },
+        { key: "tab_carte", label: "🗺️ Carte mentale", desc: "Visualisation SVG des notions" },
+        { key: "tab_colle", label: "🎓 Colle", desc: "Simulation d'interrogation orale" },
+      ],
+    },
+    {
+      title: "Modes Dissertation",
+      color: "text-rose-800",
+      bg: "bg-rose-50",
+      border: "border-rose-200",
+      items: [
+        { key: "diss_plan", label: "📋 Plan guidé", desc: "Génère un plan I/II/III dialectique" },
+        { key: "diss_brainstorm", label: "💬 Brainstorming", desc: "Dialogue socratique avec l'IA" },
+        { key: "diss_corrige", label: "✏️ Corrigé différé", desc: "Rédaction puis correction par l'IA" },
+        { key: "diss_combined", label: "🔀 Vue combinée", desc: "Accès aux 3 modes en simultané" },
+      ],
+    },
+    {
+      title: "Onglets Révision",
+      color: "text-indigo-800",
+      bg: "bg-indigo-50",
+      border: "border-indigo-200",
+      items: [
+        { key: "rev_chat", label: "💬 Chat IA", desc: "Questions libres sur le texte" },
+        { key: "rev_interrogation", label: "🎓 Interrogation", desc: "L'IA pose des questions à l'élève" },
+        { key: "rev_fiche", label: "📋 Fiche de lecture", desc: "Résumé structuré auto-généré" },
+        { key: "rev_flashcards", label: "🃏 Flashcards", desc: "Cartes de mémorisation sur le texte" },
+      ],
+    },
+    {
+      title: "Général",
+      color: "text-gray-800",
+      bg: "bg-gray-50",
+      border: "border-gray-200",
+      items: [
+        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" },
+      ],
+    },
+  ];
+
+  const totalEnabled = Object.values(featuresConfig).filter(Boolean).length;
+  const total = Object.keys(DEFAULT_FEATURES).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-gray-800">⚙️ Gestion des fonctionnalités</h2>
+          <p className="text-sm text-gray-500 mt-1">Activez ou désactivez les fonctions visibles par les élèves. Les modifications sont sauvegardées en base de données.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{totalEnabled}/{total} activées</span>
+          <button onClick={resetAll} className="text-xs font-bold text-gray-600 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300 transition-all">
+            Tout réactiver
+          </button>
+          <button onClick={handleSave}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all shadow-sm ${saved ? "bg-green-600 text-white" : "bg-orange-600 text-white hover:bg-orange-700"}`}>
+            {saved ? "✓ Sauvegardé !" : "💾 Sauvegarder"}
+          </button>
+        </div>
+      </div>
+
+      {/* Sections */}
+      {sections.map(section => (
+        <div key={section.title} className={`rounded-2xl border-2 ${section.border} overflow-hidden`}>
+          <div className={`${section.bg} px-5 py-3 border-b ${section.border}`}>
+            <h3 className={`font-black text-sm ${section.color}`}>{section.title}</h3>
+          </div>
+          <div className="bg-white divide-y divide-gray-100">
+            {section.items.map(({ key, label, desc }) => {
+              const enabled = featuresConfig[key] !== false;
+              return (
+                <div key={key} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${enabled ? "bg-green-500" : "bg-gray-300"}`} />
+                    <div>
+                      <p className={`text-sm font-bold ${enabled ? "text-gray-800" : "text-gray-400"}`}>{label}</p>
+                      <p className="text-xs text-gray-400">{desc}</p>
+                    </div>
+                  </div>
+                  {/* Toggle switch */}
+                  <button
+                    onClick={() => toggle(key)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none flex-shrink-0 ${enabled ? "bg-green-500" : "bg-gray-300"}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* Footer note */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+        <p className="text-xs text-amber-800 font-semibold">⚠️ N'oubliez pas de cliquer sur <strong>Sauvegarder</strong> après chaque modification. Les changements sont appliqués immédiatement aux élèves connectés.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard }: any) {
-  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions">("textes");
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig }: any) {
+  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
@@ -4109,6 +4309,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "notions" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
                 🎯 Notions des textes
               </button>
+              <button onClick={() => setProfTab("features")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "features" ? "bg-orange-600 text-white border-orange-600" : "bg-white text-gray-700 border-gray-200 hover:border-orange-300"}`}>
+                ⚙️ Fonctionnalités
+              </button>
             </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
               📊 Tableau de bord
@@ -4128,6 +4332,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
       ) : profTab === "notions" ? (
         <div className="max-w-5xl mx-auto px-6 py-6">
           <GestionNotionsProf sharedLib={sharedLib} onReload={onReload} />
+        </div>
+      ) : profTab === "features" ? (
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <FeaturesPanel featuresConfig={featuresConfig} setFeaturesConfig={setFeaturesConfig} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -4942,7 +5150,16 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard }: any) {
+  const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
+  const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
+    if (t === "revision") return feat.tab_revision;
+    if (t === "quiz") return feat.tab_quiz;
+    if (t === "dissertation") return feat.tab_dissertation;
+    if (t === "carte") return feat.tab_carte;
+    if (t === "colle") return feat.tab_colle;
+    return true;
+  }) || "revision";
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [numQ, setNumQ] = useState(10);
@@ -4950,7 +5167,7 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle">("revision");
+  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle">(firstEnabledTab);
   const [revisionSubTab, setRevisionSubTab] = useState<"cours" | "textes">("cours");
 
   const isHLP = matiere === "hlp";
@@ -5115,22 +5332,22 @@ ${allContent}` }]);
         ) : (
           <>
             <div className="flex gap-2 mb-6">
-              <button onClick={() => setActiveTab("revision")}
+              {feat.tab_revision && <button onClick={() => setActiveTab("revision")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "revision" ? "border-green-500 bg-green-50 text-green-700" : "border-gray-200 bg-white text-gray-700 hover:border-green-300"}`}>
                 <BookOpen className="w-4 h-4" /> 📖 Réviser
-              </button>
-              <button onClick={() => setActiveTab("quiz")}
+              </button>}
+              {feat.tab_quiz && <button onClick={() => setActiveTab("quiz")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "quiz" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300"}`}>
                 <Trophy className="w-4 h-4" /> ✅ Quiz
-              </button>
-              <button onClick={() => setActiveTab("carte")}
+              </button>}
+              {feat.tab_carte && <button onClick={() => setActiveTab("carte")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "carte" ? "border-purple-500 bg-purple-50 text-purple-700" : "border-gray-200 bg-white text-gray-700 hover:border-purple-300"}`}>
                 🗺️ Carte mentale
-              </button>
-              <button onClick={() => setActiveTab("colle")}
+              </button>}
+              {feat.tab_colle && <button onClick={() => setActiveTab("colle")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "colle" ? "border-violet-500 bg-violet-50 text-violet-700" : "border-gray-200 bg-white text-gray-700 hover:border-violet-300"}`}>
                 🎓 Colle
-              </button>
+              </button>}
             </div>
 
             {activeTab === "revision" && (
