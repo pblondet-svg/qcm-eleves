@@ -249,6 +249,97 @@ const loadFeaturesConfig = async (): Promise<FeaturesConfig> => {
 const saveFeaturesConfig = async (cfg: FeaturesConfig) => {
   await dbSetConfig("features_config", JSON.stringify(cfg));
 };
+// ── Contenu des fiches méthode (éditable par le prof) ─────────────────────────
+type MethodeContent = {
+  intro_dissertation: string;
+  plan_tas: string;
+  paragraphe: string;
+  expl_generale: string;
+  expl_techno: string;
+};
+
+const DEFAULT_METHODE_CONTENT: MethodeContent = {
+  intro_dissertation: `INTRODUCTION DE LA DISSERTATION
+1. Opinion commune (la doxa) : Exprimer clairement ce que les gens pensent habituellement sur le sujet. Tout le développement va souvent consister à montrer en quoi cette opinion courante est fausse ou insuffisante.
+2. Définitions des termes du sujet : Définir chaque terme important. S'appuyer sur le dictionnaire, le cours, la culture générale et l'expérience personnelle.
+3. Paradoxe du sujet : Montrer le caractère quasi-illogique ou surprenant du sujet. Tout sujet est paradoxal — il invite à critiquer un préjugé. Il peut sembler absurde, contradictoire, ou mettre en rapport des concepts opposés.
+4. Problématique / Reformulation : Reformuler le sujet en soulignant ses paradoxes internes. Montrer pourquoi cette question est utile à poser. On peut utiliser des synonymes, antonymes, ou ajouter des adverbes (« vraiment », « nécessairement »…).
+5. Annonce de plan : Annoncer clairement le cheminement : « Nous verrons dans un premier temps… puis… enfin… ».`,
+
+  plan_tas: `PLAN THÈSE / ANTITHÈSE / SYNTHÈSE (plan dialectique)
+Structure générale :
+- Introduction : position du problème
+- Partie I — Thèse : répond OUI à la question posée. Défend l'affirmation principale.
+- Partie II — Antithèse : répond NON. Objections et limites de la thèse.
+- Partie III — Synthèse : NI compromis NI résumé du I et II. Introduit un concept NOUVEAU et imprévu pour dépasser le oui/non. Reformule le problème autrement.
+- Conclusion : récapitulation de la progression.
+Astuce : recycler l'ouverture de la conclusion pour en faire la question traitée au III.
+Exemple — Sujet « Faut-il être optimiste ? » : I. Oui, le bonheur sur terre est accessible. II. Non, le bonheur est impossible. III. Ni optimiste ni pessimiste : être RÉALISTE — faire coïncider ses désirs au monde réel.`,
+
+  paragraphe: `RÉDIGER UN PARAGRAPHE ARGUMENTÉ (~20 lignes)
+Les 5 éléments obligatoires (ordre conseillé mais non obligatoire) :
+1. Une thèse : l'idée principale défendue dans ce paragraphe.
+2. Une argumentation : les raisons qui justifient la thèse.
+3. Un exemple : un cas concret qui illustre l'argument.
+4. Une citation : un passage d'un auteur étudié qui appuie le propos.
+5. Une conclusion : bilan de l'argumentation, transition vers l'idée suivante.
+Éléments optionnels pour enrichir : un constat, une objection, un contre-exemple.
+Conseil : faites varier l'ordre. Les philosophes eux-mêmes jouent avec la structure.`,
+
+  expl_generale: `EXPLICATION DE TEXTE — SÉRIE GÉNÉRALE (commentaire linéaire)
+Introduction :
+- Présentation rapide du texte (auteur, titre, date)
+- Le thème du texte (quelle notion du programme ?)
+- La thèse du texte (qu'est-ce qu'affirme l'auteur ?)
+- Définitions de quelques termes importants
+- Le paradoxe (quelle contradiction la thèse tente-t-elle de régler ?)
+- Une problématique en rapport avec le thème et le paradoxe
+- Le plan du texte sous forme de questions
+Développement (commentaire linéaire, dans l'ordre du texte) :
+- Citer un court passage du texte
+- Reformuler seulement si le sens littéral n'est pas clair (pas de paraphrase !)
+- Définir et expliquer les notions importantes du passage
+- Expliquer l'idée et sa fonction dans l'argumentation
+- Transition vers le passage suivant (sous forme de question)
+- Faire appel au cours et aux autres auteurs pour confirmer ou contredire la thèse
+Conclusion : répondre point par point à l'introduction. Ne pas ouvrir sur une question sans réponse.`,
+
+  expl_techno: `EXPLICATION DE TEXTE — SÉRIE TECHNOLOGIQUE
+Deux options au choix (indiquer sur la copie) :
+Option 1 : répondre aux questions guidées
+Option 2 : commentaire libre (comme en Français)
+
+OPTION 1 — QUESTIONS GUIDÉES :
+A. Éléments d'analyse :
+- Expliquer les concepts clés dans le contexte précis du texte (pas de définition générale hors contexte)
+- Analyser l'argumentation : étapes du raisonnement, distinctions, exemples de l'auteur
+- Ne pas paraphraser : reformuler pour expliquer, sans simplement répéter
+- Illustrer si possible avec un exemple concret
+
+B. Éléments de synthèse :
+- Identifier la question principale du texte (ce à quoi l'auteur tente de répondre)
+- Repérer les moments de l'argumentation (= le plan du texte)
+- Dégager l'idée principale en 1-2 phrases
+
+C. Commentaire (mini-dissertations sans introduction) :
+- Préciser le sens et l'intérêt de l'idée centrale
+- Discuter le texte : implications, limites, conséquences
+- Appuyer avec des références à d'autres auteurs ou exemples
+- Possible : partie thèse (d'accord) + partie antithèse (en désaccord)`,
+};
+
+const loadMethodeContent = async (): Promise<MethodeContent> => {
+  try {
+    const val = await dbGetConfig("methode_content");
+    if (!val) return DEFAULT_METHODE_CONTENT;
+    return { ...DEFAULT_METHODE_CONTENT, ...JSON.parse(val) };
+  } catch { return DEFAULT_METHODE_CONTENT; }
+};
+
+const saveMethodeContent = async (mc: MethodeContent) => {
+  await dbSetConfig("methode_content", JSON.stringify(mc));
+};
+
 
 // ── Dissertations DB ──────────────────────────────────────────────────────────
 const dbSaveDissertation = async (d: any) => {
@@ -3180,6 +3271,7 @@ export default function QCMApp() {
   const [dissertationData, setDissertationData] = useState<any | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
+  const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
 
   const loadLib = async () => {
     try { const data = await dbLoadTextes(); setSharedLib(data); } catch (e) { console.error(e); }
@@ -3189,6 +3281,7 @@ export default function QCMApp() {
   useEffect(() => {
     loadLib();
     loadFeaturesConfig().then(setFeaturesConfig);
+    loadMethodeContent().then(setMethodeContent);
   }, []);
 
   // Mémoriser le nom élève dans localStorage
@@ -3303,13 +3396,13 @@ export default function QCMApp() {
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
-      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} />
+      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} />
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -4201,9 +4294,97 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
   );
 }
 
+// ── PROF METHODE PANEL ────────────────────────────────────────────────────────
+function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeContent: MethodeContent; setMethodeContent: (mc: MethodeContent) => void }) {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeKey, setActiveKey] = useState<keyof MethodeContent>("intro_dissertation");
+
+  const fiches: { key: keyof MethodeContent; label: string; icon: string; desc: string }[] = [
+    { key: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", desc: "Opinion commune, définitions, paradoxe, problématique, annonce de plan" },
+    { key: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", desc: "Structure dialectique, exemples, astuce synthèse" },
+    { key: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", desc: "Les 5 éléments obligatoires + éléments optionnels" },
+    { key: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", desc: "Commentaire linéaire : introduction, développement, conclusion" },
+    { key: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", desc: "Option 1 (A/B/C) et Option 2 (commentaire libre)" },
+  ];
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveMethodeContent(methodeContent);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch { alert("Erreur lors de la sauvegarde."); }
+    setSaving(false);
+  };
+
+  const resetFiche = (key: keyof MethodeContent) => {
+    if (!confirm("Remettre cette fiche à son contenu d'origine ?")) return;
+    setMethodeContent({ ...methodeContent, [key]: DEFAULT_METHODE_CONTENT[key] });
+    setSaved(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-gray-800">📐 Fiches Méthode</h2>
+          <p className="text-sm text-gray-500 mt-1">Modifiez le contenu de chaque fiche. Le chatbot méthode des élèves s'appuiera exactement sur ces textes.</p>
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all shadow-sm ${saved ? "bg-green-600" : saving ? "bg-gray-400" : "bg-amber-600 hover:bg-amber-700"}`}>
+          {saved ? "✓ Sauvegardé !" : saving ? "Sauvegarde…" : "💾 Sauvegarder"}
+        </button>
+      </div>
+
+      <div className="flex gap-4">
+        {/* Sidebar fiches */}
+        <div className="w-56 flex-shrink-0 space-y-1">
+          {fiches.map(f => (
+            <button key={f.key} onClick={() => setActiveKey(f.key)}
+              className={`w-full text-left px-3 py-3 rounded-xl border-2 transition-all ${activeKey === f.key ? "bg-amber-600 text-white border-amber-600" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
+              <p className="text-xs font-black">{f.icon} {f.label}</p>
+              <p className={`text-xs mt-0.5 ${activeKey === f.key ? "text-amber-100" : "text-gray-400"}`}>{f.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Éditeur */}
+        <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <p className="font-black text-gray-800 text-sm">
+              {fiches.find(f => f.key === activeKey)?.icon} {fiches.find(f => f.key === activeKey)?.label}
+            </p>
+            <button onClick={() => resetFiche(activeKey)}
+              className="text-xs text-gray-500 hover:text-red-600 font-semibold transition-colors">
+              ↺ Remettre par défaut
+            </button>
+          </div>
+          <textarea
+            value={methodeContent[activeKey]}
+            onChange={e => { setMethodeContent({ ...methodeContent, [activeKey]: e.target.value }); setSaved(false); }}
+            className="flex-1 p-4 text-sm text-gray-800 font-mono leading-relaxed resize-none focus:outline-none min-h-96"
+            placeholder="Contenu de la fiche méthode…"
+            spellCheck={false}
+          />
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400 flex justify-between">
+            <span>{methodeContent[activeKey].split("\n").length} lignes · {methodeContent[activeKey].length} caractères</span>
+            <span>Format libre — le chatbot lira ce texte tel quel</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+        <p className="text-xs text-amber-800">⚠️ N'oubliez pas de cliquer sur <strong>Sauvegarder</strong>. Le chatbot méthode des élèves utilisera exactement ce contenu pour répondre à leurs questions.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig }: any) {
-  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features">("textes");
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent }: any) {
+  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
@@ -4364,6 +4545,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "features" ? "bg-orange-600 text-white border-orange-600" : "bg-white text-gray-700 border-gray-200 hover:border-orange-300"}`}>
                 ⚙️ Fonctionnalités
               </button>
+              <button onClick={() => setProfTab("methode")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "methode" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-gray-700 border-gray-200 hover:border-amber-300"}`}>
+                📐 Fiches Méthode
+              </button>
             </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
               📊 Tableau de bord
@@ -4387,6 +4572,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
       ) : profTab === "features" ? (
         <div className="max-w-3xl mx-auto px-6 py-8">
           <FeaturesPanel featuresConfig={featuresConfig} setFeaturesConfig={setFeaturesConfig} />
+        </div>
+      ) : profTab === "methode" ? (
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <ProfMethodePanel methodeContent={methodeContent} setMethodeContent={setMethodeContent} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -4686,7 +4875,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; matiere: string }) {
+function MethodeMode({ serie, matiere, methodeContent }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent }) {
   const [view, setView] = useState<"chat" | "fiche">("chat");
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
@@ -4715,22 +4904,26 @@ function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; 
   ];
 
   // Contexte méthode injecté dans le prompt selon la série
-  const methodeContext = isTechno
-    ? `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie pour la Série Technologique (Terminale).
-Tu maîtrises parfaitement les exercices du bac philo Techno :
-1. LA DISSERTATION : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse N'EST PAS un résumé mais un concept nouveau), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion).
-2. L'EXPLICATION DE TEXTE (Série Techno) : Option 1 (questions guidées) = A. Éléments d'analyse (expliquer les concepts clés dans le contexte, analyser l'argumentation, ne pas paraphraser) + B. Éléments de synthèse (identifier la question principale, repérer les moments du raisonnement, dégager l'idée principale) + C. Commentaire (mini-dissertations sans introduction, thèse + antithèse possibles, discuter les implications et limites). Option 2 = commentaire libre style Français.
-Adapte tes explications au niveau Techno : langage clair, exemples concrets du quotidien, encourageant.`
+  // Construire le contexte méthode depuis les fiches (contenu Supabase ou défaut)
+  const mc = methodeContent || DEFAULT_METHODE_CONTENT;
+  const fichesDissertation = [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].join("\n\n---\n\n");
+  const ficheExpl = isTechno ? mc.expl_techno : mc.expl_generale;
+  const serieInstruction = isTechno
+    ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
     : isHLP
-    ? `Tu es un assistant pédagogique spécialisé en méthodologie pour HLP (Humanités, Littérature et Philosophie) en Terminale.
-Tu maîtrises les exercices HLP : dissertation, commentaire de texte littéraire et philosophique, contraction de texte.
-Pour la dissertation : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse introduit un concept nouveau, jamais un résumé), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion).
-Adapte tes conseils aux spécificités littéraires et philosophiques de HLP.`
-    : `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie pour la Série Générale (Terminale).
-Tu maîtrises parfaitement les exercices du bac philo Générale :
-1. LA DISSERTATION : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse N'EST PAS un résumé ni un compromis — elle introduit un concept NOUVEAU et imprévu pour dépasser le oui/non), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion, ~20 lignes).
-2. L'EXPLICATION DE TEXTE (Série Générale) : commentaire linéaire — Introduction (auteur, thème, thèse, définitions, paradoxe, problématique, plan sous forme de questions) + Développement linéaire passage par passage (citer → reformuler si nécessaire → définir les concepts → expliquer l'idée et sa fonction dans l'argumentation → transition) + Conclusion (répondre point par point à l'introduction, pas de question sans réponse).
-Sois précis, pédagogique et encourage la rigueur philosophique.`;
+    ? "Adapte tes conseils aux spécificités littéraires et philosophiques de HLP."
+    : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
+  const methodeContext = `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie${isTechno ? " (Série Technologique)" : isHLP ? " (HLP)" : " (Série Générale)"} en Terminale.
+Tu dois répondre UNIQUEMENT en te basant sur les fiches méthode suivantes rédigées par le professeur. C'est la référence absolue.
+
+=== FICHES DISSERTATION ===
+${fichesDissertation}
+
+=== FICHE EXPLICATION DE TEXTE ===
+${ficheExpl}
+
+${serieInstruction}
+Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs…), tu peux répondre brièvement mais ramène toujours à la méthode.`;
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -4842,14 +5035,52 @@ Sois précis, pédagogique et encourage la rigueur philosophique.`;
           </div>
           {/* Contenu fiche */}
           <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-y-auto">
-            {activeFiche === "intro_dissertation" && <FicheIntroDissertation />}
-            {activeFiche === "plan_tas" && <FichePlanTAS />}
-            {activeFiche === "paragraphe" && <FicheParagraphe />}
-            {activeFiche === "expl_techno" && <FicheExplTechno />}
-            {activeFiche === "expl_generale" && <FicheExplGenerale />}
+            {activeFiche === "intro_dissertation" && <FicheMarkdown title="📝 Introduction — Dissertation" content={mc.intro_dissertation} />}
+            {activeFiche === "plan_tas" && <FicheMarkdown title="🔺 Plan Thèse / Antithèse / Synthèse" content={mc.plan_tas} />}
+            {activeFiche === "paragraphe" && <FicheMarkdown title="✍️ Rédiger un paragraphe" content={mc.paragraphe} />}
+            {activeFiche === "expl_techno" && <FicheMarkdown title="🔧 Explication de texte — Série Techno" content={mc.expl_techno} />}
+            {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Composant fiche générique (contenu texte brut) ────────────────────────────
+function FicheMarkdown({ title, content }: { title: string; content: string }) {
+  return (
+    <div className="p-6">
+      <h2 className="text-lg font-black text-gray-800 border-b-2 border-amber-200 pb-3 mb-5">{title}</h2>
+      <div className="space-y-2">
+        {content.split("\n").map((line, i) => {
+          if (!line.trim()) return <div key={i} className="h-2" />;
+          if (line.startsWith("===") || line.startsWith("---")) return <hr key={i} className="border-gray-200 my-3" />;
+          // Titres (ligne en majuscules ou commençant par un chiffre + point)
+          if (line.match(/^[A-ZÉÈÊÀÙÎÏ\s]{5,}$/) || line.match(/^[A-Z]\./)) {
+            return <p key={i} className="font-black text-gray-800 text-sm mt-4 mb-1">{line}</p>;
+          }
+          // Items numérotés
+          if (line.match(/^\d+\./) || line.match(/^[A-C]\./)) {
+            return (
+              <div key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="font-black text-amber-600 flex-shrink-0 w-5">{line.split(".")[0]}.</span>
+                <span>{line.split(".").slice(1).join(".").trim()}</span>
+              </div>
+            );
+          }
+          // Tirets / bullets
+          if (line.startsWith("- ") || line.startsWith("• ")) {
+            return (
+              <div key={i} className="flex items-start gap-2 text-sm text-gray-700 ml-2">
+                <span className="text-amber-500 flex-shrink-0 mt-0.5">→</span>
+                <span>{line.replace(/^[-•]\s/, "")}</span>
+              </div>
+            );
+          }
+          return <p key={i} className="text-sm text-gray-700 leading-relaxed">{line}</p>;
+        })}
+      </div>
     </div>
   );
 }
@@ -5631,7 +5862,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -5756,7 +5987,7 @@ ${allContent}` }]);
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {activeTab === "methode" ? (
-          <MethodeMode serie={serie} matiere={matiere} />
+          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} />
         ) : !libLoaded ? (
           <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
         ) : filteredLib.length === 0 ? (
