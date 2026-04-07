@@ -339,6 +339,27 @@ const loadMethodeContent = async (): Promise<MethodeContent> => {
 const saveMethodeContent = async (mc: MethodeContent) => {
   await dbSetConfig("methode_content", JSON.stringify(mc));
 };
+// ── FAQ Méthode (conseils et astuces du prof) ─────────────────────────────────
+type FaqItem = {
+  id: string;
+  question: string;
+  reponse: string;
+  serie: "toutes" | "generale" | "techno" | "hlp";
+  createdAt: number;
+};
+
+const loadFaqMethode = async (): Promise<FaqItem[]> => {
+  try {
+    const val = await dbGetConfig("faq_methode");
+    if (!val) return [];
+    return JSON.parse(val);
+  } catch { return []; }
+};
+
+const saveFaqMethode = async (items: FaqItem[]) => {
+  await dbSetConfig("faq_methode", JSON.stringify(items));
+};
+
 
 
 // ── Dissertations DB ──────────────────────────────────────────────────────────
@@ -3272,6 +3293,7 @@ export default function QCMApp() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
   const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
+  const [faqMethode, setFaqMethode] = useState<FaqItem[]>([]);
 
   const loadLib = async () => {
     try { const data = await dbLoadTextes(); setSharedLib(data); } catch (e) { console.error(e); }
@@ -3282,6 +3304,7 @@ export default function QCMApp() {
     loadLib();
     loadFeaturesConfig().then(setFeaturesConfig);
     loadMethodeContent().then(setMethodeContent);
+    loadFaqMethode().then(setFaqMethode);
   }, []);
 
   // Mémoriser le nom élève dans localStorage
@@ -3396,13 +3419,13 @@ export default function QCMApp() {
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
-      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} />
+      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} faqMethode={faqMethode} setFaqMethode={(faq: FaqItem[]) => { setFaqMethode(faq); saveFaqMethode(faq); }} />
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} faqMethode={faqMethode} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -4382,9 +4405,147 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
   );
 }
 
+// ── PROF FAQ PANEL ────────────────────────────────────────────────────────────
+function ProfFaqPanel({ faqMethode, setFaqMethode }: { faqMethode: FaqItem[]; setFaqMethode: (f: FaqItem[]) => void }) {
+  const [newQ, setNewQ] = useState("");
+  const [newR, setNewR] = useState("");
+  const [newSerie, setNewSerie] = useState<FaqItem["serie"]>("toutes");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQ, setEditQ] = useState("");
+  const [editR, setEditR] = useState("");
+  const [editSerie, setEditSerie] = useState<FaqItem["serie"]>("toutes");
+
+  const SERIE_LABELS: Record<FaqItem["serie"], string> = {
+    toutes: "Toutes les séries",
+    generale: "Série Générale uniquement",
+    techno: "Série Techno uniquement",
+    hlp: "HLP uniquement",
+  };
+  const SERIE_COLORS: Record<FaqItem["serie"], string> = {
+    toutes: "bg-gray-100 text-gray-700",
+    generale: "bg-blue-100 text-blue-700",
+    techno: "bg-orange-100 text-orange-700",
+    hlp: "bg-emerald-100 text-emerald-700",
+  };
+
+  const addItem = async () => {
+    if (!newQ.trim() || !newR.trim()) return;
+    const item: FaqItem = { id: uid(), question: newQ.trim(), reponse: newR.trim(), serie: newSerie, createdAt: Date.now() };
+    const updated = [item, ...faqMethode];
+    setSaving(true);
+    setFaqMethode(updated);
+    setNewQ(""); setNewR(""); setNewSerie("toutes");
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    setSaving(false);
+  };
+
+  const deleteItem = (id: string) => {
+    if (!confirm("Supprimer ce conseil ?")) return;
+    setFaqMethode(faqMethode.filter(f => f.id !== id));
+  };
+
+  const startEdit = (item: FaqItem) => {
+    setEditingId(item.id);
+    setEditQ(item.question);
+    setEditR(item.reponse);
+    setEditSerie(item.serie);
+  };
+
+  const saveEdit = () => {
+    if (!editQ.trim() || !editR.trim()) return;
+    setFaqMethode(faqMethode.map(f => f.id === editingId ? { ...f, question: editQ.trim(), reponse: editR.trim(), serie: editSerie } : f));
+    setEditingId(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-gray-800">❓ FAQ Méthode</h2>
+          <p className="text-sm text-gray-500 mt-1">Ajoutez des conseils, astuces et réponses aux questions fréquentes. Le chatbot méthode s'en servira pour répondre aux élèves.</p>
+        </div>
+        <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full">{faqMethode.length} conseil{faqMethode.length > 1 ? "s" : ""}</span>
+      </div>
+
+      {/* Formulaire ajout */}
+      <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 space-y-3">
+        <h3 className="font-black text-indigo-800 text-sm">+ Ajouter un conseil / une question-réponse</h3>
+        <input value={newQ} onChange={e => setNewQ(e.target.value)}
+          className="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white"
+          placeholder="La question ou le titre du conseil (ex : Comment éviter la paraphrase ?)" />
+        <textarea value={newR} onChange={e => setNewR(e.target.value)}
+          className="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none"
+          rows={4}
+          placeholder="La réponse détaillée, le conseil, l'astuce…" />
+        <div className="flex items-center gap-3">
+          <select value={newSerie} onChange={e => setNewSerie(e.target.value as FaqItem["serie"])}
+            className="px-3 py-2 border-2 border-indigo-200 rounded-xl text-xs font-bold bg-white focus:outline-none">
+            {(Object.entries(SERIE_LABELS) as [FaqItem["serie"], string][]).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+          <button onClick={addItem} disabled={!newQ.trim() || !newR.trim() || saving}
+            className={`flex-1 py-2.5 rounded-xl font-black text-sm text-white transition-all ${!newQ.trim() || !newR.trim() ? "bg-gray-300" : "bg-indigo-600 hover:bg-indigo-700"}`}>
+            {saved ? "✓ Ajouté !" : "+ Ajouter"}
+          </button>
+        </div>
+      </div>
+
+      {/* Liste des items */}
+      {faqMethode.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-500 font-semibold">Aucun conseil pour l'instant. Ajoutez-en un ci-dessus !</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {faqMethode.map(item => (
+            <div key={item.id} className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
+              {editingId === item.id ? (
+                <div className="p-4 space-y-3">
+                  <input value={editQ} onChange={e => setEditQ(e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400" />
+                  <textarea value={editR} onChange={e => setEditR(e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 resize-none" rows={4} />
+                  <div className="flex items-center gap-2">
+                    <select value={editSerie} onChange={e => setEditSerie(e.target.value as FaqItem["serie"])}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none">
+                      {(Object.entries(SERIE_LABELS) as [FaqItem["serie"], string][]).map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                    <button onClick={saveEdit} className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg">✓ Enregistrer</button>
+                    <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg text-gray-600">Annuler</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-gray-800 text-sm">{item.question}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${SERIE_COLORS[item.serie]}`}>{SERIE_LABELS[item.serie]}</span>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => startEdit(item)} className="text-xs text-gray-500 hover:text-indigo-600 font-semibold transition-colors">✏️</button>
+                      <button onClick={() => deleteItem(item.id)} className="text-xs text-gray-500 hover:text-red-600 font-semibold transition-colors">🗑️</button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{item.reponse}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent }: any) {
-  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode">("textes");
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode }: any) {
+  const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode" | "faq">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
   const [matiereFilter, setMatiereFilter] = useState("all");
@@ -4549,6 +4710,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "methode" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-gray-700 border-gray-200 hover:border-amber-300"}`}>
                 📐 Fiches Méthode
               </button>
+              <button onClick={() => setProfTab("faq")}
+                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "faq" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
+                ❓ FAQ Méthode
+              </button>
             </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
               📊 Tableau de bord
@@ -4576,6 +4741,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
       ) : profTab === "methode" ? (
         <div className="max-w-4xl mx-auto px-6 py-8">
           <ProfMethodePanel methodeContent={methodeContent} setMethodeContent={setMethodeContent} />
+        </div>
+      ) : profTab === "faq" ? (
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <ProfFaqPanel faqMethode={faqMethode} setFaqMethode={setFaqMethode} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -4875,8 +5044,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ serie, matiere, methodeContent }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent }) {
-  const [view, setView] = useState<"chat" | "fiche">("chat");
+function MethodeMode({ serie, matiere, methodeContent, faqMethode }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[] }) {
+  const [view, setView] = useState<"chat" | "fiche" | "faq">("chat");
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState("");
@@ -4913,14 +5082,23 @@ function MethodeMode({ serie, matiere, methodeContent }: { serie: "generale" | "
     : isHLP
     ? "Adapte tes conseils aux spécificités littéraires et philosophiques de HLP."
     : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
+
+  // Filtrer les FAQ pertinentes pour cette série
+  const faqRelevantes = (faqMethode || []).filter(f =>
+    f.serie === "toutes" || f.serie === serie || (isHLP && f.serie === "hlp") || (!serie && f.serie === "generale")
+  );
+  const faqContext = faqRelevantes.length > 0
+    ? "\n\n=== FAQ ET CONSEILS DU PROFESSEUR ===\n" + faqRelevantes.map(f => `Q: ${f.question}\nR: ${f.reponse}`).join("\n\n")
+    : "";
+
   const methodeContext = `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie${isTechno ? " (Série Technologique)" : isHLP ? " (HLP)" : " (Série Générale)"} en Terminale.
-Tu dois répondre UNIQUEMENT en te basant sur les fiches méthode suivantes rédigées par le professeur. C'est la référence absolue.
+Tu dois répondre en te basant sur les fiches méthode et la FAQ rédigées par le professeur. C'est la référence absolue.
 
 === FICHES DISSERTATION ===
 ${fichesDissertation}
 
 === FICHE EXPLICATION DE TEXTE ===
-${ficheExpl}
+${ficheExpl}${faqContext}
 
 ${serieInstruction}
 Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs…), tu peux répondre brièvement mais ramène toujours à la méthode.`;
@@ -4959,6 +5137,10 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           <button onClick={() => setView("fiche")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "fiche" ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             📋 Fiches méthode
+          </button>
+          <button onClick={() => setView("faq")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "faq" ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
+            ❓ FAQ {faqRelevantes.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${view === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqRelevantes.length}</span>}
           </button>
         </div>
       </div>
@@ -5041,6 +5223,33 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             {activeFiche === "expl_techno" && <FicheMarkdown title="🔧 Explication de texte — Série Techno" content={mc.expl_techno} />}
             {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
           </div>
+        </div>
+      )}
+      {/* VUE FAQ */}
+      {view === "faq" && (
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {faqRelevantes.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+              <div className="text-4xl mb-3">❓</div>
+              <p className="font-bold text-gray-600">Aucun conseil disponible pour l'instant</p>
+              <p className="text-sm text-gray-400 mt-1">Le professeur ajoutera des conseils et astuces ici</p>
+            </div>
+          ) : (
+            faqRelevantes.map((item) => (
+              <details key={item.id} className="bg-white rounded-2xl border-2 border-indigo-100 overflow-hidden group">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-indigo-50 transition-colors list-none">
+                  <div className="flex items-center gap-3">
+                    <span className="text-indigo-500 font-black text-lg">?</span>
+                    <span className="font-bold text-gray-800 text-sm">{item.question}</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform flex-shrink-0" />
+                </summary>
+                <div className="px-5 pb-4 pt-1 border-t border-indigo-50">
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{item.reponse}</p>
+                </div>
+              </details>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -5862,7 +6071,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent, faqMethode }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -5987,7 +6196,7 @@ ${allContent}` }]);
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {activeTab === "methode" ? (
-          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} />
+          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} faqMethode={faqMethode || []} />
         ) : !libLoaded ? (
           <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
         ) : filteredLib.length === 0 ? (
