@@ -4687,93 +4687,169 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
 function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; matiere: string }) {
-  const [activeSection, setActiveSection] = useState<string>("intro_dissertation");
+  const [view, setView] = useState<"chat" | "fiche">("chat");
+  const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const isTechno = serie === "techno";
   const isHLP = matiere === "hlp";
 
-  type Section = { id: string; label: string; icon: string; color: string };
-  type SectionGroup = { title: string; color: string; sections: Section[] };
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const serieLabel = isTechno ? "Série Techno" : isHLP ? "HLP" : "Série Générale";
+  const serieLabel = isTechno ? "Série Technologique" : isHLP ? "HLP" : "Série Générale";
+  const serieIcon = isTechno ? "🔧" : isHLP ? "📜" : "🧠";
+  const serieColor = isTechno ? "orange" : isHLP ? "emerald" : "blue";
+  const headerBg = isTechno ? "bg-orange-50 border-orange-200 text-orange-800" : isHLP ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-blue-800";
+  const accentBtn = isTechno ? "bg-orange-600 hover:bg-orange-700" : isHLP ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700";
 
-  const groups: SectionGroup[] = [
-    {
-      title: `La Dissertation — ${serieLabel}`,
-      color: "text-rose-700",
-      sections: [
-        { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", color: "rose" },
-        { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", color: "rose" },
-        { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", color: "rose" },
-      ]
-    },
-    {
-      title: `L'Explication de texte — ${serieLabel}`,
-      color: isTechno ? "text-orange-700" : "text-indigo-700",
-      sections: isTechno ? [
-        { id: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", color: "orange" },
-      ] : [
-        { id: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", color: "indigo" },
-      ]
-    },
+  // Fiches disponibles selon la série
+  const fiches = [
+    { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝" },
+    { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺" },
+    { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️" },
+    isTechno
+      ? { id: "expl_techno", label: "Explication de texte — Techno", icon: "🔧" }
+      : { id: "expl_generale", label: "Explication de texte — Générale", icon: "📖" },
   ];
 
-  const COLOR_MAP: Record<string, string> = {
-    rose: "border-rose-400 bg-rose-50 text-rose-700",
-    indigo: "border-indigo-400 bg-indigo-50 text-indigo-700",
-    orange: "border-orange-400 bg-orange-50 text-orange-700",
-  };
-  const COLOR_ACTIVE: Record<string, string> = {
-    rose: "bg-rose-600 text-white border-rose-600",
-    indigo: "bg-indigo-600 text-white border-indigo-600",
-    orange: "bg-orange-600 text-white border-orange-600",
-  };
+  // Contexte méthode injecté dans le prompt selon la série
+  const methodeContext = isTechno
+    ? `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie pour la Série Technologique (Terminale).
+Tu maîtrises parfaitement les exercices du bac philo Techno :
+1. LA DISSERTATION : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse N'EST PAS un résumé mais un concept nouveau), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion).
+2. L'EXPLICATION DE TEXTE (Série Techno) : Option 1 (questions guidées) = A. Éléments d'analyse (expliquer les concepts clés dans le contexte, analyser l'argumentation, ne pas paraphraser) + B. Éléments de synthèse (identifier la question principale, repérer les moments du raisonnement, dégager l'idée principale) + C. Commentaire (mini-dissertations sans introduction, thèse + antithèse possibles, discuter les implications et limites). Option 2 = commentaire libre style Français.
+Adapte tes explications au niveau Techno : langage clair, exemples concrets du quotidien, encourageant.`
+    : isHLP
+    ? `Tu es un assistant pédagogique spécialisé en méthodologie pour HLP (Humanités, Littérature et Philosophie) en Terminale.
+Tu maîtrises les exercices HLP : dissertation, commentaire de texte littéraire et philosophique, contraction de texte.
+Pour la dissertation : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse introduit un concept nouveau, jamais un résumé), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion).
+Adapte tes conseils aux spécificités littéraires et philosophiques de HLP.`
+    : `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie pour la Série Générale (Terminale).
+Tu maîtrises parfaitement les exercices du bac philo Générale :
+1. LA DISSERTATION : Introduction (opinion commune → définitions → paradoxe → problématique → annonce de plan), plan dialectique Thèse/Antithèse/Synthèse (la synthèse N'EST PAS un résumé ni un compromis — elle introduit un concept NOUVEAU et imprévu pour dépasser le oui/non), paragraphe argumenté (thèse + argumentation + exemple + citation + conclusion, ~20 lignes).
+2. L'EXPLICATION DE TEXTE (Série Générale) : commentaire linéaire — Introduction (auteur, thème, thèse, définitions, paradoxe, problématique, plan sous forme de questions) + Développement linéaire passage par passage (citer → reformuler si nécessaire → définir les concepts → expliquer l'idée et sa fonction dans l'argumentation → transition) + Conclusion (répondre point par point à l'introduction, pas de question sans réponse).
+Sois précis, pédagogique et encourage la rigueur philosophique.`;
 
-  const allSections = groups.flatMap(g => g.sections);
-  const currentSection = allSections.find(s => s.id === activeSection);
-  const currentColor = currentSection?.color || "rose";
-
-  const serieHeaderLabel = isTechno ? "Série Technologique" : isHLP ? "HLP" : "Série Générale";
-  const serieHeaderColor = isTechno ? "bg-orange-100 text-orange-800 border-orange-300" : isHLP ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-blue-100 text-blue-800 border-blue-300";
-  const serieHeaderIcon = isTechno ? "🔧" : isHLP ? "📜" : "🧠";
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role: "user", content: input.trim() };
+    const newMsgs = [...messages, userMsg];
+    setMessages(newMsgs);
+    setInput("");
+    setLoading(true);
+    try {
+      const data = await callAI([
+        { role: "user", content: methodeContext },
+        { role: "assistant", content: `Bonjour ! Je suis ton assistant méthode en philosophie (${serieLabel}). Pose-moi toutes tes questions sur la dissertation, l'explication de texte, la rédaction de paragraphes… Je suis là pour t'aider !` },
+        ...newMsgs,
+      ], 800);
+      setMessages([...newMsgs, { role: "assistant", content: getText(data) }]);
+    } catch { setMessages([...newMsgs, { role: "assistant", content: "Désolé, une erreur s'est produite. Réessaie !" }]); }
+    setLoading(false);
+  };
 
   return (
-    <div className="space-y-4">
-      {/* Bandeau série */}
-      <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-bold text-sm ${serieHeaderColor}`}>
-        <span>{serieHeaderIcon}</span>
-        <span>Fiches Méthode — {serieHeaderLabel}</span>
-      </div>
-      <div className="flex gap-4">
-      {/* Sidebar navigation */}
-      <div className="w-56 flex-shrink-0 space-y-4">
-        {groups.map(group => (
-          <div key={group.title}>
-            <p className={`text-xs font-black uppercase tracking-wide mb-2 ${group.color}`}>{group.title}</p>
-            <div className="space-y-1">
-              {group.sections.map(sec => (
-                <button key={sec.id} onClick={() => setActiveSection(sec.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${activeSection === sec.id ? COLOR_ACTIVE[sec.color] : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"}`}>
-                  {sec.icon} {sec.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        {/* Badge série */}
-        <div className={`mt-4 px-3 py-2 rounded-xl text-xs font-bold text-center ${isTechno ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-blue-50 border border-blue-200 text-blue-700"}`}>
-          {isTechno ? "🔧 Série Technologique" : isHLP ? "📜 HLP" : "🧠 Série Générale"}
+    <div className="flex flex-col h-full gap-3">
+      {/* Header série + toggle Chat/Fiches */}
+      <div className="flex items-center justify-between flex-shrink-0">
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold text-xs ${headerBg}`}>
+          <span>{serieIcon}</span>
+          <span>Méthode — {serieLabel}</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setView("chat")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "chat" ? accentBtn + " text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
+            💬 Assistant méthode
+          </button>
+          <button onClick={() => setView("fiche")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "fiche" ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
+            📋 Fiches méthode
+          </button>
         </div>
       </div>
 
-      {/* Contenu de la fiche */}
-      <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
-        {activeSection === "intro_dissertation" && <FicheIntroDissertation />}
-        {activeSection === "plan_tas" && <FichePlanTAS />}
-        {activeSection === "paragraphe" && <FicheParagraphe />}
-        {activeSection === "expl_techno" && <FicheExplTechno />}
-        {activeSection === "expl_generale" && <FicheExplGenerale />}
-      </div>
-    </div>
+      {/* VUE CHAT */}
+      {view === "chat" && (
+        <div className="flex flex-col flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-4">
+                <div className="text-5xl">📐</div>
+                <div>
+                  <p className="font-black text-gray-800 text-base mb-1">Assistant Méthode — {serieLabel}</p>
+                  <p className="text-sm text-gray-500 max-w-sm">Pose tes questions sur la dissertation, l'explication de texte, la rédaction de paragraphes…</p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 w-full max-w-sm mt-2">
+                  {[
+                    "Comment rédiger une bonne introduction ?",
+                    "C'est quoi la différence entre thèse et antithèse ?",
+                    isTechno ? "Comment répondre aux questions de l'explication de texte ?" : "Comment faire un commentaire linéaire ?",
+                    "Comment construire la synthèse ?",
+                  ].map(q => (
+                    <button key={q} onClick={() => { setInput(q); }}
+                      className="text-left text-xs px-3 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-gray-600 font-semibold transition-all">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "bg-gray-800 text-white" : "bg-gray-50 border border-gray-200 text-gray-800"}`}>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 animate-spin text-amber-500" />
+                  <span className="text-sm text-gray-500">Réflexion…</span>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+          {/* Input */}
+          <div className="border-t border-gray-100 p-3 flex gap-2 flex-shrink-0">
+            <input value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-amber-400 focus:outline-none"
+              placeholder="Ta question sur la méthode…" disabled={loading} />
+            <button onClick={sendMessage} disabled={!input.trim() || loading}
+              className={`px-4 py-2.5 rounded-xl font-bold text-sm text-white transition-all ${!input.trim() || loading ? "bg-gray-300" : accentBtn}`}>
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* VUE FICHES */}
+      {view === "fiche" && (
+        <div className="flex gap-3 flex-1 overflow-hidden">
+          {/* Mini sidebar fiches */}
+          <div className="w-52 flex-shrink-0 space-y-1">
+            {fiches.map(f => (
+              <button key={f.id} onClick={() => setActiveFiche(f.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${activeFiche === f.id ? "bg-amber-600 text-white border-amber-600" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
+                {f.icon} {f.label}
+              </button>
+            ))}
+          </div>
+          {/* Contenu fiche */}
+          <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-y-auto">
+            {activeFiche === "intro_dissertation" && <FicheIntroDissertation />}
+            {activeFiche === "plan_tas" && <FichePlanTAS />}
+            {activeFiche === "paragraphe" && <FicheParagraphe />}
+            {activeFiche === "expl_techno" && <FicheExplTechno />}
+            {activeFiche === "expl_generale" && <FicheExplGenerale />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
