@@ -640,7 +640,7 @@ ${entry.content.slice(0, 4000)}` }], 1200);
 }
 
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
-function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom, featuresConfig }: any) {
+function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom, featuresConfig, serie }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledRevTab = (["chat","fiche","flashcards","interrogation"] as const).find(t => feat[("rev_" + t) as keyof FeaturesConfig] !== false) || "chat";
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
@@ -809,7 +809,7 @@ Réponds en JSON UNIQUEMENT :
         .filter((t: any) => t.id !== selectedEntry.id)
         .map((t: any) => `--- ${entryName(t)} (${t.chapter || "Sans chapitre"}) ---\n${t.content.slice(0, 800)}`)
         .join("\n\n");
-      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser ses cours de ${selectedEntry.matiere === "philosophie" ? "Philosophie" : "HLP"}.
+      const systemPrompt = `Tu es un assistant pédagogique bienveillant. Tu aides un élève à réviser ses cours de ${selectedEntry.matiere === "philosophie" ? "Philosophie" : "HLP"}${serie === "techno" ? " (Série Technologique)" : ""}. ${serie === "techno" ? "Adapte ton niveau : explications simples et concrètes, exemples du quotidien accessibles, vocabulaire clair. Pas de références trop académiques." : ""}
 Tu dois TOUJOURS répondre en JSON valide, rien d'autre. Format strict :
 {"source": "texte" | "synthese" | "hors_texte", "contenu": "ta réponse ici"}
 
@@ -1635,9 +1635,9 @@ RÈGLES ABSOLUES :
         `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale qui guide un élève en brainstorming socratique.
 Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nContexte :\n" + contextForAI.slice(0, 800).slice(0, 800) : ""}
+${contextForAI ? "\n\nAuteurs étudiés (pour référence uniquement, ne pas citer) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
 
-Lance le brainstorming par une question ouverte qui pousse l'élève à définir les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500);
+Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500);
       setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setBrainstormMessages([{ role: "assistant", content: "Commençons ! Qu'est-ce que le sujet te demande selon toi ?" }]); }
     setBrainstormLoading(false);
@@ -1657,7 +1657,7 @@ Lance le brainstorming par une question ouverte qui pousse l'élève à définir
           `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale en session de brainstorming socratique avec un élève.
 Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nContexte : " + contextForAI.slice(0, 800).slice(0, 1500) : ""}
+${contextForAI ? "\n\nAuteurs étudiés (référence uniquement, ne pas s'y limiter) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
 Règles : guide par des questions, ne donne pas de plan tout fait, encourage la réflexion autonome, sois bienveillant. Pose une seule question à la fois. Réponds en 3-5 phrases max.` },
         { role: "assistant", content: "Bien sûr, je suis prêt à guider ta réflexion." },
         ...newMsgs,
@@ -2368,7 +2368,7 @@ RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un
     setBrainstormLoading(true);
     try {
       const data = await callAI([
-        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en brainstorming socratique. Sujet : "${sujet}". Chapitres : ${selectedChapters.join(", ")}. Contexte : ${contextForAI.slice(0, 1000)}. Guide par questions, 3-5 phrases max, une seule question.` },
+        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en brainstorming socratique.\nSujet : "${sujet}"\nChapitres : ${selectedChapters.join(", ")}\n\nGuide la réflexion sur le SUJET (pas sur les textes). Lance par une question ouverte sur les termes clés. 3-4 phrases max, UNE seule question.` },
         { role: "assistant", content: "Bien sûr, je guide ta réflexion." },
         ...newMsgs,
       ], 500);
@@ -3197,7 +3197,13 @@ export default function QCMApp() {
     try { if (nom.trim()) localStorage.setItem("qcm_eleve_nom", nom.trim()); } catch {}
   };
 
-  const matiere = role === "eleve-HLP" ? "hlp" : role === "eleve-Philosophie" ? "philosophie" : null;
+  const matiere = role === "eleve-HLP" ? "hlp"
+    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale" || role === "eleve-Philosophie-techno") ? "philosophie"
+    : null;
+  const serie: "generale" | "techno" | null =
+    role === "eleve-Philosophie-techno" ? "techno"
+    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale") ? "generale"
+    : null;
   const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
   if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} />;
@@ -3261,7 +3267,7 @@ export default function QCMApp() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} eleveNom={eleveNom} featuresConfig={featuresConfig} />
+        <RevisionMode entries={revisionData.entries} chapter={revisionData.chapter} onBack={() => setRevisionData(null)} allTextes={sharedLib.filter((t: any) => t.matiere === (revisionData.entries[0]?.matiere || "hlp"))} eleveNom={eleveNom} featuresConfig={featuresConfig} serie={serie} />
       </div>
     </div>
   );
@@ -3299,7 +3305,7 @@ export default function QCMApp() {
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -3358,12 +3364,20 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom, saveEleveNom }: any) {
           <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-emerald-700 transition-colors">Élève HLP</h2>
           <p className="text-gray-500 text-sm">Humanités, Littérature & Philosophie</p>
         </button>
-        <button onClick={() => onSelect("eleve-Philosophie")}
-          className="flex-1 bg-white rounded-3xl border-2 border-blue-200 shadow-lg p-7 hover:border-blue-400 hover:shadow-xl transition-all group text-center">
-          <div className="text-5xl mb-3">🧠</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-blue-700 transition-colors">Élève Philosophie</h2>
-          <p className="text-gray-500 text-sm">Terminale générale & STMG</p>
-        </button>
+        <div className="flex-1 flex flex-col gap-3">
+          <button onClick={() => onSelect("eleve-Philosophie-generale")}
+            className="flex-1 bg-white rounded-3xl border-2 border-blue-200 shadow-lg p-5 hover:border-blue-400 hover:shadow-xl transition-all group text-center">
+            <div className="text-4xl mb-2">🧠</div>
+            <h2 className="text-lg font-bold text-gray-800 mb-0.5 group-hover:text-blue-700 transition-colors">Philo — Série Générale</h2>
+            <p className="text-gray-500 text-xs">Terminale générale</p>
+          </button>
+          <button onClick={() => onSelect("eleve-Philosophie-techno")}
+            className="flex-1 bg-white rounded-3xl border-2 border-orange-200 shadow-lg p-5 hover:border-orange-400 hover:shadow-xl transition-all group text-center">
+            <div className="text-4xl mb-2">🔧</div>
+            <h2 className="text-lg font-bold text-gray-800 mb-0.5 group-hover:text-orange-700 transition-colors">Philo — Série Techno</h2>
+            <p className="text-gray-500 text-xs">Terminale technologique</p>
+          </button>
+        </div>
       </div>
 
       {/* Carte Dissertation */}
@@ -4633,10 +4647,341 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
 
 
+
+// ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
+function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; matiere: string }) {
+  const [activeSection, setActiveSection] = useState<string>("intro_dissertation");
+  const isTechno = serie === "techno";
+  const isHLP = matiere === "hlp";
+
+  type Section = { id: string; label: string; icon: string; color: string };
+  type SectionGroup = { title: string; color: string; sections: Section[] };
+
+  const groups: SectionGroup[] = [
+    {
+      title: "La Dissertation",
+      color: "text-rose-700",
+      sections: [
+        { id: "intro_dissertation", label: "Introduction", icon: "📝", color: "rose" },
+        { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", color: "rose" },
+        { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", color: "rose" },
+      ]
+    },
+    {
+      title: "L'Explication de texte",
+      color: isTechno ? "text-orange-700" : "text-indigo-700",
+      sections: isTechno ? [
+        { id: "expl_techno", label: "Méthode Série Techno (questions guidées)", icon: "🔧", color: "orange" },
+      ] : [
+        { id: "expl_generale", label: "Méthode Série Générale (linéaire)", icon: "📖", color: "indigo" },
+      ]
+    },
+  ];
+
+  const COLOR_MAP: Record<string, string> = {
+    rose: "border-rose-400 bg-rose-50 text-rose-700",
+    indigo: "border-indigo-400 bg-indigo-50 text-indigo-700",
+    orange: "border-orange-400 bg-orange-50 text-orange-700",
+  };
+  const COLOR_ACTIVE: Record<string, string> = {
+    rose: "bg-rose-600 text-white border-rose-600",
+    indigo: "bg-indigo-600 text-white border-indigo-600",
+    orange: "bg-orange-600 text-white border-orange-600",
+  };
+
+  const allSections = groups.flatMap(g => g.sections);
+  const currentSection = allSections.find(s => s.id === activeSection);
+  const currentColor = currentSection?.color || "rose";
+
+  return (
+    <div className="flex gap-4">
+      {/* Sidebar navigation */}
+      <div className="w-56 flex-shrink-0 space-y-4">
+        {groups.map(group => (
+          <div key={group.title}>
+            <p className={`text-xs font-black uppercase tracking-wide mb-2 ${group.color}`}>{group.title}</p>
+            <div className="space-y-1">
+              {group.sections.map(sec => (
+                <button key={sec.id} onClick={() => setActiveSection(sec.id)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-all ${activeSection === sec.id ? COLOR_ACTIVE[sec.color] : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"}`}>
+                  {sec.icon} {sec.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {/* Badge série */}
+        <div className={`mt-4 px-3 py-2 rounded-xl text-xs font-bold text-center ${isTechno ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-blue-50 border border-blue-200 text-blue-700"}`}>
+          {isTechno ? "🔧 Série Technologique" : isHLP ? "📜 HLP" : "🧠 Série Générale"}
+        </div>
+      </div>
+
+      {/* Contenu de la fiche */}
+      <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
+        {activeSection === "intro_dissertation" && <FicheIntroDissertation />}
+        {activeSection === "plan_tas" && <FichePlanTAS />}
+        {activeSection === "paragraphe" && <FicheParagraphe />}
+        {activeSection === "expl_techno" && <FicheExplTechno />}
+        {activeSection === "expl_generale" && <FicheExplGenerale />}
+      </div>
+    </div>
+  );
+}
+
+// ── Composants fiches méthode ─────────────────────────────────────────────────
+function FicheIntroDissertation() {
+  return (
+    <div className="p-6 space-y-5">
+      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">📝 Introduction de la dissertation</h2>
+      {[
+        { num: "1", title: "Opinion commune (la doxa)", color: "bg-rose-50 border-rose-200", tcolor: "text-rose-800",
+          content: "Exprimer clairement ce que les gens pensent habituellement sur le sujet. Attention : tout le développement va souvent consister à montrer en quoi cette opinion courante est fausse ou insuffisante." },
+        { num: "2", title: "Définitions des termes du sujet", color: "bg-amber-50 border-amber-200", tcolor: "text-amber-800",
+          content: "Définir clairement chaque terme important du sujet. S'appuyer sur le dictionnaire, le cours, la culture générale et l'expérience personnelle." },
+        { num: "3", title: "Paradoxe du sujet", color: "bg-orange-50 border-orange-200", tcolor: "text-orange-800",
+          content: "Montrer le caractère quasi-illogique ou surprenant du sujet. Tout sujet est paradoxal — il invite à critiquer un préjugé. Le sujet peut sembler absurde, contradictoire, ou mettre en rapport des concepts opposés. C'est précisément pour ça qu'il mérite d'être posé." },
+        { num: "4", title: "Problématique / Reformulation", color: "bg-yellow-50 border-yellow-200", tcolor: "text-yellow-800",
+          content: "Reformuler le sujet en soulignant ses paradoxes internes. Montrer au lecteur qu'on a compris pourquoi cette question est utile à poser. On peut utiliser des synonymes, antonymes, ou ajouter des adverbes (« vraiment », « nécessairement »…). La problématique fait apparaître un problème là où on n'en voyait pas à première vue." },
+        { num: "5", title: "Annonce de plan", color: "bg-green-50 border-green-200", tcolor: "text-green-800",
+          content: "Annoncer clairement le cheminement pour résoudre le problème : « Nous verrons dans un premier temps… puis… enfin… ». L'annonce de plan est utile pour l'élève (clarifier son cheminement) et pour le correcteur (voir la progression)." },
+      ].map(step => (
+        <div key={step.num} className={`rounded-xl border-2 ${step.color} p-4`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`w-7 h-7 rounded-full ${step.color} border-2 ${step.color.replace("bg-","border-")} flex items-center justify-center text-sm font-black ${step.tcolor}`}>{step.num}</span>
+            <h3 className={`font-black text-sm ${step.tcolor}`}>{step.title}</h3>
+          </div>
+          <p className="text-sm text-gray-700 leading-relaxed">{step.content}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FichePlanTAS() {
+  return (
+    <div className="p-6 space-y-5">
+      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">🔺 Plan Thèse / Antithèse / Synthèse</h2>
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+        <h3 className="font-black text-gray-700 text-sm mb-3">Structure générale</h3>
+        <div className="space-y-2">
+          {[
+            ["Introduction", "Position du problème"],
+            ["Partie I — Thèse", "Hypothèse de réponse (OUI)"],
+            ["Partie II — Antithèse", "Limites de la thèse + hypothèse contraire (NON)"],
+            ["Partie III — Synthèse", "Dépassement de la contradiction par un concept nouveau"],
+            ["Conclusion", "Récapitulation de la progression"],
+          ].map(([part, desc]) => (
+            <div key={part} className="flex items-center gap-3 text-sm">
+              <span className="font-bold text-gray-700 w-36 flex-shrink-0">{part}</span>
+              <span className="text-gray-500">→</span>
+              <span className="text-gray-600">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "I — Thèse", color: "bg-blue-50 border-blue-200 text-blue-800", icon: "👍", desc: "Répond OUI à la question posée. Défend l'affirmation principale. Arguments en faveur." },
+          { label: "II — Antithèse", color: "bg-red-50 border-red-200 text-red-800", icon: "👎", desc: "Répond NON. Objections et limites de la thèse. Formule l'hypothèse contraire." },
+          { label: "III — Synthèse", color: "bg-purple-50 border-purple-200 text-purple-800", icon: "💡", desc: "NI compromis NI résumé. Introduit un concept NOUVEAU et imprévu pour dépasser le oui/non. Reformule le problème autrement." },
+        ].map(p => (
+          <div key={p.label} className={`rounded-xl border-2 ${p.color} p-4`}>
+            <div className="text-2xl mb-2">{p.icon}</div>
+            <h3 className="font-black text-sm mb-2">{p.label}</h3>
+            <p className="text-xs leading-relaxed opacity-80">{p.desc}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+        <p className="text-xs font-black text-amber-800 mb-2">💡 Astuce pour la Synthèse</p>
+        <p className="text-sm text-amber-700">Recyclez votre ouverture de conclusion pour en faire la question à traiter en Partie III. La synthèse doit introduire un concept <strong>imprévu au départ</strong> qui permet de dépasser la simple opposition I/II.</p>
+      </div>
+      <div className="space-y-3">
+        <h3 className="font-black text-gray-700 text-sm">Exemples</h3>
+        {[
+          { sujet: "Faut-il être optimiste ?", these: "Oui — le bonheur sur terre est accessible.", antithese: "Non — le bonheur est impossible, les autres sont des obstacles.", synthese: "Ni optimiste ni pessimiste : être RÉALISTE. Faire coïncider ses désirs au monde réel." },
+          { sujet: "L'homme s'accomplit-il dans le travail ?", these: "Oui — il trouve sa place dans la société, peut s'épanouir.", antithese: "Non — le travail est une contrainte, il peut détruire psychologiquement.", synthese: "Qu'entend-on par « homme » ? À quelles conditions s'accomplit-il ? Le travail est-il le seul lieu d'accomplissement ?" },
+        ].map(ex => (
+          <div key={ex.sujet} className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm">
+            <p className="font-black text-gray-700 mb-2">Sujet : <span className="italic">« {ex.sujet} »</span></p>
+            <p className="text-blue-700 mb-1"><strong>I.</strong> {ex.these}</p>
+            <p className="text-red-700 mb-1"><strong>II.</strong> {ex.antithese}</p>
+            <p className="text-purple-700"><strong>III.</strong> {ex.synthese}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FicheParagraphe() {
+  return (
+    <div className="p-6 space-y-5">
+      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">✍️ Rédiger un paragraphe argumenté</h2>
+      <p className="text-sm text-gray-600">Un paragraphe doit être <strong>argumenté</strong> : il doit convaincre le lecteur du bien-fondé de l'idée développée. Il doit faire environ <strong>une vingtaine de lignes</strong>.</p>
+      <div className="space-y-3">
+        <h3 className="font-black text-gray-700 text-sm">Les 5 éléments obligatoires</h3>
+        {[
+          { num: "1", label: "Une thèse", desc: "L'idée principale que vous défendez dans ce paragraphe.", color: "bg-blue-50 border-blue-200 text-blue-800" },
+          { num: "2", label: "Une argumentation", desc: "Les raisons qui justifient votre thèse. Pourquoi est-ce vrai ?", color: "bg-indigo-50 border-indigo-200 text-indigo-800" },
+          { num: "3", label: "Un exemple", desc: "Un cas concret, une situation réelle ou fictive qui illustre votre argument.", color: "bg-green-50 border-green-200 text-green-800" },
+          { num: "4", label: "Une citation", desc: "Un passage d'un auteur étudié qui appuie votre propos.", color: "bg-amber-50 border-amber-200 text-amber-800" },
+          { num: "5", label: "Une conclusion", desc: "Un bilan de l'argumentation, une transition vers l'idée suivante.", color: "bg-rose-50 border-rose-200 text-rose-800" },
+        ].map(el => (
+          <div key={el.num} className={`rounded-xl border-2 ${el.color} p-3 flex items-start gap-3`}>
+            <span className="font-black text-lg w-6 flex-shrink-0">{el.num}.</span>
+            <div>
+              <p className="font-black text-sm">{el.label}</p>
+              <p className="text-xs mt-0.5 opacity-80">{el.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <p className="text-xs font-black text-gray-700 mb-2">✨ Éléments optionnels pour enrichir</p>
+        <div className="space-y-1 text-sm text-gray-600">
+          <p><strong>Un constat</strong> — un point essentiel observé pour débuter le paragraphe.</p>
+          <p><strong>Une objection</strong> — un argument opposé pour nuancer ou renforcer votre propos.</p>
+          <p><strong>Un contre-exemple</strong> — un cas qui contredit une règle, pour complexifier.</p>
+        </div>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <p className="text-xs text-amber-800">💡 L'ordre des 5 éléments est conseillé mais pas obligatoire. Faites varier votre style : parfois commencez par la citation, d'autres fois terminez par elle. Les philosophes eux-mêmes jouent avec la structure.</p>
+      </div>
+    </div>
+  );
+}
+
+function FicheExplTechno() {
+  return (
+    <div className="p-6 space-y-5">
+      <h2 className="text-xl font-black text-gray-800 border-b-2 border-orange-200 pb-3">🔧 Explication de texte — Série Technologique</h2>
+      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 text-sm text-orange-800">
+        <p className="font-black mb-1">Deux options possibles</p>
+        <p><strong>Option 1</strong> : Répondre aux questions guidées (A. Analyse + B. Synthèse + C. Commentaire). Indiquer sur la copie : <em>« J'opte pour l'option 1 »</em>.</p>
+        <p className="mt-1"><strong>Option 2</strong> : Rédiger un commentaire libre (comme en Français). Indiquer sur la copie : <em>« J'opte pour l'option 2 »</em>.</p>
+      </div>
+      <div className="space-y-4">
+        {[
+          {
+            letter: "A", title: "Éléments d'analyse", color: "bg-blue-50 border-blue-300 text-blue-800",
+            objectif: "Expliciter clairement les points demandés : mot, groupe de mots, expressions, articulations. Comprendre le texte en profondeur, identifier les concepts clés et montrer comment l'auteur construit son argumentation.",
+            points: [
+              "Expliquer les concepts clés : définir les notions importantes dans le contexte précis du texte (pas de définition générale hors contexte).",
+              "Analyser l'argumentation : repérer les étapes de raisonnement, les distinctions que fait l'auteur, ses exemples et illustrations.",
+              "Ne pas paraphraser : reformuler pour expliquer le sens, sans simplement répéter le texte.",
+              "Illustrer si possible : un exemple concret ou une référence connue peut aider à clarifier le propos.",
+            ]
+          },
+          {
+            letter: "B", title: "Éléments de synthèse", color: "bg-indigo-50 border-indigo-300 text-indigo-800",
+            objectif: "Dégager la thèse principale du texte en tenant compte de l'analyse. Montrer qu'on comprend l'ensemble du texte, sa structure et son idée centrale.",
+            points: [
+              "Identifier la question principale du texte : ce à quoi l'auteur tente de répondre.",
+              "Repérer les moments de l'argumentation : quelles étapes ou parties composent le raisonnement ? (= le plan du texte)",
+              "Dégager l'idée principale : formuler en une ou deux phrases ce que le texte cherche à démontrer.",
+            ]
+          },
+          {
+            letter: "C", title: "Commentaire", color: "bg-orange-50 border-orange-300 text-orange-800",
+            objectif: "Examiner en détail la démarche de l'auteur par une série de questions cohérentes. Produire des « mini-dissertations » sans introduction. On peut faire une partie thèse (d'accord) et une partie antithèse (en désaccord).",
+            points: [
+              "Préciser le sens et l'intérêt de l'idée centrale : pourquoi cette idée est-elle importante ?",
+              "Discuter le texte : réfléchir aux implications de la thèse, à ses limites éventuelles, à ses conséquences pratiques ou théoriques.",
+              "Appuyer vos réflexions : utiliser des références à d'autres auteurs ou exemples pour montrer qu'on comprend le contexte philosophique.",
+            ]
+          },
+        ].map(part => (
+          <div key={part.letter} className={`rounded-xl border-2 ${part.color} overflow-hidden`}>
+            <div className={`${part.color} px-4 py-2.5 border-b ${part.color.replace("bg-","border-")}`}>
+              <h3 className="font-black text-sm">{part.letter}. {part.title}</h3>
+            </div>
+            <div className="p-4 bg-white">
+              <p className="text-xs text-gray-600 mb-3 italic">{part.objectif}</p>
+              <ul className="space-y-1.5">
+                {part.points.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-gray-400 mt-0.5 flex-shrink-0">→</span>
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FicheExplGenerale() {
+  return (
+    <div className="p-6 space-y-5">
+      <h2 className="text-xl font-black text-gray-800 border-b-2 border-indigo-200 pb-3">📖 Explication de texte — Série Générale</h2>
+      <p className="text-sm text-gray-600">On vous propose un texte philosophique précédé de la consigne : <em>« Expliquer le texte suivant »</em>. Il s'agit de découvrir le problème que le texte résout, comprendre la thèse et l'argumentation, puis examiner la valeur de cette solution.</p>
+      <div className="space-y-4">
+        {[
+          {
+            title: "Introduction", icon: "🔍", color: "bg-indigo-50 border-indigo-200",
+            items: [
+              "Présentation rapide du texte (auteur, titre de l'ouvrage, date)",
+              "Le thème du texte (quelle notion du programme ?)",
+              "La thèse du texte (qu'est-ce qu'affirme l'auteur ?)",
+              "Définitions de quelques termes importants",
+              "Le paradoxe (quelle contradiction la thèse tente-t-elle de régler ?)",
+              "Une problématique en rapport avec le thème et le paradoxe",
+              "Le plan : celui du texte est aussi celui du devoir. Le formuler sous forme de questions.",
+            ]
+          },
+          {
+            title: "Développement — Commentaire linéaire", icon: "📄", color: "bg-blue-50 border-blue-200",
+            items: [
+              "Commenter le texte dans l'ordre, passage par passage, du début à la fin.",
+              "Citer un court passage du texte.",
+              "Reformuler seulement si le sens littéral n'est pas clair (attention : la reformulation seule = paraphrase, ce n'est pas une explication).",
+              "Définir et expliquer les notions ou concepts importants du passage cité.",
+              "Expliquer l'idée exprimée et sa fonction dans l'argumentation : en quoi est-ce un argument pour régler le problème ?",
+              "Proposer une transition (sous forme de question) vers le passage suivant.",
+              "Faire appel au cours et aux autres auteurs pour confirmer ou contredire la thèse (examen critique intégré à l'analyse).",
+            ]
+          },
+          {
+            title: "Conclusion", icon: "✅", color: "bg-green-50 border-green-200",
+            items: [
+              "Répondre point par point aux questions posées en introduction.",
+              "Rassembler ce qui s'est dit d'essentiel dans le développement.",
+              "Ne pas ouvrir sur une nouvelle question sans réponse : on ne pose pas de question qu'on ne va pas traiter.",
+            ]
+          },
+        ].map(part => (
+          <div key={part.title} className={`rounded-xl border-2 ${part.color} overflow-hidden`}>
+            <div className={`${part.color} px-4 py-2.5 border-b`}>
+              <h3 className="font-black text-sm">{part.icon} {part.title}</h3>
+            </div>
+            <div className="p-4 bg-white">
+              <ul className="space-y-1.5">
+                {part.items.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-gray-400 mt-0.5 flex-shrink-0">→</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800">
+        💡 L'examen critique (confrontation avec d'autres auteurs) peut être intégré tout au long de l'analyse linéaire. Il n'est pas obligatoire de le réserver à une partie finale.
+      </div>
+    </div>
+  );
+}
+
 // ── MODE COLLE SIMULÉE ────────────────────────────────────────────────────────
 type CollePhase = "choix" | "preparation" | "oral" | "bilan";
 
-function ModeColle({ filteredLib, matiere, isHLP, eleveNom }: any) {
+function ModeColle({ filteredLib, matiere, isHLP, eleveNom, serie }: any) {
   const [phase, setPhase] = useState<CollePhase>("choix");
   const [selectedNotion, setSelectedNotion] = useState("");
   const [sujet, setSujet] = useState("");
@@ -4748,22 +5093,32 @@ Commence directement par ta réaction au plan, sans introduction formelle.` }], 
       setPhase("bilan");
       setBilanLoading(true);
       try {
-        const data = await callAI([{ role: "user", content:
-          `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} qui vient de faire passer une colle.
-Sujet : "${sujet}"
-Plan de l\'élève : ${planEleve || "(non fourni)"}
-Échange oral : ${newMsgs.slice(-6).map(m => `${m.role === "user" ? "Élève" : "Prof"} : ${m.content.slice(0, 150)}`).join(" | ")}
-
-GRILLE ÉDUSCOL (appliquer strictement) :
+        const grilleBac = serie === "techno"
+          ? `GRILLE SÉRIE TECHNO (appliquer) :
+• 0-5 : devoir inintelligible, hors-sujet ou refus de traiter
+• 6-9 : compréhension du sujet mais pas de démarche philosophique
+• ≥10 : pose le problème, esquisse un plan, montre qu'on a réfléchi
+• ≥12 : + utilise le cours et des exemples concrets
+• ≥14 : + raisonnement structuré, distinction thèse/antithèse claire
+• ≥16 : + maîtrise du vocabulaire philosophique, synthèse personnelle
+Attentes Techno : valoriser l'effort de compréhension et la capacité à expliquer simplement. Ne pas pénaliser l'absence de références nombreuses.`
+          : `GRILLE ÉDUSCOL SÉRIE GÉNÉRALE (appliquer strictement) :
 • 0-5 : copie inintelligible/vide/refus
 • 6-9 : intelligible mais sans traitement philosophique du sujet
 • ≥10 : effort réel de problématisation et cohérence globale
 • ≥12 : + exemples et références pertinents
 • ≥14 : + raisonnement construit et affirmations justifiées
-• ≥16 : + maîtrise de concepts philosophiques et culture au service du sujet
+• ≥16 : + maîtrise de concepts philosophiques et culture au service du sujet`;
+        const data = await callAI([{ role: "user", content:
+          `Tu es un professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} qui vient de faire passer une colle${serie === "techno" ? " (Série Technologique)" : ""}.
+Sujet : "${sujet}"
+Plan de l\'élève : ${planEleve || "(non fourni)"}
+Échange oral : ${newMsgs.slice(-6).map(m => `${m.role === "user" ? "Élève" : "Prof"} : ${m.content.slice(0, 150)}`).join(" | ")}
+
+${grilleBac}
 
 Génère un bilan de colle :
-1. 📊 **Note /20** : note précise + palier Éduscol atteint + justification (2 lignes)
+1. 📊 **Note /20** : note précise + palier atteint + justification (2 lignes)
 2. ✅ **Points forts** (2-3 points observés durant l\'oral)
 3. ⚠️ **Points à améliorer** (2-3 conseils concrets)
 4. 💡 **Conseil prioritaire** pour la prochaine colle
@@ -5150,7 +5505,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -5167,12 +5522,13 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle">(firstEnabledTab);
+  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle" | "methode">(firstEnabledTab);
   const [revisionSubTab, setRevisionSubTab] = useState<"cours" | "textes">("cours");
 
   const isHLP = matiere === "hlp";
-  const headerBorder = isHLP ? "border-emerald-200" : "border-blue-200";
-  const matiereDisplay = isHLP ? "📜 HLP" : "🧠 Philosophie";
+  const isTechno = serie === "techno";
+  const headerBorder = isHLP ? "border-emerald-200" : isTechno ? "border-orange-200" : "border-blue-200";
+  const matiereDisplay = isHLP ? "📜 HLP" : isTechno ? "🔧 Philo — Série Techno" : "🧠 Philo — Série Générale";
 
   const filteredLib = useMemo(() => sharedLib.filter((e: any) => matchesMatiere(e, matiere)), [sharedLib, matiere]);
 
@@ -5221,10 +5577,13 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
         const batchSize = Math.min(20, rem); rem -= batchSize;
         const already = allQs.length ? "\n\nNe répète pas ces questions déjà générées :\n" + allQs.map((q, i) => `${i + 1}. ${q.question}`).join("\n") : "";
         setProgress(`Génération : ${allQs.length}/${numQ}…`);
+        const serieHint = serie === "techno"
+          ? "\nSérie Technologique : questions accessibles, vocabulaire simple, mauvaises réponses clairement fausses (pas de subtilité), bonne réponse reformulée avec des mots du quotidien."
+          : "";
         const data = await callAI([{ role: "user", content:
           `Génère EXACTEMENT ${batchSize} questions QCM sur le texte littéraire ci-dessous.
 Règle de format : la bonne réponse est TOUJOURS en position 0, suivie de 3 mauvaises réponses. 4 choix au total.
-${diffHint}${already}
+${diffHint}${serieHint}${already}
 CONSIGNES ABSOLUES pour les mauvaises réponses :
 - Chaque mauvaise réponse doit être IMMÉDIATEMENT et SANS AMBIGUÏTÉ fausse.
 - OBLIGATOIRE : erreurs grossières (mauvais auteur, mauvaise époque, affirmation contraire, hors-sujet).
@@ -5251,7 +5610,7 @@ ${allContent}` }]);
             )}
             <span className="text-xl">{isHLP ? "📜" : "🧠"}</span>
             <div>
-              <h1 className={`text-lg font-bold leading-tight ${isHLP ? "text-emerald-700" : "text-blue-700"}`}>{matiereDisplay}</h1>
+              <h1 className={`text-lg font-bold leading-tight ${isHLP ? "text-emerald-700" : isTechno ? "text-orange-700" : "text-blue-700"}`}>{matiereDisplay}</h1>
               {selectedChapter && <p className="text-xs text-gray-500 leading-none">{selectedChapter}</p>}
             </div>
           </div>
@@ -5348,6 +5707,10 @@ ${allContent}` }]);
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "colle" ? "border-violet-500 bg-violet-50 text-violet-700" : "border-gray-200 bg-white text-gray-700 hover:border-violet-300"}`}>
                 🎓 Colle
               </button>}
+              <button onClick={() => setActiveTab("methode")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "methode" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
+                📐 Méthode
+              </button>
             </div>
 
             {activeTab === "revision" && (
@@ -5504,7 +5867,10 @@ ${allContent}` }]);
             <CarteMentaleNotions filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} />
           )}
           {activeTab === "colle" && (
-            <ModeColle filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} eleveNom={eleveNom} />
+            <ModeColle filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} eleveNom={eleveNom} serie={serie} />
+          )}
+          {activeTab === "methode" && (
+            <MethodeMode serie={serie} matiere={matiere} />
           )}
           </>
         )}
