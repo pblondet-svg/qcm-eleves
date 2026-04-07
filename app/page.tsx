@@ -4657,23 +4657,25 @@ function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; 
   type Section = { id: string; label: string; icon: string; color: string };
   type SectionGroup = { title: string; color: string; sections: Section[] };
 
+  const serieLabel = isTechno ? "Série Techno" : isHLP ? "HLP" : "Série Générale";
+
   const groups: SectionGroup[] = [
     {
-      title: "La Dissertation",
+      title: `La Dissertation — ${serieLabel}`,
       color: "text-rose-700",
       sections: [
-        { id: "intro_dissertation", label: "Introduction", icon: "📝", color: "rose" },
+        { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", color: "rose" },
         { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", color: "rose" },
         { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", color: "rose" },
       ]
     },
     {
-      title: "L'Explication de texte",
+      title: `L'Explication de texte — ${serieLabel}`,
       color: isTechno ? "text-orange-700" : "text-indigo-700",
       sections: isTechno ? [
-        { id: "expl_techno", label: "Méthode Série Techno (questions guidées)", icon: "🔧", color: "orange" },
+        { id: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", color: "orange" },
       ] : [
-        { id: "expl_generale", label: "Méthode Série Générale (linéaire)", icon: "📖", color: "indigo" },
+        { id: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", color: "indigo" },
       ]
     },
   ];
@@ -4693,8 +4695,18 @@ function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; 
   const currentSection = allSections.find(s => s.id === activeSection);
   const currentColor = currentSection?.color || "rose";
 
+  const serieHeaderLabel = isTechno ? "Série Technologique" : isHLP ? "HLP" : "Série Générale";
+  const serieHeaderColor = isTechno ? "bg-orange-100 text-orange-800 border-orange-300" : isHLP ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-blue-100 text-blue-800 border-blue-300";
+  const serieHeaderIcon = isTechno ? "🔧" : isHLP ? "📜" : "🧠";
+
   return (
-    <div className="flex gap-4">
+    <div className="space-y-4">
+      {/* Bandeau série */}
+      <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-bold text-sm ${serieHeaderColor}`}>
+        <span>{serieHeaderIcon}</span>
+        <span>Fiches Méthode — {serieHeaderLabel}</span>
+      </div>
+      <div className="flex gap-4">
       {/* Sidebar navigation */}
       <div className="w-56 flex-shrink-0 space-y-4">
         {groups.map(group => (
@@ -4724,6 +4736,7 @@ function MethodeMode({ serie, matiere }: { serie: "generale" | "techno" | null; 
         {activeSection === "expl_techno" && <FicheExplTechno />}
         {activeSection === "expl_generale" && <FicheExplGenerale />}
       </div>
+    </div>
     </div>
   );
 }
@@ -5693,7 +5706,7 @@ ${allContent}` }]);
             <div className="flex gap-2 mb-6">
               {feat.tab_revision && <button onClick={() => setActiveTab("revision")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "revision" ? "border-green-500 bg-green-50 text-green-700" : "border-gray-200 bg-white text-gray-700 hover:border-green-300"}`}>
-                <BookOpen className="w-4 h-4" /> 📖 Réviser
+                <BookOpen className="w-4 h-4" /> {isHLP ? "📖 Révision HLP" : isTechno ? "📖 Cours — Série Techno" : "📖 Cours — Série Générale"}
               </button>}
               {feat.tab_quiz && <button onClick={() => setActiveTab("quiz")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "quiz" ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-700 hover:border-indigo-300"}`}>
@@ -5709,7 +5722,7 @@ ${allContent}` }]);
               </button>}
               <button onClick={() => setActiveTab("methode")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "methode" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
-                📐 Méthode
+                {isHLP ? "📐 Méthode HLP" : isTechno ? "📐 Méthode — Série Techno" : "📐 Méthode — Série Générale"}
               </button>
             </div>
 
