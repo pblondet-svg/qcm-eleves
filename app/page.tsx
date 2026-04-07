@@ -5755,7 +5755,9 @@ ${allContent}` }]);
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {!libLoaded ? (
+        {activeTab === "methode" ? (
+          <MethodeMode serie={serie} matiere={matiere} />
+        ) : !libLoaded ? (
           <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
         ) : filteredLib.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
@@ -5834,7 +5836,7 @@ ${allContent}` }]);
                 🎓 Colle
               </button>}
               <button onClick={() => setActiveTab("methode")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${activeTab === "methode" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl border-2 font-bold text-xs transition-all ${(activeTab as string) === "methode" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
                 {isHLP ? "📐 Méthode HLP" : isTechno ? "📐 Méthode — Série Techno" : "📐 Méthode — Série Générale"}
               </button>
             </div>
@@ -5994,9 +5996,6 @@ ${allContent}` }]);
           )}
           {activeTab === "colle" && (
             <ModeColle filteredLib={filteredLib} matiere={matiere} isHLP={isHLP} eleveNom={eleveNom} serie={serie} />
-          )}
-          {activeTab === "methode" && (
-            <MethodeMode serie={serie} matiere={matiere} />
           )}
           </>
         )}
