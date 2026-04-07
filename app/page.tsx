@@ -3197,12 +3197,16 @@ export default function QCMApp() {
     try { if (nom.trim()) localStorage.setItem("qcm_eleve_nom", nom.trim()); } catch {}
   };
 
-  const matiere = role === "eleve-HLP" ? "hlp"
-    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale" || role === "eleve-Philosophie-techno") ? "philosophie"
+  const matiere = role === "eleve-HLP" || role === "eleve-HLP-methode" ? "hlp"
+    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale" || role === "eleve-Philosophie-techno"
+       || role === "eleve-Philosophie-generale-methode" || role === "eleve-Philosophie-techno-methode") ? "philosophie"
     : null;
   const serie: "generale" | "techno" | null =
-    role === "eleve-Philosophie-techno" ? "techno"
-    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale") ? "generale"
+    (role === "eleve-Philosophie-techno" || role === "eleve-Philosophie-techno-methode") ? "techno"
+    : (role === "eleve-Philosophie" || role === "eleve-Philosophie-generale" || role === "eleve-Philosophie-generale-methode") ? "generale"
+    : null;
+  const initialTab: string | null =
+    (role === "eleve-Philosophie-generale-methode" || role === "eleve-Philosophie-techno-methode" || role === "eleve-HLP-methode") ? "methode"
     : null;
   const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
@@ -3305,7 +3309,7 @@ export default function QCMApp() {
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} serie={serie} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -3356,26 +3360,59 @@ function HomeScreen({ onSelect, eleveNom, setEleveNom, saveEleveNom }: any) {
         </div>
       </div>
 
-      {/* Cartes élèves HLP + Philosophie */}
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4">
-        <button onClick={() => onSelect("eleve-HLP")}
-          className="flex-1 bg-white rounded-3xl border-2 border-emerald-200 shadow-lg p-7 hover:border-emerald-400 hover:shadow-xl transition-all group text-center">
-          <div className="text-5xl mb-3">📜</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-emerald-700 transition-colors">Élève HLP</h2>
-          <p className="text-gray-500 text-sm">Humanités, Littérature & Philosophie</p>
-        </button>
-        <div className="flex-1 flex flex-col gap-3">
+      {/* Cartes élèves — Philosophie Série Générale */}
+      <div className="w-full max-w-2xl mb-2">
+        <p className="text-xs font-black text-blue-600 uppercase tracking-widest mb-2 px-1">🧠 Philosophie — Série Générale</p>
+        <div className="grid grid-cols-2 gap-3">
           <button onClick={() => onSelect("eleve-Philosophie-generale")}
-            className="flex-1 bg-white rounded-3xl border-2 border-blue-200 shadow-lg p-5 hover:border-blue-400 hover:shadow-xl transition-all group text-center">
-            <div className="text-4xl mb-2">🧠</div>
-            <h2 className="text-lg font-bold text-gray-800 mb-0.5 group-hover:text-blue-700 transition-colors">Philo — Série Générale</h2>
-            <p className="text-gray-500 text-xs">Terminale générale</p>
+            className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-5 hover:border-blue-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📖</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-blue-700 transition-colors">Cours</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
           </button>
+          <button onClick={() => onSelect("eleve-Philosophie-generale-methode")}
+            className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-5 hover:border-blue-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📐</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-blue-700 transition-colors">Méthode</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
+          </button>
+        </div>
+      </div>
+
+      {/* Cartes élèves — Philosophie Série Techno */}
+      <div className="w-full max-w-2xl mb-2">
+        <p className="text-xs font-black text-orange-600 uppercase tracking-widest mb-2 px-1">🔧 Philosophie — Série Techno</p>
+        <div className="grid grid-cols-2 gap-3">
           <button onClick={() => onSelect("eleve-Philosophie-techno")}
-            className="flex-1 bg-white rounded-3xl border-2 border-orange-200 shadow-lg p-5 hover:border-orange-400 hover:shadow-xl transition-all group text-center">
-            <div className="text-4xl mb-2">🔧</div>
-            <h2 className="text-lg font-bold text-gray-800 mb-0.5 group-hover:text-orange-700 transition-colors">Philo — Série Techno</h2>
-            <p className="text-gray-500 text-xs">Terminale technologique</p>
+            className="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5 hover:border-orange-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📖</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-orange-700 transition-colors">Cours</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
+          </button>
+          <button onClick={() => onSelect("eleve-Philosophie-techno-methode")}
+            className="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5 hover:border-orange-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📐</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-orange-700 transition-colors">Méthode</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
+          </button>
+        </div>
+      </div>
+
+      {/* Carte HLP */}
+      <div className="w-full max-w-2xl mb-2">
+        <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2 px-1">📜 HLP — Humanités, Littérature & Philosophie</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => onSelect("eleve-HLP")}
+            className="bg-white rounded-2xl border-2 border-emerald-200 shadow-sm p-5 hover:border-emerald-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📖</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">Cours</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
+          </button>
+          <button onClick={() => onSelect("eleve-HLP-methode")}
+            className="bg-white rounded-2xl border-2 border-emerald-200 shadow-sm p-5 hover:border-emerald-400 hover:shadow-md transition-all group text-center">
+            <div className="text-3xl mb-2">📐</div>
+            <h2 className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">Méthode</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
           </button>
         </div>
       </div>
@@ -5518,7 +5555,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -5535,7 +5572,7 @@ function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStart
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle" | "methode">(firstEnabledTab);
+  const [activeTab, setActiveTab] = useState<"revision" | "quiz" | "dissertation" | "carte" | "colle" | "methode">(initialTab || firstEnabledTab);
   const [revisionSubTab, setRevisionSubTab] = useState<"cours" | "textes">("cours");
 
   const isHLP = matiere === "hlp";
