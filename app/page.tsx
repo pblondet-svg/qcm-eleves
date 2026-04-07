@@ -359,6 +359,27 @@ const loadFaqMethode = async (): Promise<FaqItem[]> => {
 const saveFaqMethode = async (items: FaqItem[]) => {
   await dbSetConfig("faq_methode", JSON.stringify(items));
 };
+// ── Questions des élèves (en attente de réponse du prof) ──────────────────────
+type EleveQuestion = {
+  id: string;
+  question: string;
+  serie: "generale" | "techno" | "hlp" | null;
+  eleveNom: string;
+  createdAt: number;
+};
+
+const loadEleveQuestions = async (): Promise<EleveQuestion[]> => {
+  try {
+    const val = await dbGetConfig("eleve_questions");
+    if (!val) return [];
+    return JSON.parse(val);
+  } catch { return []; }
+};
+
+const saveEleveQuestions = async (items: EleveQuestion[]) => {
+  await dbSetConfig("eleve_questions", JSON.stringify(items));
+};
+
 
 
 
@@ -3294,6 +3315,7 @@ export default function QCMApp() {
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
   const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
   const [faqMethode, setFaqMethode] = useState<FaqItem[]>([]);
+  const [eleveQuestions, setEleveQuestions] = useState<EleveQuestion[]>([]);
 
   const loadLib = async () => {
     try { const data = await dbLoadTextes(); setSharedLib(data); } catch (e) { console.error(e); }
@@ -3305,6 +3327,7 @@ export default function QCMApp() {
     loadFeaturesConfig().then(setFeaturesConfig);
     loadMethodeContent().then(setMethodeContent);
     loadFaqMethode().then(setFaqMethode);
+    loadEleveQuestions().then(setEleveQuestions);
   }, []);
 
   // Mémoriser le nom élève dans localStorage
@@ -3419,13 +3442,13 @@ export default function QCMApp() {
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
-      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} faqMethode={faqMethode} setFaqMethode={(faq: FaqItem[]) => { setFaqMethode(faq); saveFaqMethode(faq); }} />
+      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} faqMethode={faqMethode} setFaqMethode={(faq: FaqItem[]) => { setFaqMethode(faq); saveFaqMethode(faq); }} eleveQuestions={eleveQuestions} setEleveQuestions={(q: EleveQuestion[]) => { setEleveQuestions(q); saveEleveQuestions(q); }} />
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} faqMethode={faqMethode} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} faqMethode={faqMethode} eleveQuestions={eleveQuestions} onEleveQuestion={(q: EleveQuestion) => { const updated = [q, ...eleveQuestions]; setEleveQuestions(updated); saveEleveQuestions(updated); }} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -4406,13 +4429,17 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
 }
 
 // ── PROF FAQ PANEL ────────────────────────────────────────────────────────────
-function ProfFaqPanel({ faqMethode, setFaqMethode }: { faqMethode: FaqItem[]; setFaqMethode: (f: FaqItem[]) => void }) {
+function ProfFaqPanel({ faqMethode, setFaqMethode, eleveQuestions, setEleveQuestions }: { faqMethode: FaqItem[]; setFaqMethode: (f: FaqItem[]) => void; eleveQuestions: EleveQuestion[]; setEleveQuestions: (q: EleveQuestion[]) => void }) {
   const [newQ, setNewQ] = useState("");
   const [newR, setNewR] = useState("");
   const [newSerie, setNewSerie] = useState<FaqItem["serie"]>("toutes");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [repondreId, setRepondreId] = useState<string | null>(null);
+  const [reponseInput, setReponseInput] = useState("");
+  const [repSerie, setRepSerie] = useState<FaqItem["serie"]>("toutes");
+  const [activePanel, setActivePanel] = useState<"faq" | "questions">("questions");
   const [editQ, setEditQ] = useState("");
   const [editR, setEditR] = useState("");
   const [editSerie, setEditSerie] = useState<FaqItem["serie"]>("toutes");
@@ -4459,16 +4486,105 @@ function ProfFaqPanel({ faqMethode, setFaqMethode }: { faqMethode: FaqItem[]; se
     setEditingId(null);
   };
 
+  const ajouterAFaq = (q: EleveQuestion) => {
+    if (!reponseInput.trim()) return;
+    const item: FaqItem = { id: uid(), question: q.question, reponse: reponseInput.trim(), serie: repSerie, createdAt: Date.now() };
+    setFaqMethode([item, ...faqMethode]);
+    setEleveQuestions(eleveQuestions.filter(eq => eq.id !== q.id));
+    setRepondreId(null);
+    setReponseInput("");
+    setRepSerie("toutes");
+  };
+
+  const ignorerQuestion = (id: string) => {
+    if (!confirm("Supprimer cette question sans l'ajouter à la FAQ ?")) return;
+    setEleveQuestions(eleveQuestions.filter(q => q.id !== id));
+  };
+
+  const SERIE_LABEL_SHORT: Record<string, string> = { generale: "🧠 Générale", techno: "🔧 Techno", hlp: "📜 HLP" };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header + toggle */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-gray-800">❓ FAQ Méthode</h2>
-          <p className="text-sm text-gray-500 mt-1">Ajoutez des conseils, astuces et réponses aux questions fréquentes. Le chatbot méthode s'en servira pour répondre aux élèves.</p>
+          <p className="text-sm text-gray-500 mt-1">Gérez les questions des élèves et les conseils de la FAQ.</p>
         </div>
-        <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full">{faqMethode.length} conseil{faqMethode.length > 1 ? "s" : ""}</span>
+        <div className="flex gap-2">
+          <button onClick={() => setActivePanel("questions")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activePanel === "questions" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"}`}>
+            📬 Questions élèves
+            {eleveQuestions.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${activePanel === "questions" ? "bg-white/30 text-white" : "bg-rose-100 text-rose-700"}`}>{eleveQuestions.length}</span>}
+          </button>
+          <button onClick={() => setActivePanel("faq")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activePanel === "faq" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
+            ❓ FAQ publiée
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${activePanel === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqMethode.length}</span>
+          </button>
+        </div>
       </div>
+
+      {/* === PANEL QUESTIONS ÉLÈVES === */}
+      {activePanel === "questions" && (
+        <div className="space-y-3">
+          {eleveQuestions.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+              <div className="text-4xl mb-3">📭</div>
+              <p className="font-bold text-gray-600">Aucune question en attente</p>
+              <p className="text-sm text-gray-400 mt-1">Les questions des élèves apparaîtront ici</p>
+            </div>
+          ) : eleveQuestions.map(q => (
+            <div key={q.id} className="bg-white rounded-2xl border-2 border-rose-100 overflow-hidden">
+              <div className="px-5 py-4">
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-gray-800 text-sm">{q.question}</span>
+                    {q.serie && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">{SERIE_LABEL_SHORT[q.serie] || q.serie}</span>}
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{q.eleveNom} · {new Date(q.createdAt).toLocaleDateString("fr-FR")}</span>
+                </div>
+                {repondreId === q.id ? (
+                  <div className="mt-3 space-y-2">
+                    <textarea value={reponseInput} onChange={e => setReponseInput(e.target.value)}
+                      className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 resize-none"
+                      rows={3} placeholder="Votre réponse à publier dans la FAQ…" autoFocus />
+                    <div className="flex items-center gap-2">
+                      <select value={repSerie} onChange={e => setRepSerie(e.target.value as FaqItem["serie"])}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none">
+                        <option value="toutes">Toutes les séries</option>
+                        <option value="generale">Série Générale</option>
+                        <option value="techno">Série Techno</option>
+                        <option value="hlp">HLP</option>
+                      </select>
+                      <button onClick={() => ajouterAFaq(q)} disabled={!reponseInput.trim()}
+                        className={`flex-1 py-1.5 text-xs font-black rounded-lg text-white transition-all ${reponseInput.trim() ? "bg-green-600 hover:bg-green-700" : "bg-gray-300"}`}>
+                        ✓ Répondre et ajouter à la FAQ
+                      </button>
+                      <button onClick={() => { setRepondreId(null); setReponseInput(""); }}
+                        className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg text-gray-600">Annuler</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => { setRepondreId(q.id); setReponseInput(""); setRepSerie(q.serie || "toutes"); }}
+                      className="text-xs font-bold px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-200 transition-all">
+                      ✍️ Répondre → FAQ
+                    </button>
+                    <button onClick={() => ignorerQuestion(q.id)}
+                      className="text-xs font-bold px-3 py-1.5 text-gray-500 hover:text-red-600 rounded-lg border border-gray-200 transition-all">
+                      🗑️ Ignorer
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* === PANEL FAQ PUBLIÉE === */}
+      {activePanel === "faq" && <div className="space-y-6">
 
       {/* Formulaire ajout */}
       <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 space-y-3">
@@ -4539,12 +4655,13 @@ function ProfFaqPanel({ faqMethode, setFaqMethode }: { faqMethode: FaqItem[]; se
           ))}
         </div>
       )}
+      </div>}
     </div>
   );
 }
 
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode }: any) {
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode, eleveQuestions, setEleveQuestions }: any) {
   const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode" | "faq">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
@@ -4738,7 +4855,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
         </div>
       ) : profTab === "faq" ? (
         <div className="max-w-3xl mx-auto px-6 py-8">
-          <ProfFaqPanel faqMethode={faqMethode} setFaqMethode={setFaqMethode} />
+          <ProfFaqPanel faqMethode={faqMethode} setFaqMethode={setFaqMethode} eleveQuestions={eleveQuestions} setEleveQuestions={setEleveQuestions} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -5038,8 +5155,10 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ serie, matiere, methodeContent, faqMethode }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[] }) {
+function MethodeMode({ serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
   const [view, setView] = useState<"chat" | "fiche" | "faq">("chat");
+  const [eleveQ, setEleveQ] = useState("");
+  const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState("");
@@ -5221,12 +5340,45 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
       )}
       {/* VUE FAQ */}
       {view === "faq" && (
-        <div className="flex-1 overflow-y-auto space-y-3">
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {/* Formulaire question élève */}
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
+            <p className="text-xs font-black text-indigo-800 mb-2">💬 Poser une question au professeur</p>
+            {eleveQSent ? (
+              <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <span className="text-lg">✓</span>
+                <span className="text-sm font-bold">Question envoyée ! Le professeur vous répondra bientôt.</span>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input value={eleveQ} onChange={e => setEleveQ(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && eleveQ.trim() && onEleveQuestion) {
+                    onEleveQuestion({ id: uid(), question: eleveQ.trim(), serie, eleveNom: eleveNom || "Anonyme", createdAt: Date.now() });
+                    setEleveQ(""); setEleveQSent(true); setTimeout(() => setEleveQSent(false), 4000);
+                  }}}
+                  className="flex-1 px-3 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white"
+                  placeholder="Ta question sur la méthode…" />
+                <button
+                  onClick={() => {
+                    if (!eleveQ.trim() || !onEleveQuestion) return;
+                    onEleveQuestion({ id: uid(), question: eleveQ.trim(), serie, eleveNom: eleveNom || "Anonyme", createdAt: Date.now() });
+                    setEleveQ(""); setEleveQSent(true); setTimeout(() => setEleveQSent(false), 4000);
+                  }}
+                  disabled={!eleveQ.trim()}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-sm text-white transition-all ${eleveQ.trim() ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300"}`}>
+                  Envoyer
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-indigo-400 mt-1.5">La réponse apparaîtra ici quand le professeur l'aura ajoutée à la FAQ.</p>
+          </div>
+
+          {/* FAQ existante */}
           {faqRelevantes.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="text-4xl mb-3">❓</div>
-              <p className="font-bold text-gray-600">Aucun conseil disponible pour l'instant</p>
-              <p className="text-sm text-gray-400 mt-1">Le professeur ajoutera des conseils et astuces ici</p>
+            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+              <div className="text-3xl mb-2">❓</div>
+              <p className="font-bold text-gray-600 text-sm">Aucun conseil disponible pour l'instant</p>
+              <p className="text-xs text-gray-400 mt-1">Pose ta question ci-dessus, le professeur te répondra !</p>
             </div>
           ) : (
             faqRelevantes.map((item) => (
@@ -6065,7 +6217,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent, faqMethode }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent, faqMethode, onEleveQuestion }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -6190,7 +6342,7 @@ ${allContent}` }]);
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {activeTab === "methode" ? (
-          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} faqMethode={faqMethode || []} />
+          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} faqMethode={faqMethode || []} eleveNom={eleveNom} onEleveQuestion={onEleveQuestion} />
         ) : !libLoaded ? (
           <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
         ) : filteredLib.length === 0 ? (
