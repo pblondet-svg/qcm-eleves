@@ -4689,34 +4689,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex gap-2">
-              <button onClick={() => setProfTab("textes")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "textes" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-700 border-gray-200 hover:border-purple-300"}`}>
-                📚 Textes
-              </button>
-              <button onClick={() => setProfTab("sujets")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "sujets" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"}`}>
-                ✍️ Banque de sujets
-              </button>
-              <button onClick={() => setProfTab("notions")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "notions" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
-                🎯 Notions des textes
-              </button>
-              <button onClick={() => setProfTab("features")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "features" ? "bg-orange-600 text-white border-orange-600" : "bg-white text-gray-700 border-gray-200 hover:border-orange-300"}`}>
-                ⚙️ Fonctionnalités
-              </button>
-              <button onClick={() => setProfTab("methode")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "methode" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-gray-700 border-gray-200 hover:border-amber-300"}`}>
-                📐 Fiches Méthode
-              </button>
-              <button onClick={() => setProfTab("faq")}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${profTab === "faq" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
-                ❓ FAQ Méthode
-              </button>
-            </div>
             <button onClick={onDashboard} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl border border-indigo-200">
-              📊 Tableau de bord
+              📊 Stats
             </button>
             <button onClick={onReload} className="p-2 text-gray-600 hover:text-indigo-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
             <ChangerCodeProf />
@@ -4724,6 +4698,26 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
               <LogOut className="w-4 h-4" /> Déconnexion
             </button>
           </div>
+        </div>
+        {/* Ligne onglets */}
+        <div className="max-w-6xl mx-auto px-6 pb-3 flex flex-wrap gap-2">
+          {([
+            ["textes",   "📚 Textes",          "bg-purple-600 border-purple-600", "hover:border-purple-300"],
+            ["sujets",   "✍️ Sujets",          "bg-rose-600 border-rose-600",    "hover:border-rose-300"],
+            ["notions",  "🎯 Notions",         "bg-indigo-600 border-indigo-600", "hover:border-indigo-300"],
+            ["features", "⚙️ Fonctionnalités", "bg-orange-600 border-orange-600", "hover:border-orange-300"],
+            ["methode",  "📐 Fiches Méthode",  "bg-amber-600 border-amber-600",   "hover:border-amber-300"],
+            ["faq",      "❓ FAQ Méthode",      "bg-violet-600 border-violet-600", "hover:border-violet-300"],
+          ] as [string, string, string, string][]).map(([tab, label, activeClass, hoverClass]) => (
+            <button key={tab} onClick={() => setProfTab(tab as any)}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${
+                profTab === tab
+                  ? activeClass + " text-white"
+                  : "bg-white text-gray-700 border-gray-200 " + hoverClass
+              }`}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
       {profTab === "sujets" ? (
