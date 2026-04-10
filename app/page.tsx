@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000) => {
+const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false) => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq }),
   });
   if (!res.ok) throw new Error("Erreur API " + res.status);
   return res.json();
@@ -456,7 +456,7 @@ async function extractMetadataWithAI(content: string, filename: string, chapterH
     `Analyse ce texte et extrais ses métadonnées. Réponds UNIQUEMENT en JSON valide.${hint}
 Format: {"author":"Prénom Nom","workTitle":"Titre","chapter":"Mouvement littéraire","notions":["notion1","notion2","notion3"]}
 Fichier: ${filename}
-Texte: ${snippet}` }], 600);
+Texte: ${snippet}` }], 600, true);
   return parseJSON(getText(data));
 }
 
@@ -669,12 +669,12 @@ function FlashcardsMode({ entry, onBack }: any) {
     try {
       const dbNotions: string[] = (entry.notions || []).filter((n: string) => n.trim());
       const data = await callAI([{ role: "user", content:
-        `À partir de ce texte littéraire, génère des flashcards de révision.
+        `Flashcards de révision.
 ${dbNotions.length > 0 ? "Notions déjà identifiées : " + dbNotions.join(", ") + ". Crée une flashcard pour chacune, puis ajoute d'autres notions importantes du texte." : "Identifie les notions clés du texte et crée une flashcard pour chacune."}
 Format JSON strict : [{"recto":"Notion ou question courte","verso":"Définition ou explication en 2-3 phrases max, en lien avec le texte"}]
 Génère entre 6 et 10 flashcards au total.
 Texte :
-${entry.content.slice(0, 4000)}` }], 1200);
+${entry.content.slice(0, 4000)}` }], 1200, true);
       const parsed = parseJSON(getText(data));
       setCards(parsed);
       setKnown(new Array(parsed.length).fill(false));
@@ -833,7 +833,7 @@ Structure :
 - ... (5 points max, formulés comme des phrases mémorisables)
 **Citation emblématique** : (si présente dans le texte)
 Texte :
-${selectedEntry.content.slice(0, 5000)}` }], 1000);
+${selectedEntry.content.slice(0, 5000)}` }], 1000, true);
       setFiche(getText(data));
     } catch { setFiche("Impossible de générer la fiche."); }
     setFicheLoading(false);
@@ -862,7 +862,7 @@ Pose une première question ouverte sur ce texte pour vérifier la compréhensio
 - Être formulée de façon claire pour un lycéen
 - Ne pas être un simple "oui/non" mais demander une explication
 
-Commence directement par la question, sans introduction.` }], 400);
+Commence directement par la question, sans introduction.` }], 400, true);
       setInterrogMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setInterrogMessages([{ role: "assistant", content: "Explique-moi en quelques mots ce que dit l'auteur dans ce texte." }]); }
     setInterrogLoading(false);
@@ -1409,7 +1409,7 @@ Génère exactement 2 sujets :
 2. "surprenant" : paradoxal ou contre-intuitif, même format bac court, formulation qui surprend
 
 Réponds UNIQUEMENT en JSON (rien d'autre) :
-{"classique":"Sujet classique ?","surprenant":"Sujet surprenant ?"}` }], 500);
+{"classique":"Sujet classique ?","surprenant":"Sujet surprenant ?"}` }], 500, true);
       const parsed = parseJSON(getText(data));
       setSujet(parsed.classique || "");
       setSujetAlt(parsed.surprenant || "");
@@ -1540,7 +1540,7 @@ Corrige en 150 mots max, de façon bienveillante et précise :
 2. ⚠️ Ce qui manque ou peut être amélioré (1-2 points concrets)
 3. 💡 Conseil prioritaire pour améliorer cette partie
 
-Sois direct et encourageant.` }], 700);
+Sois direct et encourageant.` }], 700, true);
       setRedacFeedbacks(prev => ({ ...prev, [step]: getText(data) }));
     } catch { setRedacFeedbacks(prev => ({ ...prev, [step]: "Erreur lors de la correction." })); }
     setRedacLoading(false);
@@ -1560,7 +1560,7 @@ Explique en 150 mots maximum, de façon claire et pédagogique pour un lycéen :
 2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
 3. Un conseil sur la transition la plus délicate à rédiger
 
-Sois direct, encourageant, évite le jargon.` }], 600);
+Sois direct, encourageant, évite le jargon.` }], 600, true);
       setPlanLogique(getText(data));
       setPlanLogiqueMessages([{ role: "assistant", content: getText(data) }]);
       setShowLogiqueChat(true);
@@ -1770,7 +1770,7 @@ Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
 ${contextForAI ? "\n\nAuteurs étudiés (pour référence uniquement, ne pas citer) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
 
-Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500);
+Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500, true);
       setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setBrainstormMessages([{ role: "assistant", content: "Commençons ! Qu'est-ce que le sujet te demande selon toi ?" }]); }
     setBrainstormLoading(false);
@@ -2656,7 +2656,7 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
     setLoadingExplan(true); setExplanation("");
     try {
       const data = await callAI([{ role: "user", content:
-        `Question : ${q.question}\nBonne réponse : ${q.options[q.correctIndex]}\nRéponse de l'élève : ${q.options[chosen]}\nExplique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse.` }], 500);
+        `Question : ${q.question}\nBonne réponse : ${q.options[q.correctIndex]}\nRéponse de l'élève : ${q.options[chosen]}\nExplique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse.` }], 500, true);
       setExplanation(getText(data));
     } catch { setExplanation("Impossible de générer une explication."); }
     setLoadingExplan(false);
@@ -5784,7 +5784,7 @@ Tu joues le rôle d\'un examinateur bienveillant mais exigeant. Tu dois :
 2. Poser UNE question précise pour approfondir la réflexion
 3. Rester dans le registre d\'un oral de philosophie (5 minutes au total)
 
-Commence directement par ta réaction au plan, sans introduction formelle.` }], 600);
+Commence directement par ta réaction au plan, sans introduction formelle.` }], 600, true);
       setMessages([{ role: "assistant", content: getText(data) }]);
       setQuestionCount(1);
     } catch { setMessages([{ role: "assistant", content: "Bien. Présentez-moi votre plan pour ce sujet." }]); }
@@ -5834,7 +5834,7 @@ Génère un bilan de colle :
 2. ✅ **Points forts** (2-3 points observés durant l\'oral)
 3. ⚠️ **Points à améliorer** (2-3 conseils concrets)
 4. 💡 **Conseil prioritaire** pour la prochaine colle
-5. 💬 **Encouragement** (1 phrase)` }], 800);
+5. 💬 **Encouragement** (1 phrase)` }], 800, true);
         setBilan(getText(data));
       } catch { setBilan("Erreur lors de la génération du bilan."); }
       setBilanLoading(false);
