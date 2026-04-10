@@ -3,11 +3,9 @@ export async function POST(request) {
     const body = await request.json();
     const { messages, max_tokens = 2000 } = body;
 
-    // Séparer le system prompt des autres messages
     const systemMessage = messages.find((m) => m.role === "system");
     const userMessages = messages.filter((m) => m.role !== "system");
 
-    // Construire le corps de la requête pour Gemini
     const geminiBody = {
       system_instruction: systemMessage
         ? { parts: [{ text: systemMessage.content }] }
@@ -22,7 +20,8 @@ export async function POST(request) {
       },
     };
 
-const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`;
+
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,10 +31,7 @@ const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-
     const data = await response.json();
 
     if (!response.ok) {
-      return Response.json(
-        { error: JSON.stringify(data) },
-        { status: 500 }
-      );
+      return Response.json({ error: JSON.stringify(data) }, { status: 500 });
     }
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
