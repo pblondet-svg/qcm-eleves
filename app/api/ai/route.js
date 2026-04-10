@@ -1,19 +1,46 @@
-import Groq from "groq-sdk";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { messages, max_tokens = 4000 } = body;
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      max_tokens,
-      temperature: 0.7,
-    });
+    const { messages, max_tokens = 2000 } = body;
+
+    // Séparer le system prompt des autres messages
+    const systemMessage = messages.find((m) => m.role === "system");
+    const userMessages = messages.filter((m) => m.role !== "system");
+
+    // Construire le corps de la requête pour Gemini
+    const geminiBody = {
+      system_instruction: systemMessage
+        ? { parts: [{ text: systemMessage.content }] }
+        : undefined,
+      contents: userMessages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+      generationConfig: {
+        maxOutputTokens: max_tokens,
+        temperature: 0.7,
+      },
+    };
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiBody),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "Erreur API Google");
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
     return Response.json({
-      content: [{ type: "text", text: completion.choices[0].message.content }]
+      content: [{ type: "text", text }],
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
