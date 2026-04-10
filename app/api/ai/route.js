@@ -1,3 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 const GROQ_MODEL = "llama-3.1-8b-instant";
 const GOOGLE_MODEL = "gemini-2.5-flash";
 const MISTRAL_MODEL = "mistral-small-latest";
@@ -98,7 +105,7 @@ async function callWithFallback(providers, messages, max_tokens) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { messages, max_tokens = 2000, prefer_groq = false } = body;
+    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu" } = body;
 
     let text = "";
 
@@ -115,6 +122,13 @@ export async function POST(request) {
         messages, max_tokens
       );
     }
+
+    // Logger l'usage dans Supabase (sans bloquer la réponse)
+    supabase.from("usage_stats").insert([{
+      module,
+      action: prefer_groq ? "leger" : "lourd",
+      ip: request.headers.get("x-forwarded-for") || "unknown"
+    }]).then(() => {}).catch(() => {});
 
     return Response.json({ content: [{ type: "text", text }] });
   } catch (error) {
