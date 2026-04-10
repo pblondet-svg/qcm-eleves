@@ -105,7 +105,7 @@ async function callWithFallback(providers, messages, max_tokens) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu" } = body;
+    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown" } = body;
 
     let text = "";
 
@@ -127,7 +127,8 @@ export async function POST(request) {
     supabase.from("usage_stats").insert([{
       module,
       action: prefer_groq ? "leger" : "lourd",
-      ip: request.headers.get("x-forwarded-for") || "unknown"
+      ip: request.headers.get("x-forwarded-for") || "unknown",
+      visitor_id
     }]).then(() => {}).catch(() => {});
 
     return Response.json({ content: [{ type: "text", text }] });
