@@ -106,9 +106,7 @@ export async function POST(request) {
       // Ajouter instruction de concision pour les appels légers
       const lastUserMsg = messages[messages.length - 1];
       if (lastUserMsg && lastUserMsg.role === 'user' && !lastUserMsg.content.includes('concis')) {
-        lastUserMsg.content = lastUserMsg.content + '
-
-Sois concis et va à l essentiel. Maximum 3-4 phrases sauf si un format JSON est demandé.';
+        lastUserMsg.content = lastUserMsg.content + '\n\nSois concis. Maximum 3-4 phrases sauf si format JSON demande.';
       }
       // Requêtes légères : Groq → Cerebras → Google → Mistral
       text = await callWithFallback(
