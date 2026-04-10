@@ -103,6 +103,13 @@ export async function POST(request) {
     let text = "";
 
     if (prefer_groq) {
+      // Ajouter instruction de concision pour les appels légers
+      const lastUserMsg = messages[messages.length - 1];
+      if (lastUserMsg && lastUserMsg.role === 'user' && !lastUserMsg.content.includes('concis')) {
+        lastUserMsg.content = lastUserMsg.content + '
+
+Sois concis et va à l essentiel. Maximum 3-4 phrases sauf si un format JSON est demandé.';
+      }
       // Requêtes légères : Groq → Cerebras → Google → Mistral
       text = await callWithFallback(
         [callGroq, callCerebras, callGoogle, callMistral],
