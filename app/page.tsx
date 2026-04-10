@@ -456,7 +456,7 @@ async function extractMetadataWithAI(content: string, filename: string, chapterH
     `Analyse ce texte et extrais ses métadonnées. Réponds UNIQUEMENT en JSON valide.${hint}
 Format: {"author":"Prénom Nom","workTitle":"Titre","chapter":"Mouvement littéraire","notions":["notion1","notion2","notion3"]}
 Fichier: ${filename}
-Texte: ${snippet}` }], 600, true);
+Texte: ${snippet}` }], 400, true);
   return parseJSON(getText(data));
 }
 
@@ -674,7 +674,7 @@ ${dbNotions.length > 0 ? "Notions déjà identifiées : " + dbNotions.join(", ")
 Format JSON strict : [{"recto":"Notion ou question courte","verso":"Définition ou explication en 2-3 phrases max, en lien avec le texte"}]
 Génère entre 6 et 10 flashcards au total.
 Texte :
-${entry.content.slice(0, 4000)}` }], 1200, true);
+${entry.content.slice(0, 4000)}` }], 800, true);
       const parsed = parseJSON(getText(data));
       setCards(parsed);
       setKnown(new Array(parsed.length).fill(false));
@@ -833,7 +833,7 @@ Structure :
 - ... (5 points max, formulés comme des phrases mémorisables)
 **Citation emblématique** : (si présente dans le texte)
 Texte :
-${selectedEntry.content.slice(0, 5000)}` }], 1000, true);
+${selectedEntry.content.slice(0, 5000)}` }], 600, true);
       setFiche(getText(data));
     } catch { setFiche("Impossible de générer la fiche."); }
     setFicheLoading(false);
@@ -1540,7 +1540,7 @@ Corrige en 150 mots max, de façon bienveillante et précise :
 2. ⚠️ Ce qui manque ou peut être amélioré (1-2 points concrets)
 3. 💡 Conseil prioritaire pour améliorer cette partie
 
-Sois direct et encourageant.` }], 700, true);
+Sois direct et encourageant.` }], 400, true);
       setRedacFeedbacks(prev => ({ ...prev, [step]: getText(data) }));
     } catch { setRedacFeedbacks(prev => ({ ...prev, [step]: "Erreur lors de la correction." })); }
     setRedacLoading(false);
@@ -1560,7 +1560,7 @@ Explique en 150 mots maximum, de façon claire et pédagogique pour un lycéen :
 2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
 3. Un conseil sur la transition la plus délicate à rédiger
 
-Sois direct, encourageant, évite le jargon.` }], 600, true);
+Sois direct, encourageant, évite le jargon.` }], 400, true);
       setPlanLogique(getText(data));
       setPlanLogiqueMessages([{ role: "assistant", content: getText(data) }]);
       setShowLogiqueChat(true);
@@ -1749,7 +1749,7 @@ RÈGLES ABSOLUES :
 - La Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau imprévu)
 - La synthèse N'EST PAS un résumé ni un compromis — elle introduit quelque chose d'inédit
 - Respecte EXACTEMENT le format visuel demandé avec les émojis et symboles (═══, 1️⃣, ✏️, ❓, 📌, etc.)
-- Sois précis, pédagogique, adapté au niveau terminale` }], 1800);
+- Sois précis, pédagogique, adapté au niveau terminale` }], 1200);
       // Générer aussi l'explication de la logique
       const planTexte = getText(data);
       genererExplicationLogique(planTexte, currentSujet);
@@ -5784,7 +5784,7 @@ Tu joues le rôle d\'un examinateur bienveillant mais exigeant. Tu dois :
 2. Poser UNE question précise pour approfondir la réflexion
 3. Rester dans le registre d\'un oral de philosophie (5 minutes au total)
 
-Commence directement par ta réaction au plan, sans introduction formelle.` }], 600, true);
+Commence directement par ta réaction au plan, sans introduction formelle.` }], 400, true);
       setMessages([{ role: "assistant", content: getText(data) }]);
       setQuestionCount(1);
     } catch { setMessages([{ role: "assistant", content: "Bien. Présentez-moi votre plan pour ce sujet." }]); }
@@ -5834,7 +5834,7 @@ Génère un bilan de colle :
 2. ✅ **Points forts** (2-3 points observés durant l\'oral)
 3. ⚠️ **Points à améliorer** (2-3 conseils concrets)
 4. 💡 **Conseil prioritaire** pour la prochaine colle
-5. 💬 **Encouragement** (1 phrase)` }], 800, true);
+5. 💬 **Encouragement** (1 phrase)` }], 500, true);
         setBilan(getText(data));
       } catch { setBilan("Erreur lors de la génération du bilan."); }
       setBilanLoading(false);
