@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false) => {
+const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general") => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module }),
   });
   if (!res.ok) throw new Error("Erreur API " + res.status);
   return res.json();
@@ -431,6 +431,13 @@ const dbLoadSessions = async () => {
   return data || [];
 };
 
+const dbLoadUsageStats = async () => {
+  const { data, error } = await supabase
+    .from('usage_stats').select('*').order('created_at', { ascending: false }).limit(500);
+  if (error) return [];
+  return data || [];
+};
+
 const dbLoadResultatsAll = async () => {
   const { data, error } = await supabase
     .from("resultats").select("*").order("created_at", { ascending: false });
@@ -456,7 +463,7 @@ async function extractMetadataWithAI(content: string, filename: string, chapterH
     `Analyse ce texte et extrais ses métadonnées. Réponds UNIQUEMENT en JSON valide.${hint}
 Format: {"author":"Prénom Nom","workTitle":"Titre","chapter":"Mouvement littéraire","notions":["notion1","notion2","notion3"]}
 Fichier: ${filename}
-Texte: ${snippet}` }], 400, true);
+Texte: ${snippet}` }], 400, true, "import");
   return parseJSON(getText(data));
 }
 
@@ -674,7 +681,7 @@ ${dbNotions.length > 0 ? "Notions déjà identifiées : " + dbNotions.join(", ")
 Format JSON strict : [{"recto":"Notion ou question courte","verso":"Définition ou explication en 2-3 phrases max, en lien avec le texte"}]
 Génère entre 6 et 10 flashcards au total.
 Texte :
-${entry.content.slice(0, 4000)}` }], 800, true);
+${entry.content.slice(0, 4000)}` }], 800, true, "flashcards");
       const parsed = parseJSON(getText(data));
       setCards(parsed);
       setKnown(new Array(parsed.length).fill(false));
@@ -833,7 +840,7 @@ Structure :
 - ... (5 points max, formulés comme des phrases mémorisables)
 **Citation emblématique** : (si présente dans le texte)
 Texte :
-${selectedEntry.content.slice(0, 5000)}` }], 600, true);
+${selectedEntry.content.slice(0, 5000)}` }], 600, true, "interrogation");
       setFiche(getText(data));
     } catch { setFiche("Impossible de générer la fiche."); }
     setFicheLoading(false);
@@ -862,7 +869,7 @@ Pose une première question ouverte sur ce texte pour vérifier la compréhensio
 - Être formulée de façon claire pour un lycéen
 - Ne pas être un simple "oui/non" mais demander une explication
 
-Commence directement par la question, sans introduction.` }], 400, true);
+Commence directement par la question, sans introduction.` }], 400, true, "interrogation");
       setInterrogMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setInterrogMessages([{ role: "assistant", content: "Explique-moi en quelques mots ce que dit l'auteur dans ce texte." }]); }
     setInterrogLoading(false);
@@ -1409,7 +1416,7 @@ Génère exactement 2 sujets :
 2. "surprenant" : paradoxal ou contre-intuitif, même format bac court, formulation qui surprend
 
 Réponds UNIQUEMENT en JSON (rien d'autre) :
-{"classique":"Sujet classique ?","surprenant":"Sujet surprenant ?"}` }], 500, true);
+{"classique":"Sujet classique ?","surprenant":"Sujet surprenant ?"}` }], 500, true, "sujets");
       const parsed = parseJSON(getText(data));
       setSujet(parsed.classique || "");
       setSujetAlt(parsed.surprenant || "");
@@ -1540,7 +1547,7 @@ Corrige en 150 mots max, de façon bienveillante et précise :
 2. ⚠️ Ce qui manque ou peut être amélioré (1-2 points concrets)
 3. 💡 Conseil prioritaire pour améliorer cette partie
 
-Sois direct et encourageant.` }], 400, true);
+Sois direct et encourageant.` }], 400, true, "dissertation");
       setRedacFeedbacks(prev => ({ ...prev, [step]: getText(data) }));
     } catch { setRedacFeedbacks(prev => ({ ...prev, [step]: "Erreur lors de la correction." })); }
     setRedacLoading(false);
@@ -1560,7 +1567,7 @@ Explique en 150 mots maximum, de façon claire et pédagogique pour un lycéen :
 2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
 3. Un conseil sur la transition la plus délicate à rédiger
 
-Sois direct, encourageant, évite le jargon.` }], 400, true);
+Sois direct, encourageant, évite le jargon.` }], 400, true, "dissertation");
       setPlanLogique(getText(data));
       setPlanLogiqueMessages([{ role: "assistant", content: getText(data) }]);
       setShowLogiqueChat(true);
@@ -1749,7 +1756,7 @@ RÈGLES ABSOLUES :
 - La Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau imprévu)
 - La synthèse N'EST PAS un résumé ni un compromis — elle introduit quelque chose d'inédit
 - Respecte EXACTEMENT le format visuel demandé avec les émojis et symboles (═══, 1️⃣, ✏️, ❓, 📌, etc.)
-- Sois précis, pédagogique, adapté au niveau terminale` }], 1200);
+- Sois précis, pédagogique, adapté au niveau terminale` }], 1200, false, "dissertation");
       // Générer aussi l'explication de la logique
       const planTexte = getText(data);
       genererExplicationLogique(planTexte, currentSujet);
@@ -1770,7 +1777,7 @@ Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
 ${contextForAI ? "\n\nAuteurs étudiés (pour référence uniquement, ne pas citer) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
 
-Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500, true);
+Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500, true, "brainstorming");
       setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setBrainstormMessages([{ role: "assistant", content: "Commençons ! Qu'est-ce que le sujet te demande selon toi ?" }]); }
     setBrainstormLoading(false);
@@ -1823,7 +1830,7 @@ Fournis une correction bienveillante et détaillée :
 5. **Suggestion principale** : une seule chose prioritaire à travailler
 6. **Note indicative** /20 avec justification courte
 
-Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000);
+Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, false, "corrige");
       const corrigeTexte = getText(data);
       setCorrige(corrigeTexte);
       setCorrigeSubmitted(true);
@@ -2486,7 +2493,7 @@ ${contextForAI ? "\n\nExtraits :\n" + contextForAI.slice(0, 800) : ""}
 ${METHODE_INTRO_C}
 ${METHODE_PLAN_C}
 ${levelPrompts[level]}
-RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un concept NOUVEAU et IMPRÉVU.` }], 2000);
+RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un concept NOUVEAU et IMPRÉVU.` }], 2000, false, "plan_guide");
       setPlan(getText(data));
     } catch { setPlan("Erreur."); }
     setPlanLoading(false);
@@ -2517,7 +2524,7 @@ RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Sujet : "${sujet}". Chapitres : ${selectedChapters.join(", ")}.
 COPIE : ${eleveTexte}
-Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Forme 5. Suggestion prioritaire 6. Note /20` }], 2000);
+Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Forme 5. Suggestion prioritaire 6. Note /20` }], 2000, false, "correction");
       setCorrige(getText(data)); setCorrigeSubmitted(true);
     } catch { setCorrige("Erreur."); }
     setCorrigeLoading(false);
@@ -2656,7 +2663,7 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
     setLoadingExplan(true); setExplanation("");
     try {
       const data = await callAI([{ role: "user", content:
-        `Question : ${q.question}\nBonne réponse : ${q.options[q.correctIndex]}\nRéponse de l'élève : ${q.options[chosen]}\nExplique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse.` }], 500, true);
+        `Question : ${q.question}\nBonne réponse : ${q.options[q.correctIndex]}\nRéponse de l'élève : ${q.options[chosen]}\nExplique en 2-3 phrases simples pourquoi "${q.options[q.correctIndex]}" est la bonne réponse.` }], 500, true, "qcm");
       setExplanation(getText(data));
     } catch { setExplanation("Impossible de générer une explication."); }
     setLoadingExplan(false);
@@ -2822,11 +2829,12 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
 
 // ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
 function Dashboard({ onBack, sharedLib }: any) {
-  const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision">("qcm");
+  const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision" | "usage">("qcm");
   const [resultats, setResultats] = useState<any[]>([]);
   const [dissertations, setDissertations] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usageStats, setUsageStats] = useState<any[]>([]);
   const [periodeFilter, setPeriodeFilter] = useState<"semaine" | "mois" | "tout">("tout");
   const [matiereFilter, setMatiereFilter] = useState("all");
 
@@ -2838,8 +2846,8 @@ function Dashboard({ onBack, sharedLib }: any) {
   ];
 
   useEffect(() => {
-    Promise.all([dbLoadResultatsAll(), dbLoadDissertations(), dbLoadSessions()])
-      .then(([r, d, s]) => { setResultats(r); setDissertations(d); setSessions(s); setLoading(false); })
+    Promise.all([dbLoadResultatsAll(), dbLoadDissertations(), dbLoadSessions(), dbLoadUsageStats()])
+      .then(([r, d, s, u]) => { setResultats(r); setDissertations(d); setSessions(s); setUsageStats(u as any[]); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -2920,6 +2928,7 @@ function Dashboard({ onBack, sharedLib }: any) {
     ["notions", "🎯 Notions", null],
     ["dissertations", "✍️ Dissertations", dFiltered.length],
     ["revision", "📖 Révision", sFiltered.length],
+    ["usage", "📡 Usage IA", usageStats.length],
   ] as [string, string, number | null][];
 
   return (
@@ -3293,6 +3302,120 @@ function Dashboard({ onBack, sharedLib }: any) {
                 )}
               </div>
             )}
+
+            {activeTab === "usage" && (
+              <div className="space-y-4">
+                {/* KPIs */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    ["Appels IA total", usageStats.length, "text-indigo-700"],
+                    ["Modules distincts", new Set(usageStats.map((u: any) => u.module)).size, "text-purple-700"],
+                    ["Aujourd'hui", usageStats.filter((u: any) => new Date(u.created_at).toDateString() === new Date().toDateString()).length, "text-green-700"],
+                  ].map(([label, val, color]) => (
+                    <div key={label as string} className="bg-white rounded-2xl border border-gray-200 p-5 text-center shadow-sm">
+                      <div className={`text-3xl font-black ${color}`}>{val}</div>
+                      <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Usage par module */}
+                {usageStats.length > 0 && (() => {
+                  const moduleLabels: Record<string, string> = {
+                    qcm: "✅ Quiz / QCM",
+                    flashcards: "🃏 Flashcards",
+                    dissertation: "✍️ Dissertation",
+                    plan_guide: "📋 Plan guidé",
+                    brainstorming: "💡 Brainstorming",
+                    correction: "🔍 Correction",
+                    corrige: "📝 Corrigé",
+                    revision: "📖 Révision (chat)",
+                    interrogation: "🎓 Interrogation",
+                    sujets: "📚 Sujets bac",
+                    import: "📥 Import texte",
+                    general: "🔧 Général",
+                  };
+                  const byModule: Record<string, number> = {};
+                  usageStats.forEach((u: any) => {
+                    const m = u.module || "general";
+                    byModule[m] = (byModule[m] || 0) + 1;
+                  });
+                  const sorted = Object.entries(byModule).sort((a, b) => b[1] - a[1]);
+                  const max = sorted[0]?.[1] || 1;
+                  return (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                      <h3 className="font-black text-gray-800 mb-4">📊 Utilisation par module</h3>
+                      <div className="space-y-3">
+                        {sorted.map(([module, count]) => (
+                          <div key={module} className="flex items-center gap-3">
+                            <div className="w-36 text-sm font-semibold text-gray-700 truncate">
+                              {moduleLabels[module] || module}
+                            </div>
+                            <div className="flex-1 bg-gray-100 rounded-full h-3">
+                              <div className="h-3 rounded-full bg-indigo-500"
+                                style={{ width: `${(count / max) * 100}%` }} />
+                            </div>
+                            <div className="w-12 text-sm font-black text-indigo-700 text-right">{count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Activité par heure */}
+                {usageStats.length > 0 && (() => {
+                  const byHour: Record<number, number> = {};
+                  for (let i = 0; i < 24; i++) byHour[i] = 0;
+                  usageStats.forEach((u: any) => {
+                    const h = new Date(u.created_at).getHours();
+                    byHour[h] = (byHour[h] || 0) + 1;
+                  });
+                  const max = Math.max(...Object.values(byHour), 1);
+                  return (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                      <h3 className="font-black text-gray-800 mb-4">🕐 Activité par heure</h3>
+                      <div className="flex items-end gap-1 h-20">
+                        {Array.from({length: 24}, (_, h) => (
+                          <div key={h} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-full bg-indigo-400 rounded-t"
+                              style={{ height: `${(byHour[h] / max) * 64}px`, minHeight: byHour[h] > 0 ? "4px" : "0" }} />
+                            {h % 6 === 0 && <span className="text-xs text-gray-400">{h}h</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Derniers appels */}
+                {usageStats.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                    <h3 className="font-black text-gray-800 mb-4">🕐 Derniers appels IA</h3>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {usageStats.slice(0, 50).map((u: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                          <span className="text-sm font-semibold text-gray-700">{u.module || "général"}</span>
+                          <span className="text-xs text-gray-400">{new Date(u.created_at).toLocaleString("fr-FR")}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${u.action === "leger" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                            {u.action === "leger" ? "Groq" : "Google"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {usageStats.length === 0 && (
+                  <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <div className="text-5xl mb-4">📭</div>
+                    <p className="text-xl font-bold text-gray-600">Aucun appel IA enregistré</p>
+                    <p className="text-sm text-gray-400 mt-1">Les statistiques apparaîtront dès que les élèves utiliseront l'application</p>
+                  </div>
+                )}
+              </div>
+            )}
+
           </>
         )}
       </div>
@@ -3918,7 +4041,7 @@ ${lines.map((l, i) => `${i+1}. ${l}`).join("\n")}
 
 Réponds UNIQUEMENT en JSON (tableau) :
 [{"sujet":"...","notions":["notion1","notion2"],"notion_principale":"notion principale"}]
-Un objet par sujet, dans le même ordre.` }], 2000);
+Un objet par sujet, dans le même ordre.` }], 2000, false, "qcm");
       const parsed = parseJSON(getText(data));
       const prepared = parsed.map((item: any, i: number) => ({
         id: `import-${Date.now()}-${i}`,
@@ -5784,7 +5907,7 @@ Tu joues le rôle d\'un examinateur bienveillant mais exigeant. Tu dois :
 2. Poser UNE question précise pour approfondir la réflexion
 3. Rester dans le registre d\'un oral de philosophie (5 minutes au total)
 
-Commence directement par ta réaction au plan, sans introduction formelle.` }], 400, true);
+Commence directement par ta réaction au plan, sans introduction formelle.` }], 400, true, "revision");
       setMessages([{ role: "assistant", content: getText(data) }]);
       setQuestionCount(1);
     } catch { setMessages([{ role: "assistant", content: "Bien. Présentez-moi votre plan pour ce sujet." }]); }
@@ -5834,7 +5957,7 @@ Génère un bilan de colle :
 2. ✅ **Points forts** (2-3 points observés durant l\'oral)
 3. ⚠️ **Points à améliorer** (2-3 conseils concrets)
 4. 💡 **Conseil prioritaire** pour la prochaine colle
-5. 💬 **Encouragement** (1 phrase)` }], 500, true);
+5. 💬 **Encouragement** (1 phrase)` }], 500, true, "revision");
         setBilan(getText(data));
       } catch { setBilan("Erreur lors de la génération du bilan."); }
       setBilanLoading(false);
