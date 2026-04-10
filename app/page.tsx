@@ -11,11 +11,14 @@ import {
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+let _visitorId = "unknown";
+try { _visitorId = localStorage.getItem("qcm_visitor_id") || "unknown"; } catch {}
+
 const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general") => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq, module }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId }),
   });
   if (!res.ok) throw new Error("Erreur API " + res.status);
   return res.json();
@@ -3388,6 +3391,29 @@ function Dashboard({ onBack, sharedLib }: any) {
                   );
                 })()}
 
+                {/* Visiteurs uniques */}
+                {usageStats.length > 0 && (() => {
+                  const visitors: Record<string, number> = {};
+                  usageStats.forEach((u: any) => {
+                    const v = u.visitor_id || "unknown";
+                    visitors[v] = (visitors[v] || 0) + 1;
+                  });
+                  const sorted = Object.entries(visitors).sort((a, b) => b[1] - a[1]);
+                  return (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                      <h3 className="font-black text-gray-800 mb-4">👤 Visiteurs uniques ({sorted.length})</h3>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {sorted.map(([vid, count], i) => (
+                          <div key={vid} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
+                            <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded">#{i+1} — {vid.slice(0, 16)}</span>
+                            <span className="text-sm font-black text-indigo-700">{count} appels</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Derniers appels */}
                 {usageStats.length > 0 && (
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
@@ -3396,6 +3422,7 @@ function Dashboard({ onBack, sharedLib }: any) {
                       {usageStats.slice(0, 50).map((u: any, i: number) => (
                         <div key={i} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
                           <span className="text-sm font-semibold text-gray-700">{u.module || "général"}</span>
+                          <span className="text-xs text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{u.visitor_id ? u.visitor_id.slice(0, 12) : "—"}</span>
                           <span className="text-xs text-gray-400">{new Date(u.created_at).toLocaleString("fr-FR")}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${u.action === "leger" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                             {u.action === "leger" ? "Groq" : "Google"}
@@ -3424,11 +3451,23 @@ function Dashboard({ onBack, sharedLib }: any) {
 }
 
 // ── APP ───────────────────────────────────────────────────────────────────────
+function getOrCreateVisitorId(): string {
+  try {
+    let id = localStorage.getItem("qcm_visitor_id");
+    if (!id) {
+      id = "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem("qcm_visitor_id", id);
+    }
+    return id;
+  } catch { return "unknown"; }
+}
+
 export default function QCMApp() {
   const [role, setRole] = useState<string | null>(null);
   const [eleveNom, setEleveNom] = useState<string>(() => {
     try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; }
   });
+  const [visitorId] = useState<string>(() => getOrCreateVisitorId());
   const [sharedLib, setSharedLib] = useState<any[]>([]);
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
