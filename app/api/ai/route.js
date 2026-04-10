@@ -22,21 +22,23 @@ export async function POST(request) {
       },
     };
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`;
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error?.message || "Erreur API Google");
-    }
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiBody),
+    });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      return Response.json(
+        { error: JSON.stringify(data) },
+        { status: 500 }
+      );
+    }
+
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return Response.json({
