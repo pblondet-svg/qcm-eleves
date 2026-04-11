@@ -14,6 +14,12 @@ import {
 let _visitorId = "unknown";
 try { _visitorId = localStorage.getItem("qcm_visitor_id") || "unknown"; } catch {}
 
+const dbLogUsage = async (module: string, action: string) => {
+  try {
+    await supabase.from("usage_stats").insert([{ id: uid(), module, action }]);
+  } catch { /* silencieux */ }
+};
+
 const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general") => {
   const res = await fetch("/api/ai", {
     method: "POST",
@@ -21,6 +27,7 @@ const callAI = async (messages: { role: string; content: string }[], max_tokens 
     body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId }),
   });
   if (!res.ok) throw new Error("Erreur API " + res.status);
+  dbLogUsage(module, "call");
   return res.json();
 };
 
@@ -2849,8 +2856,14 @@ function Dashboard({ onBack, sharedLib }: any) {
   ];
 
   useEffect(() => {
-    Promise.all([dbLoadResultatsAll(), dbLoadDissertations(), dbLoadSessions(), dbLoadUsageStats()])
-      .then(([r, d, s, u]) => { setResultats(r); setDissertations(d); setSessions(s); setUsageStats(u as any[]); setLoading(false); })
+    Promise.allSettled([dbLoadResultatsAll(), dbLoadDissertations(), dbLoadSessions(), dbLoadUsageStats()])
+      .then(([r, d, s, u]) => {
+        if (r.status === "fulfilled") setResultats(r.value);
+        if (d.status === "fulfilled") setDissertations(d.value);
+        if (s.status === "fulfilled") setSessions(s.value);
+        if (u.status === "fulfilled") setUsageStats(u.value as any[]);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
