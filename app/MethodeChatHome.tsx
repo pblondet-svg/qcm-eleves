@@ -6,7 +6,7 @@
 //   (même contexte que l'onglet « Assistant méthode » de la page Méthode).
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { BookOpen, HelpCircle, RotateCcw, Send, Sparkles } from "lucide-react";
+import { BookOpen, HelpCircle, RotateCcw, Send, Sparkles, Target } from "lucide-react";
 import type { FaqItem } from "./FaqComponents";
 
 export type SerieKey = "generale" | "techno" | "hlp";
@@ -108,7 +108,7 @@ export default function MethodeChatHome({
   askAI: (messages: { role: string; content: string }[]) => Promise<string>;
   methodeContent: MethodeFiches;
   faqMethode: FaqItem[];
-  onOpenMethode: (role: string, view: "fiche" | "faq") => void;
+  onOpenMethode: (role: string, view: "fiche" | "faq" | "plan") => void;
   eleveNom?: string;
 }) {
   const [serie, setSerie] = useState<SerieKey | null>(null);
@@ -288,7 +288,7 @@ export default function MethodeChatHome({
         </div>
 
         {/* Accès aux fiches et à la FAQ */}
-        <div className="grid grid-cols-2 border-t border-gray-100">
+        <div className="grid grid-cols-3 border-t border-gray-100">
           <button
             onClick={() => current && onOpenMethode(current.role, "fiche")}
             disabled={!current}
@@ -296,10 +296,16 @@ export default function MethodeChatHome({
             <BookOpen className="w-4 h-4" /> Fiches méthode
           </button>
           <button
+            onClick={() => current && onOpenMethode(current.role, "plan")}
+            disabled={!current}
+            className="flex items-center justify-center gap-2 py-3 text-xs font-bold text-violet-700 hover:bg-violet-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors border-r border-gray-100">
+            <Target className="w-4 h-4" /> S'entraîner
+          </button>
+          <button
             onClick={() => current && onOpenMethode(current.role, "faq")}
             disabled={!current}
             className="flex items-center justify-center gap-2 py-3 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors">
-            <HelpCircle className="w-4 h-4" /> FAQ du professeur{faqCount > 0 && <span className="bg-indigo-100 text-indigo-700 rounded-full px-1.5">{faqCount}</span>}
+            <HelpCircle className="w-4 h-4" /> FAQ{faqCount > 0 && <span className="bg-indigo-100 text-indigo-700 rounded-full px-1.5">{faqCount}</span>}
           </button>
         </div>
       </div>

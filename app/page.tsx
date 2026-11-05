@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -3488,7 +3488,7 @@ export default function QCMApp() {
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
   const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
   const [faqMethode, setFaqMethode] = useState<FaqItem[]>([]);
-  const [methodeView, setMethodeView] = useState<"chat" | "fiche" | "faq">("faq");
+  const [methodeView, setMethodeView] = useState<"chat" | "fiche" | "faq" | "plan">("faq");
   const [eleveQuestions, setEleveQuestions] = useState<EleveQuestion[]>([]);
 
   const loadLib = async () => {
@@ -3615,7 +3615,7 @@ export default function QCMApp() {
   if (!role) return <HomeScreenV2 onSelect={(r: string) => { setMethodeView("faq"); setRole(r); }} eleveNom={eleveNom} setEleveNom={setEleveNom} saveEleveNom={saveEleveNom} featuresConfig={featuresConfig}
     methodeContent={methodeContent} faqMethode={faqMethode}
     askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 800, false, "methode_accueil"))}
-    onOpenMethode={(r: string, v: "fiche" | "faq") => { setMethodeView(v); setRole(r); }} />;
+    onOpenMethode={(r: string, v: "fiche" | "faq" | "plan") => { setMethodeView(v); setRole(r); }} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
@@ -5332,8 +5332,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: "chat" | "fiche" | "faq"; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
-  const [view, setView] = useState<"chat" | "fiche" | "faq">(initialView || "faq");
+function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: "chat" | "fiche" | "faq" | "plan"; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
+  const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView || "faq");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
@@ -5428,6 +5428,10 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "fiche" ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             📋 Fiches méthode
           </button>
+          <button onClick={() => setView("plan")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "plan" ? "bg-violet-600 hover:bg-violet-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
+            🎯 S'entraîner
+          </button>
           <button onClick={() => setView("faq")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "faq" ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             ❓ FAQ {faqRelevantes.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${view === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqRelevantes.length}</span>}
@@ -5514,6 +5518,16 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
           </div>
         </div>
+      )}
+      {/* VUE ENTRAÎNEMENT AU PLAN */}
+      {view === "plan" && (
+        <PlanTrainer
+          ficheTas={mc.plan_tas}
+          matiere={matiere}
+          serie={serie}
+          loadSujets={() => dbLoadSujetsBac(matiere)}
+          askAI={async (m: { role: string; content: string }[], maxTokens = 900) => getText(await callAI(m, maxTokens, false, "entrainement_plan"))}
+        />
       )}
       {/* VUE FAQ */}
       {view === "faq" && <FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}
