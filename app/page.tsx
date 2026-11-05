@@ -227,7 +227,7 @@ type FeaturesConfig = {
   rev_flashcards: boolean;
   rev_interrogation: boolean;
   // Général
-show_dashboard: boolean; home_cours: boolean;};
+show_dashboard: boolean; home_cours: boolean; home_dissertation: boolean;};
 
 const DEFAULT_FEATURES: FeaturesConfig = {
   tab_revision: true,
@@ -243,7 +243,7 @@ const DEFAULT_FEATURES: FeaturesConfig = {
   rev_fiche: true,
   rev_flashcards: true,
   rev_interrogation: true,
-show_dashboard: true, home_cours: true,};
+show_dashboard: true, home_cours: true, home_dissertation: true,};
 
 const loadFeaturesConfig = async (): Promise<FeaturesConfig> => {
   try {
@@ -4445,7 +4445,7 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
       bg: "bg-gray-50",
       border: "border-gray-200",
       items: [
-        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" }, { key: "home_cours", label: "📖 Cours (page d'accueil)", desc: "Cartes Cours sur l'accueil élèves : décocher pour les masquer" },
+        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" }, { key: "home_cours", label: "📖 Cours (page d'accueil)", desc: "Cartes Cours sur l'accueil élèves : décocher pour les masquer" }, { key: "home_dissertation", label: "✍️ Dissertation (page d'accueil)", desc: "Cartes Dissertation HLP et Philo sur l'accueil élèves : décocher pour les masquer" },
       ],
     },
   ];
