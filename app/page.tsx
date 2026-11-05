@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -227,8 +227,7 @@ type FeaturesConfig = {
   rev_flashcards: boolean;
   rev_interrogation: boolean;
   // Général
-  show_dashboard: boolean;
-};
+show_dashboard: boolean; home_cours: boolean;};
 
 const DEFAULT_FEATURES: FeaturesConfig = {
   tab_revision: true,
@@ -244,8 +243,7 @@ const DEFAULT_FEATURES: FeaturesConfig = {
   rev_fiche: true,
   rev_flashcards: true,
   rev_interrogation: true,
-  show_dashboard: true,
-};
+show_dashboard: true, home_cours: true,};
 
 const loadFeaturesConfig = async (): Promise<FeaturesConfig> => {
   try {
@@ -3613,7 +3611,7 @@ export default function QCMApp() {
     </div>
   );
 
-  if (!role) return <HomeScreen onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} />;
+  if (!role) return <HomeScreenV2 onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} saveEleveNom={saveEleveNom} featuresConfig={featuresConfig} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
@@ -4323,7 +4321,7 @@ function ChangerCodeProf() {
       const storedCode = await dbGetConfig("prof_code");
       const validCode = storedCode || "prof1234";
       if (ancien !== validCode) { setMsg({ type: "err", text: "Ancien code incorrect" }); setSaving(false); return; }
-      await dbSetConfig("prof_code", nouveau);
+      await dbSetConfig("prof_code", nouveau); try { sessionStorage.setItem("prof_code_session", nouveau); } catch {}
       setMsg({ type: "ok", text: "Code modifié avec succès !" });
       setAncien(""); setNouveau(""); setConfirm("");
       setTimeout(() => { setOpen(false); setMsg(null); }, 2000);
@@ -4447,7 +4445,7 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
       bg: "bg-gray-50",
       border: "border-gray-200",
       items: [
-        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" },
+        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" }, { key: "home_cours", label: "📖 Cours (page d'accueil)", desc: "Cartes Cours sur l'accueil élèves : décocher pour les masquer" },
       ],
     },
   ];
@@ -4857,7 +4855,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); const pendingFaq = usePendingFaqCount();
 
   const existingChapters = useMemo(
     () => [...new Set(sharedLib.map((e: any) => entryChapter(e)))].sort() as string[],
@@ -4999,7 +4997,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
             ["notions",  "🎯 Notions",         "bg-indigo-600 border-indigo-600", "hover:border-indigo-300"],
             ["features", "⚙️ Fonctionnalités", "bg-orange-600 border-orange-600", "hover:border-orange-300"],
             ["methode",  "📐 Fiches Méthode",  "bg-amber-600 border-amber-600",   "hover:border-amber-300"],
-            ["faq",      "❓ FAQ Méthode",      "bg-violet-600 border-violet-600", "hover:border-violet-300"],
+            ["faq",      `❓ FAQ Méthode${pendingFaq > 0 ? ` (${pendingFaq})` : ""}`,      "bg-violet-600 border-violet-600", "hover:border-violet-300"],
           ] as [string, string, string, string][]).map(([tab, label, activeClass, hoverClass]) => (
             <button key={tab} onClick={() => setProfTab(tab as any)}
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${
@@ -5030,7 +5028,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
         </div>
       ) : profTab === "faq" ? (
         <div className="max-w-3xl mx-auto px-6 py-8">
-          <ProfFaqPanel faqMethode={faqMethode} setFaqMethode={setFaqMethode} eleveQuestions={eleveQuestions} setEleveQuestions={setEleveQuestions} />
+          <ProfFaqManager faqMethode={faqMethode} setFaqMethode={setFaqMethode} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
@@ -5331,7 +5329,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
 function MethodeMode({ serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
-  const [view, setView] = useState<"chat" | "fiche" | "faq">("chat");
+  const [view, setView] = useState<"chat" | "fiche" | "faq">("faq");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
@@ -5514,7 +5512,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         </div>
       )}
       {/* VUE FAQ */}
-      {view === "faq" && (
+      {view === "faq" && <FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom} />} {false && (
         <div className="flex-1 overflow-y-auto space-y-4">
           {/* Formulaire question élève */}
           <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
