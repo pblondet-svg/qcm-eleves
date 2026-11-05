@@ -13,6 +13,27 @@ const GOOGLE_MODEL = "gemini-2.5-flash";
 const MISTRAL_MODEL = "mistral-small-latest";
 const CEREBRAS_MODEL = "llama-3.3-70b";
 
+// ── Quotas : on garde les en-têtes « x-ratelimit-* » renvoyés par les fournisseurs ──
+// (Groq, Cerebras et Mistral indiquent ce qu'il reste ; Google ne le fait pas).
+// Instantané enregistré dans config.ai_quota, au plus une fois par minute et par instance.
+let quotaCache = {};
+let lastQuotaWrite = 0;
+function captureLimits(provider, headers) {
+  const h = {};
+  headers.forEach((v, k) => { if (k.toLowerCase().includes("ratelimit")) h[k.toLowerCase()] = v; });
+  if (Object.keys(h).length) quotaCache[provider] = { headers: h, at: new Date().toISOString() };
+}
+async function flushQuota() {
+  if (Date.now() - lastQuotaWrite < 60000 || !Object.keys(quotaCache).length) return;
+  lastQuotaWrite = Date.now();
+  try {
+    const { data } = await supabase.from("config").select("value").eq("key", "ai_quota").maybeSingle();
+    let current = {};
+    try { current = data?.value ? JSON.parse(data.value) : {}; } catch { current = {}; }
+    await supabase.from("config").upsert({ key: "ai_quota", value: JSON.stringify({ ...current, ...quotaCache }) }, { onConflict: "key" });
+  } catch { /* silencieux */ }
+}
+
 // Appel Groq
 async function callGroq(messages, max_tokens) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -23,6 +44,7 @@ async function callGroq(messages, max_tokens) {
     },
     body: JSON.stringify({ model: GROQ_MODEL, messages, max_tokens, temperature: 0.7 }),
   });
+  captureLimits("groq", response.headers);
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error?.message || "Erreur Groq");
@@ -76,6 +98,7 @@ async function callCerebras(messages, max_tokens) {
     },
     body: JSON.stringify({ model: CEREBRAS_MODEL, messages, max_tokens, temperature: 0.7 }),
   });
+  captureLimits("cerebras", response.headers);
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error?.message || "Erreur Cerebras");
@@ -94,6 +117,7 @@ async function callMistral(messages, max_tokens) {
     },
     body: JSON.stringify({ model: MISTRAL_MODEL, messages, max_tokens, temperature: 0.7 }),
   });
+  captureLimits("mistral", response.headers);
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error?.message || "Erreur Mistral");
@@ -103,12 +127,16 @@ async function callMistral(messages, max_tokens) {
 }
 
 // Cascade de fallback
+const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
 async function callWithFallback(providers, messages, max_tokens, deep = false) {
   for (const provider of providers) {
     try {
-      return await provider(messages, max_tokens, deep);
+      const text = await provider(messages, max_tokens, deep);
+      return { text, provider: PROVIDER_NAMES.get(provider) || "inconnu" };
     } catch (err) {
       console.warn(`Provider failed: ${err.message}, trying next...`);
+      const name = PROVIDER_NAMES.get(provider) || "inconnu";
+      quotaCache[name] = { ...(quotaCache[name] || {}), last_error: String(err.message || "").slice(0, 200), last_error_at: new Date().toISOString() };
     }
   }
   throw new Error("Tous les providers ont échoué");
@@ -119,32 +147,35 @@ export async function POST(request) {
     const body = await request.json();
     const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false } = body;
 
-    let text = "";
+    let result = { text: "", provider: "inconnu" };
 
     if (prefer_groq) {
       // Requêtes légères : Groq → Cerebras → Google → Mistral
-      text = await callWithFallback(
+      result = await callWithFallback(
         [callGroq, callCerebras, callGoogle, callMistral],
         messages, max_tokens
       );
     } else {
       // Requêtes lourdes : Google → Cerebras → Groq → Mistral
-      text = await callWithFallback(
+      result = await callWithFallback(
         [callGoogle, callCerebras, callGroq, callMistral],
         messages, max_tokens, !!deep
       );
     }
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
+    // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu
     supabase.from("usage_stats").insert([{
       module,
-      action: prefer_groq ? "leger" : "lourd",
+      action: (prefer_groq ? "leger" : "lourd") + ":" + result.provider,
       ip: request.headers.get("x-forwarded-for") || "unknown",
       visitor_id
     }]).then(() => {}).catch(() => {});
 
-    return Response.json({ content: [{ type: "text", text }] });
+    await flushQuota();
+    return Response.json({ content: [{ type: "text", text: result.text }] });
   } catch (error) {
+    await flushQuota();
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

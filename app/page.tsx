@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -3382,6 +3382,8 @@ function Dashboard({ onBack, sharedLib }: any) {
 
             {activeTab === "usage" && (
               <div className="space-y-4">
+                {/* Jauge de consommation */}
+                <AiQuotaGauge />
                 {/* KPIs */}
                 <div className="grid grid-cols-3 gap-4">
                   {[
