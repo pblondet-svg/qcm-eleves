@@ -115,44 +115,6 @@ async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MOD
   return text;
 }
 
-// Appel Cerebras
-async function callCerebras(messages, max_tokens) {
-  const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.CEREBRAS_API_KEY}`,
-    },
-    body: JSON.stringify({ model: CEREBRAS_MODEL, messages, max_tokens, temperature: 0.7 }),
-  });
-  captureLimits("cerebras", response.headers);
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "Erreur Cerebras");
-  }
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
-
-// Appel Mistral
-async function callMistral(messages, max_tokens) {
-  const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.MISTRAL_API_KEY}`,
-    },
-    body: JSON.stringify({ model: MISTRAL_MODEL, messages, max_tokens, temperature: 0.7 }),
-  });
-  captureLimits("mistral", response.headers);
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "Erreur Mistral");
-  }
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
-
 // Cascade de fallback
 const callGoogleLite = (messages, max_tokens, deep = false) => callGoogle(messages, max_tokens, deep, GOOGLE_LITE_MODEL);
 const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
