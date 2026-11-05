@@ -5,6 +5,9 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Laisse le temps aux réponses « réfléchies » (deep) de se terminer sur Vercel
+export const maxDuration = 60;
+
 const GROQ_MODEL = "llama-3.1-8b-instant";
 const GOOGLE_MODEL = "gemini-2.5-flash";
 const MISTRAL_MODEL = "mistral-small-latest";
@@ -29,7 +32,7 @@ async function callGroq(messages, max_tokens) {
 }
 
 // Appel Google Gemini
-async function callGoogle(messages, max_tokens) {
+async function callGoogle(messages, max_tokens, deep = false) {
   const systemMessage = messages.find((m) => m.role === "system");
   const userMessages = messages.filter((m) => m.role !== "system");
   const geminiBody = {
@@ -40,9 +43,14 @@ async function callGoogle(messages, max_tokens) {
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    // thinkingBudget: 0 → Gemini 2.5 ne « réfléchit » pas en silence : sinon cette réflexion
-    // consomme les max_tokens et la réponse arrive vide ou coupée (JSON illisible).
-    generationConfig: { maxOutputTokens: max_tokens, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
+    // Par défaut, thinkingBudget: 0 : Gemini 2.5 ne « réfléchit » pas en silence (sinon cette
+    // réflexion consomme les max_tokens et la réponse arrive vide ou coupée).
+    // deep = true : on lui laisse un temps de réflexion, ajouté en plus de la longueur de réponse.
+    generationConfig: {
+      maxOutputTokens: deep ? max_tokens + 3000 : max_tokens,
+      temperature: deep ? 0.5 : 0.7,
+      thinkingConfig: { thinkingBudget: deep ? 3000 : 0 },
+    },
   };
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
@@ -95,10 +103,10 @@ async function callMistral(messages, max_tokens) {
 }
 
 // Cascade de fallback
-async function callWithFallback(providers, messages, max_tokens) {
+async function callWithFallback(providers, messages, max_tokens, deep = false) {
   for (const provider of providers) {
     try {
-      return await provider(messages, max_tokens);
+      return await provider(messages, max_tokens, deep);
     } catch (err) {
       console.warn(`Provider failed: ${err.message}, trying next...`);
     }
@@ -109,7 +117,7 @@ async function callWithFallback(providers, messages, max_tokens) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown" } = body;
+    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false } = body;
 
     let text = "";
 
@@ -123,7 +131,7 @@ export async function POST(request) {
       // Requêtes lourdes : Google → Cerebras → Groq → Mistral
       text = await callWithFallback(
         [callGoogle, callCerebras, callGroq, callMistral],
-        messages, max_tokens
+        messages, max_tokens, !!deep
       );
     }
 

@@ -20,11 +20,11 @@ const dbLogUsage = async (module: string, action: string) => {
   } catch { /* silencieux */ }
 };
 
-const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general") => {
+const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general", deep = false) => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep }),
   });
   if (!res.ok) throw new Error("Erreur API " + res.status);
   dbLogUsage(module, "call");
@@ -5526,7 +5526,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           matiere={matiere}
           serie={serie}
           loadSujets={() => dbLoadSujetsBac(matiere)}
-          askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan"))}
+          askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan", !light))}
         />
       )}
       {/* VUE FAQ */}

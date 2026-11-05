@@ -6,11 +6,25 @@
 // (astuce du professeur : recycler l'ouverture pour en faire la question du III).
 // La correction s'appuie sur la fiche « Plan Thèse / Antithèse / Synthèse » du professeur.
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
 
-type Sujet = { sujet: string; notion_principale?: string };
-type Plan = { I: { titre: string; arguments: string[] }; II: { titre: string; arguments: string[] } };
+type Sujet = { sujet: string; notion_principale?: string; notions?: string[]; source?: string };
+type Repere = { auteur: string; oeuvre: string; idee: string };
+type Partie = { titre: string; arguments: string[]; reperes: Repere[] };
+type Plan = { I: Partie; II: Partie };
+
+// Sujets « officiels » : source qui mentionne le bac, une session, des annales ou une année
+const isBacSource = (src?: string) => !!src && /bac|session|annale|m[ée]tropole|polyn[ée]sie|antilles|liban|asie|am[ée]rique|centres? [ée]trangers|\b(19|20)\d{2}\b/i.test(src);
+
+const toPartie = (x: any): Partie => ({
+  titre: String(x?.titre || ""),
+  arguments: (Array.isArray(x?.arguments) ? x.arguments : []).map((a: any) => (typeof a === "string" ? a : a?.idee || a?.texte || "")).filter(Boolean).slice(0, 3),
+  reperes: (Array.isArray(x?.reperes) ? x.reperes : [])
+    .filter((r: any) => r && r.auteur)
+    .map((r: any) => ({ auteur: String(r.auteur), oeuvre: String(r.oeuvre || ""), idee: String(r.idee || "") }))
+    .slice(0, 2),
+});
 type Critere = { nom: string; ok: boolean; commentaire: string };
 type Correction = {
   verdict: "reussi" | "presque" | "a_retravailler";
@@ -67,8 +81,10 @@ export default function PlanTrainer({
   const isTechno = serie === "techno";
   const niveau = isTechno ? "Terminale technologique" : matiere === "hlp" ? "Terminale HLP" : "Terminale générale";
 
-  const [sujet, setSujet] = useState<string>("");
-  const [ownSujet, setOwnSujet] = useState("");
+  const [sujet, setSujet] = useState<Sujet | null>(null);
+  const [bank, setBank] = useState<Sujet[] | null>(null);
+  const [bankErr, setBankErr] = useState(false);
+  const [notion, setNotion] = useState("all");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [ouverture, setOuverture] = useState("");
@@ -78,54 +94,67 @@ export default function PlanTrainer({
   const [correcting, setCorrecting] = useState(false);
   const [correction, setCorrection] = useState<Correction | null>(null);
   const [err, setErr] = useState("");
-  const cache = useRef<Sujet[] | null>(null);
+
+  // Banque de vrais sujets : questions uniquement (le plan dialectique suppose un oui / non),
+  // en gardant les sujets d'examen quand la banque en indique la source.
+  useEffect(() => {
+    loadSujets()
+      .then((all) => {
+        const questions = (all || []).filter((x) => x?.sujet && x.sujet.trim().endsWith("?"));
+        const officiels = questions.filter((x) => isBacSource(x.source));
+        setBank(officiels.length >= 30 ? officiels : questions);
+      })
+      .catch(() => setBankErr(true));
+  }, []);
+
+  const notions = useMemo(() => {
+    const m: Record<string, number> = {};
+    (bank || []).forEach((x) => { const n = (x.notion_principale || "").trim(); if (n) m[n] = (m[n] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0], "fr"));
+  }, [bank]);
 
   const resetAnswer = () => {
     setOuverture(""); setConcept(""); setPartie3(""); setCorrection(null); setShowHint(false); setErr("");
   };
 
   // Les parties I et II sont rédigées par l'IA : l'élève se concentre sur la synthèse
-  const preparePlan = async (s: string) => {
-    setSujet(s); setPlan(null); resetAnswer(); setLoadingPlan(true);
+  const preparePlan = async (sj: Sujet) => {
+    setSujet(sj); setPlan(null); resetAnswer(); setLoadingPlan(true);
+    const notionTxt = sj.notion_principale ? `Notion principale du programme : ${sj.notion_principale}.` : "";
     try {
-      const p = await askJSON(askAI, `Sujet de dissertation de philosophie (${niveau}) : « ${s} »
+      const p = await askJSON(askAI, `Tu es professeur agrégé de philosophie. Sujet de dissertation (${niveau}) : « ${sj.sujet} »
+${notionTxt}
 
 Rédige seulement les deux premières parties d'un plan dialectique, en suivant cette méthode du professeur :
 ${ficheTas}
 
-- Partie I (thèse) : répond « oui » au sujet.
-- Partie II (antithèse) : examine les limites de la thèse et répond « non ».
-Pour chaque partie : un titre (une phrase qui énonce l'idée directrice) et 2 ou 3 arguments très courts (une ligne chacun).
-Ne donne SURTOUT PAS la partie III ni aucune piste de synthèse : c'est l'élève qui doit la trouver.
-${isTechno ? "Langage simple et concret." : ""}
-Réponds uniquement en JSON : {"I":{"titre":"...","arguments":["...","..."]},"II":{"titre":"...","arguments":["...","..."]}}`,
-        1500, (x) => !!(x?.I?.titre && x?.II?.titre));
-      setPlan({
-        I: { titre: String(p.I.titre), arguments: (p.I.arguments || []).map(String).slice(0, 3) },
-        II: { titre: String(p.II.titre), arguments: (p.II.arguments || []).map(String).slice(0, 3) },
-      });
+Exigences philosophiques :
+- Commence par repérer les concepts du sujet et ce qu'ils présupposent ; le plan doit porter sur ces concepts, pas sur des opinions.
+- Partie I (thèse) : répond « oui » avec de vraies raisons philosophiques.
+- Partie II (antithèse) : examine les limites de la thèse (ce qu'elle présuppose, ce qu'elle oublie) et répond « non ».
+- Chaque argument est une idée conceptuelle précise (définition, distinction, raisonnement), jamais un lieu commun ni un exemple d'actualité.
+- Pour chaque partie, donne 1 ou 2 repères tirés d'auteurs classiques du programme de Terminale : l'auteur, une œuvre réellement écrite par lui, et sa thèse en une phrase avec tes mots.
+- N'invente rien : pas de citation entre guillemets, pas d'œuvre douteuse. Si tu n'es pas certain d'une référence, choisis-en une autre que tu connais avec certitude.
+- Ne donne SURTOUT PAS la partie III ni aucune piste de synthèse : c'est l'élève qui doit la trouver.
+${isTechno ? "- Langage clair et accessible, sans perdre la précision des concepts." : ""}
+Réponds uniquement en JSON :
+{"I":{"titre":"idée directrice en une phrase","arguments":["...","..."],"reperes":[{"auteur":"...","oeuvre":"...","idee":"..."}]},"II":{"titre":"...","arguments":["...","..."],"reperes":[{"auteur":"...","oeuvre":"...","idee":"..."}]}}`,
+        2000, (x) => !!(x?.I?.titre && x?.II?.titre));
+      setPlan({ I: toPartie(p.I), II: toPartie(p.II) });
     } catch {
       setErr("Impossible de préparer le plan pour l'instant. Réessaie dans un instant.");
-      setSujet("");
+      setSujet(null);
     }
     setLoadingPlan(false);
   };
 
-  const randomSujet = async () => {
+  const randomSujet = () => {
     setErr("");
-    try {
-      if (!cache.current) {
-        const all = await loadSujets();
-        // Le plan dialectique suppose une question à laquelle on peut répondre oui / non
-        cache.current = all.filter((x) => x?.sujet && x.sujet.trim().endsWith("?"));
-      }
-      const pool = cache.current;
-      if (!pool || pool.length === 0) throw new Error("vide");
-      const pick = pool[Math.floor(Math.random() * pool.length)];
-      preparePlan(pick.sujet.trim());
-    } catch {
-      setErr("Impossible de charger la banque de sujets. Écris ton propre sujet ci-dessous.");
-    }
+    const pool = (bank || []).filter((x) => notion === "all" || (x.notion_principale || "").trim() === notion);
+    if (pool.length === 0) { setErr("Aucun sujet disponible pour cette notion."); return; }
+    let pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
+    preparePlan({ ...pick, sujet: pick.sujet.trim() });
   };
 
   const corriger = async () => {
@@ -144,13 +173,15 @@ Rappels essentiels de cette méthode :
 - Attention : « ni l'un ni l'autre » ou « un peu des deux » n'est valable que si un concept nouveau, défini, change vraiment la question.
 
 === SUJET ===
-« ${sujet} »
+« ${sujet?.sujet} »
 
 === PLAN DONNÉ À L'ÉLÈVE ===
 I. ${plan.I.titre}
 ${plan.I.arguments.map((a) => "- " + a).join("\n")}
+${plan.I.reperes.map((r) => `(Repère : ${r.auteur}, ${r.oeuvre} : ${r.idee})`).join("\n")}
 II. ${plan.II.titre}
 ${plan.II.arguments.map((a) => "- " + a).join("\n")}
+${plan.II.reperes.map((r) => `(Repère : ${r.auteur}, ${r.oeuvre} : ${r.idee})`).join("\n")}
 
 === RÉPONSE DE L'ÉLÈVE ===
 Ouverture de conclusion : ${ouverture.trim() || "(vide)"}
@@ -160,8 +191,9 @@ Partie III : ${partie3.trim() || "(vide)"}
 Évalue la réponse avec bienveillance mais exigence, critère par critère :
 ${CRITERES.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
-Tutoie l'élève. Commentaires courts (une ou deux phrases). Ne réécris pas toute sa copie.
-Dans "piste", propose UNE partie III possible (2 ou 3 phrases), en précisant que ce n'est pas la seule.
+Juge en philosophe : le concept proposé est-il vraiment un concept (et non un mot vague) ? Est-il défini ? Change-t-il réellement les termes du problème ? Un « réalisme » ou un « juste milieu » non défini est un compromis déguisé.
+Tutoie l'élève. Commentaires courts (une ou deux phrases), précis et philosophiques. Ne réécris pas toute sa copie.
+Dans "piste", propose UNE partie III possible (2 ou 3 phrases) : un concept nouveau défini, et un auteur classique du programme qui l'éclaire (auteur + œuvre réelle, sans citation inventée). Précise que ce n'est pas la seule piste.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
         2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0);
@@ -189,7 +221,7 @@ Réponds uniquement en JSON :
         <p className="text-[10px] font-black uppercase tracking-widest text-violet-200">🎯 S'entraîner au plan</p>
         <h3 className="text-lg font-black mt-1">Le plan dialectique : trouve ta synthèse</h3>
         <p className="text-sm text-violet-100 mt-1 leading-relaxed">
-          Tu reçois un sujet avec sa thèse (I) et son antithèse (II). À toi de trouver <strong>l'ouverture de ta conclusion</strong>,
+          Tu reçois un vrai sujet de dissertation avec sa thèse (I) et son antithèse (II), appuyées sur des auteurs. À toi de trouver <strong>l'ouverture de ta conclusion</strong>,
           puis la <strong>partie III</strong> qui en découle.
         </p>
       </div>
@@ -199,28 +231,24 @@ Réponds uniquement en JSON :
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={randomSujet}
-            disabled={loadingPlan}
+            disabled={loadingPlan || !bank}
             className="flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all">
             <RefreshCw className={`w-4 h-4 ${loadingPlan ? "animate-spin" : ""}`} /> {plan ? "Autre sujet au hasard" : "Un sujet au hasard"}
           </button>
-          <div className="flex-1 flex gap-2">
-            <input
-              value={ownSujet}
-              onChange={(e) => setOwnSujet(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && ownSujet.trim().length > 8 && preparePlan(ownSujet.trim())}
-              className="flex-1 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-violet-400 focus:outline-none text-gray-800"
-              placeholder="…ou écris ton sujet (ex. : Peut-on être libre sans loi ?)"
-            />
-            <button
-              onClick={() => ownSujet.trim().length > 8 && preparePlan(ownSujet.trim())}
-              disabled={ownSujet.trim().length <= 8 || loadingPlan}
-              className="px-4 rounded-xl text-sm font-bold border-2 border-violet-200 text-violet-700 hover:bg-violet-50 disabled:text-gray-300 disabled:border-gray-100">
-              OK
-            </button>
-          </div>
+          <select
+            value={notion}
+            onChange={(e) => setNotion(e.target.value)}
+            disabled={!bank || notions.length === 0}
+            className="flex-1 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-violet-400 focus:outline-none text-gray-800 bg-white">
+            <option value="all">Toutes les notions</option>
+            {notions.map(([n, c]) => <option key={n} value={n}>{n} ({c})</option>)}
+          </select>
         </div>
+        <p className="text-[11px] text-gray-400">
+          {bankErr ? "La banque de sujets n'a pas pu être chargée." : !bank ? "Chargement de la banque de sujets…" : `${bank.length} sujets de dissertation tirés de la banque de vrais sujets.`}
+        </p>
         {loadingPlan && (
-          <p className="text-sm text-gray-500 flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin text-violet-500" /> Préparation de la thèse et de l'antithèse…</p>
+          <p className="text-sm text-gray-500 flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin text-violet-500" /> Préparation de la thèse et de l'antithèse (une vingtaine de secondes)…</p>
         )}
       </div>
 
@@ -231,7 +259,13 @@ Réponds uniquement en JSON :
         <div className="bg-white border-2 border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Sujet</p>
-            <p className="font-black text-gray-800">« {sujet} »</p>
+            <p className="font-black text-gray-800">« {sujet?.sujet} »</p>
+            {(sujet?.source || sujet?.notion_principale) && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {sujet?.notion_principale && <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{sujet.notion_principale}</span>}
+                {sujet?.source && <span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">📌 {sujet.source}</span>}
+              </div>
+            )}
           </div>
           <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
             {([["I", "Thèse : oui", plan.I, "text-blue-700 bg-blue-50"], ["II", "Antithèse : non", plan.II, "text-rose-700 bg-rose-50"]] as const).map(([num, lab, part, cls]) => (
@@ -243,6 +277,17 @@ Réponds uniquement en JSON :
                     <li key={i} className="text-xs text-gray-600 flex gap-1.5"><span className="text-gray-300">•</span>{a}</li>
                   ))}
                 </ul>
+                {part.reperes.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {part.reperes.map((r, i) => (
+                      <div key={i} className="text-xs bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">
+                        <span className="font-black text-gray-800">📚 {r.auteur}</span>
+                        {r.oeuvre && <span className="italic text-gray-500">, {r.oeuvre}</span>}
+                        {r.idee && <p className="text-gray-600 mt-0.5">{r.idee}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
