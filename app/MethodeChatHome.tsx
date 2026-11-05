@@ -6,7 +6,7 @@
 //   (même contexte que l'onglet « Assistant méthode » de la page Méthode).
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { BookOpen, HelpCircle, RotateCcw, Send, Sparkles, Target } from "lucide-react";
+import { BookOpen, GraduationCap, HelpCircle, RotateCcw, Send, Sparkles, Target } from "lucide-react";
 import type { FaqItem } from "./FaqComponents";
 
 export type SerieKey = "generale" | "techno" | "hlp";
@@ -14,9 +14,9 @@ type Msg = { role: "user" | "assistant"; content: string };
 type MethodeFiches = Record<string, string>;
 
 const SERIES: { key: SerieKey; label: string; short: string; icon: string; role: string }[] = [
-  { key: "generale", label: "Série Générale", short: "Générale", icon: "🧠", role: "eleve-Philosophie-generale-methode" },
-  { key: "techno", label: "Série Technologique", short: "Techno", icon: "🔧", role: "eleve-Philosophie-techno-methode" },
-  { key: "hlp", label: "HLP", short: "HLP", icon: "📜", role: "eleve-HLP-methode" },
+  { key: "generale", label: "Filière générale", short: "Filière générale", icon: "", role: "eleve-Philosophie-generale-methode" },
+  { key: "techno", label: "Filière techno", short: "Filière techno", icon: "", role: "eleve-Philosophie-techno-methode" },
+  { key: "hlp", label: "Spécialité HLP", short: "Spécialité HLP", icon: "", role: "eleve-HLP-methode" },
 ];
 
 const STARTERS: Record<SerieKey, string[]> = {
@@ -192,7 +192,7 @@ export default function MethodeChatHome({
         {/* En-tête : on voit tout de suite que c'est pour réviser la méthode */}
         <div className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 px-5 py-4 text-white">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">📐</div>
+            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0"><GraduationCap className="w-6 h-6" /></div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-black leading-tight">Assistant Méthode</h2>
@@ -200,7 +200,7 @@ export default function MethodeChatHome({
               </div>
               <p className="text-xs text-indigo-100 mt-0.5">
                 {serie === "hlp"
-                  ? "HLP : question d'interprétation · essai (question de réflexion philosophique)"
+                  ? "Spécialité HLP : question d'interprétation · essai (question de réflexion philosophique)"
                   : "Philosophie : dissertation · explication de texte · paragraphe argumenté"}
               </p>
             </div>
@@ -221,7 +221,7 @@ export default function MethodeChatHome({
                 key={s.key}
                 onClick={() => chooseSerie(s.key)}
                 className={`flex-1 text-xs font-bold py-2 rounded-xl transition-all ${serie === s.key ? "bg-white text-indigo-700 shadow" : "bg-white/15 text-white hover:bg-white/25"}`}>
-                {s.icon} {s.short}
+                {s.short}
               </button>
             ))}
           </div>
@@ -231,8 +231,7 @@ export default function MethodeChatHome({
         <div ref={scrollRef} className="h-[22rem] sm:h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-gradient-to-b from-indigo-50/60 to-white">
           {!serie ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-6">
-              <div className="text-4xl mb-3">👆</div>
-              <p className="font-black text-gray-800">Choisis ta série pour commencer</p>
+              <p className="font-black text-gray-800">Choisis ta filière ou ta spécialité pour commencer</p>
               <p className="text-sm text-gray-500 mt-1 max-w-sm">
                 L'assistant te répond à partir des fiches méthode et de la FAQ de ton professeur.
               </p>
@@ -241,10 +240,10 @@ export default function MethodeChatHome({
             <>
               {/* Message d'accueil de l'assistant */}
               <div className="flex gap-2 items-end">
-                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm flex-shrink-0">📐</div>
+                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0"><GraduationCap className="w-4 h-4" /></div>
                 <div className="max-w-[85%] bg-white border border-indigo-100 shadow-sm rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed">
                   <p>
-                    Bonjour{prenom ? ` ${prenom}` : ""} ! On révise la <strong>méthode</strong> ensemble ({serie === "hlp" ? "HLP : question d'interprétation et essai" : current?.label}).
+                    Bonjour{prenom ? ` ${prenom}` : ""} ! On révise la <strong>méthode</strong> ensemble ({serie === "hlp" ? "spécialité HLP : question d'interprétation et essai" : current?.label}).
                     Pose ta question, ou choisis-en une ci-dessous.
                   </p>
                 </div>
@@ -272,7 +271,7 @@ export default function MethodeChatHome({
                   </div>
                 ) : (
                   <div key={i} className="flex gap-2 items-end">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm flex-shrink-0">📐</div>
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0"><GraduationCap className="w-4 h-4" /></div>
                     <div className="max-w-[85%] bg-white border border-indigo-100 shadow-sm rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed">
                       <RichText text={m.content} />
                     </div>
@@ -295,7 +294,7 @@ export default function MethodeChatHome({
 
               {loading && (
                 <div className="flex gap-2 items-end">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm flex-shrink-0">📐</div>
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0"><GraduationCap className="w-4 h-4" /></div>
                   <div className="bg-white border border-indigo-100 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1">
                     <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
                     <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
@@ -317,7 +316,7 @@ export default function MethodeChatHome({
             rows={1}
             disabled={!serie || loading}
             className="flex-1 resize-none px-4 py-2.5 border-2 border-gray-200 rounded-2xl text-sm focus:border-indigo-400 focus:outline-none text-gray-800 disabled:bg-gray-50 max-h-32"
-            placeholder={serie ? "Ta question sur la méthode…" : "Choisis d'abord ta série"}
+            placeholder={serie ? "Ta question sur la méthode…" : "Choisis d'abord ta filière ou ta spécialité"}
           />
           <button
             onClick={() => send()}

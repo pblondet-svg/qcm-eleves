@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "QCM Élèves",
+  title: "Tuteur de philosophie",
   description: "Générateur de QCM pour réviser",
 };
 

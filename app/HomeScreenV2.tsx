@@ -77,8 +77,7 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6">
       <div className="text-center mb-8">
-        <div className="text-5xl mb-4">📚</div>
-        <h1 className="text-4xl font-black text-gray-800 mb-2">QCM Entraînement</h1>
+        <h1 className="text-4xl font-black text-gray-800 mb-2">Tuteur de philosophie</h1>
         <p className="text-gray-700 text-lg">Révise la méthode avec ton assistant</p>
       </div>
 
