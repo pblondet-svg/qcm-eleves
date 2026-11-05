@@ -10,6 +10,8 @@ export const maxDuration = 60;
 
 const GROQ_MODEL = "llama-3.1-8b-instant";
 const GOOGLE_MODEL = "gemini-2.5-flash";
+// Quota gratuit séparé et plus large : prend le relais quand Flash est épuisé
+const GOOGLE_LITE_MODEL = "gemini-2.5-flash-lite";
 const MISTRAL_MODEL = "mistral-small-latest";
 const CEREBRAS_MODEL = "llama-3.3-70b";
 
@@ -54,7 +56,7 @@ async function callGroq(messages, max_tokens) {
 }
 
 // Appel Google Gemini
-async function callGoogle(messages, max_tokens, deep = false) {
+async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MODEL) {
   const systemMessage = messages.find((m) => m.role === "system");
   const userMessages = messages.filter((m) => m.role !== "system");
   const geminiBody = {
@@ -75,7 +77,7 @@ async function callGoogle(messages, max_tokens, deep = false) {
     },
   };
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) }
   );
   if (!response.ok) {
@@ -127,7 +129,8 @@ async function callMistral(messages, max_tokens) {
 }
 
 // Cascade de fallback
-const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
+const callGoogleLite = (messages, max_tokens, deep = false) => callGoogle(messages, max_tokens, deep, GOOGLE_LITE_MODEL);
+const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
 async function callWithFallback(providers, messages, max_tokens, deep = false) {
   for (const provider of providers) {
     try {
@@ -150,15 +153,16 @@ export async function POST(request) {
     let result = { text: "", provider: "inconnu" };
 
     if (prefer_groq) {
-      // Requêtes légères : Groq → Cerebras → Google → Mistral
+      // Requêtes légères : Groq → Cerebras → Google Flash-Lite → Google Flash → Mistral
       result = await callWithFallback(
-        [callGroq, callCerebras, callGoogle, callMistral],
+        [callGroq, callCerebras, callGoogleLite, callGoogle, callMistral],
         messages, max_tokens
       );
     } else {
-      // Requêtes lourdes : Google → Cerebras → Groq → Mistral
+      // Requêtes lourdes : Google Flash → Google Flash-Lite → Mistral → Cerebras → Groq
+      // (Mistral avant Cerebras et Groq : il accepte des requêtes plus longues)
       result = await callWithFallback(
-        [callGoogle, callCerebras, callGroq, callMistral],
+        [callGoogle, callGoogleLite, callMistral, callCerebras, callGroq],
         messages, max_tokens, !!deep
       );
     }

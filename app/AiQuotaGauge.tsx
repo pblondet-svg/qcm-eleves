@@ -8,12 +8,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type ProviderKey = "google" | "groq" | "cerebras" | "mistral";
+type ProviderKey = "google" | "google-lite" | "groq" | "cerebras" | "mistral";
 type Limits = Record<ProviderKey, number>;
 type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string };
 
 const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
   { key: "google", nom: "Google Gemini", role: "Principal pour les réponses longues (assistant, corrections, plans)" },
+  { key: "google-lite", nom: "Gemini Flash-Lite", role: "Relais de Gemini quand son quota est épuisé" },
   { key: "groq", nom: "Groq", role: "Principal pour les réponses courtes (flashcards, FAQ, petits retours)" },
   { key: "cerebras", nom: "Cerebras", role: "Secours n° 2" },
   { key: "mistral", nom: "Mistral", role: "Dernier secours" },
@@ -21,7 +22,7 @@ const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
 
 // Limites gratuites indicatives (requêtes par jour) — modifiables ci-dessous,
 // car les fournisseurs les changent régulièrement.
-const DEFAULT_LIMITS: Limits = { google: 250, groq: 14400, cerebras: 14400, mistral: 5000 };
+const DEFAULT_LIMITS: Limits = { google: 250, "google-lite": 1000, groq: 14400, cerebras: 14400, mistral: 5000 };
 
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const isToday = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date().toDateString();
@@ -98,7 +99,8 @@ export default function AiQuotaGauge() {
     const pctUsed = limit > 0 ? Math.min(100, Math.round(((limit - remaining) / limit) * 100)) : 0;
     const blocked = isToday(snap?.last_error_at) && isQuotaError(snap?.last_error)
       && (!snap?.at || new Date(snap.last_error_at!) > new Date(snap.at));
-    return { ...p, limit, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null, at: snap?.at, blocked, blockedAt: snap?.last_error_at };
+    const lastError = isToday(snap?.last_error_at) && (!snap?.at || new Date(snap.last_error_at!) > new Date(snap.at)) ? snap?.last_error : "";
+    return { ...p, limit, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null, at: snap?.at, blocked, blockedAt: snap?.last_error_at, lastError };
   });
 
   const main = rows[0];
@@ -156,6 +158,9 @@ export default function AiQuotaGauge() {
             <p className="text-[11px] text-gray-400 mt-0.5">
               {r.used.toLocaleString("fr-FR")} appel{r.used > 1 ? "s" : ""} aujourd'hui · {r.exact ? `reste exact relevé à ${heure(r.at)}` : `estimation sur une limite de ${r.limit.toLocaleString("fr-FR")} / jour`}
             </p>
+            {r.lastError && (
+              <p className="text-[11px] text-red-500 mt-0.5 break-words">Dernière erreur ({heure(r.blockedAt)}) : {r.lastError}</p>
+            )}
           </div>
         ))}
       </div>
@@ -177,7 +182,7 @@ export default function AiQuotaGauge() {
             <p className="text-xs text-gray-500">
               Requêtes gratuites par jour. Pour Google, vérifie ta limite dans Google AI Studio (rubrique « Rate limit ») : c'est la plus importante, car Google n'indique pas ce qu'il reste.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {PROVIDERS.map((p) => (
                 <label key={p.key} className="text-xs font-bold text-gray-600">
                   {p.nom}

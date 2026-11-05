@@ -176,6 +176,45 @@ async function askJSON(askAI: AskAI, prompt: string, maxTokens: number, valid: (
 
 const coursTexte = (s: Seance, max = 45000) =>
   s.docs.map((d) => `### ${d.titre}\n${d.contenu}`).join("\n\n").slice(0, max);
+// Extrait du cours qui tient dans la taille acceptée par TOUS les modèles de secours
+// (Groq et Cerebras refusent les requêtes trop longues : si Gemini est épuisé, tout échouait).
+// - avec une question : les passages les plus proches de la question ;
+// - sans question (quiz, citations) : des passages pris dans chaque document, à tour de rôle.
+const BUDGET = 11000;
+const motsCles = (t: string) =>
+  t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+export function extraitCours(s: Seance, question = "", budget = BUDGET) {
+  const complet = coursTexte(s);
+  if (complet.length <= budget) return complet;
+  const plan = "Plan du cours : " + s.docs.map((d) => d.titre).join(" ; ") + "\n\n";
+  const morceaux = s.docs.flatMap((d, di) =>
+    d.contenu.split(/\n\s*\n/).filter((p) => p.trim()).map((p, pi) => ({ di, pi, titre: d.titre, texte: p.trim() })));
+  let choisis: typeof morceaux = [];
+  let taille = plan.length;
+  const prendre = (m: (typeof morceaux)[number]) => {
+    if (choisis.includes(m) || taille + m.texte.length + 50 > budget) return;
+    choisis.push(m); taille += m.texte.length + m.titre.length + 8;
+  };
+  const q = new Set(motsCles(question));
+  if (q.size) {
+    // Les mots rares (« Spinoza ») comptent plus que les mots partout présents (« liberté »)
+    const sets = morceaux.map((m) => new Set(motsCles(m.titre + " " + m.texte)));
+    const idf = (w: string) => Math.log((morceaux.length + 1) / (sets.filter((st) => st.has(w)).length + 0.5));
+    const notes = morceaux.map((m, i) => ({ m, score: Array.from(q).reduce((acc, w) => acc + (sets[i].has(w) ? idf(w) : 0), 0) }))
+      .filter((x) => x.score > 0.5).sort((a, b) => b.score - a.score);
+    notes.forEach((x) => prendre(x.m));
+  }
+  // Compléter (ou remplir, sans question) en prenant à tour de rôle dans chaque document
+  const maxRang = Math.max(...s.docs.map((_, di) => morceaux.filter((x) => x.di === di).length), 0);
+  for (let rang = 0; rang < maxRang && taille < budget - 300; rang++) {
+    s.docs.forEach((_, di) => { const m = morceaux.filter((x) => x.di === di)[rang]; if (m) prendre(m); });
+  }
+  choisis = choisis.sort((a, b) => a.di - b.di || a.pi - b.pi);
+  let dernier = "";
+  const corps = choisis.map((m) => { const t = (m.titre !== dernier ? `### ${m.titre}\n` : "") + m.texte; dernier = m.titre; return t; }).join("\n\n");
+  return plan + corps + "\n\n(Extrait : le cours complet est plus long. Si la réponse n'est pas dans cet extrait, conseille à l'élève de choisir la partie concernée.)";
+}
+
 const norm = (t: string) => t.toLowerCase().replace(/[«»"“”'’]/g, "").replace(/\[\s*(\.\.\.|…)\s*\]/g, " ").replace(/\s+/g, " ").trim();
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -318,11 +357,11 @@ function TuteurChat({ seance, askAI, eleveNom, niveau }: { seance: Seance; askAI
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading]);
 
-  const contexte = `Tu es le tuteur de révision d'${NIVEAUX[niveau].public}.
+  const contexte = (question: string) => `Tu es le tuteur de révision d'${NIVEAUX[niveau].public}.
 Séance : « ${seance.titre} » (${seance.semestre} — ${seance.theme}).
 
 === COURS DU PROFESSEUR (seule référence) ===
-${coursTexte(seance)}
+${extraitCours(seance, question)}
 
 Règles :
 - Appuie-toi UNIQUEMENT sur ce cours. Si la réponse n'y est pas, dis-le simplement et conseille de demander au professeur.
@@ -338,9 +377,9 @@ ${REGLE_LONGUEUR}`;
     setMessages(next); setInput(""); setLoading(true);
     try {
       const r = await askAI([
-        { role: "user", content: contexte },
+        { role: "user", content: contexte(next.filter((m) => m.role === "user").slice(-2).map((m) => m.content).join(" ")) },
         { role: "assistant", content: `D'accord, je suis prêt à t'aider à réviser « ${seance.titre} ».` },
-        ...next,
+        ...next.slice(-8),
       ], 800);
       setMessages([...next, { role: "assistant", content: r || "Je n'ai pas réussi à répondre. Reformule ta question ?" }]);
     } catch {
@@ -417,7 +456,7 @@ function QuizSeance({ seance, askAI, niveau }: { seance: Seance; askAI: AskAI; n
     try {
       const x = await askJSON(askAI, `Voici le cours d'une séance (${NIVEAUX[niveau].titre}) : « ${seance.titre} ».
 
-${coursTexte(seance)}
+${extraitCours(seance)}
 
 Écris 6 questions à choix multiples pour vérifier qu'un élève a compris et retenu ce cours : définitions, idées et thèses, auteurs et œuvres, étapes de la méthode, sens des citations.
 - Chaque question porte UNIQUEMENT sur ce qui est dans le cours.
@@ -519,7 +558,7 @@ function CitationExercice({ seance, askAI, niveau }: { seance: Seance; askAI: As
     try {
       const x = await askJSON(askAI, `Voici le cours d'une séance (${NIVEAUX[niveau].titre}) : « ${seance.titre} ».
 
-${coursTexte(seance)}
+${extraitCours(seance)}
 
 Choisis 5 citations d'auteurs présentes dans ce cours (dans les textes étudiés ou citées dans le cours), de 8 à 35 mots chacune, qui méritent d'être expliquées.
 Recopie chaque citation MOT POUR MOT, sans rien changer, sans guillemets. Indique l'auteur et l'œuvre tels qu'ils figurent dans le cours.
@@ -545,7 +584,7 @@ Réponds uniquement en JSON : [{"texte":"...","auteur":"...","source":"..."}]`,
       const c = await askJSON(askAI, `Tu es ${NIVEAUX[niveau].prof} et tu corriges l'explication de citation d'${NIVEAUX[niveau].public}.
 
 Cours de référence (séance « ${seance.titre} ») :
-${coursTexte(seance, 20000)}
+${extraitCours(seance, cit.texte + " " + rep, 9000)}
 
 Citation : « ${cit.texte} » (${cit.auteur}${cit.source ? ", " + cit.source : ""})
 Explication de l'élève : ${rep.trim()}
