@@ -40,7 +40,9 @@ async function callGoogle(messages, max_tokens) {
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    generationConfig: { maxOutputTokens: max_tokens, temperature: 0.7 },
+    // thinkingBudget: 0 → Gemini 2.5 ne « réfléchit » pas en silence : sinon cette réflexion
+    // consomme les max_tokens et la réponse arrive vide ou coupée (JSON illisible).
+    generationConfig: { maxOutputTokens: max_tokens, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
   };
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
@@ -51,7 +53,9 @@ async function callGoogle(messages, max_tokens) {
     throw new Error(err.error?.message || "Erreur Google");
   }
   const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+  if (!text.trim()) throw new Error("Réponse Google vide");
+  return text;
 }
 
 // Appel Cerebras

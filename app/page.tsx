@@ -5526,7 +5526,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           matiere={matiere}
           serie={serie}
           loadSujets={() => dbLoadSujetsBac(matiere)}
-          askAI={async (m: { role: string; content: string }[], maxTokens = 900) => getText(await callAI(m, maxTokens, false, "entrainement_plan"))}
+          askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan"))}
         />
       )}
       {/* VUE FAQ */}

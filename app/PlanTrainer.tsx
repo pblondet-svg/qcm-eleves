@@ -41,10 +41,24 @@ const VERDICT_UI: Record<Correction["verdict"], { label: string; cls: string; ic
   a_retravailler: { label: "À retravailler", cls: "bg-rose-50 border-rose-300 text-rose-800", icon: "🔁" },
 };
 
+// Demande du JSON à l'IA ; si la réponse est illisible, on réessaie une fois avec l'autre chaîne de modèles
+async function askJSON(
+  askAI: (m: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>,
+  prompt: string, maxTokens: number, valid: (x: any) => boolean,
+) {
+  for (const light of [false, true]) {
+    try {
+      const x = parseJSONLoose(await askAI([{ role: "user", content: prompt }], maxTokens, light));
+      if (valid(x)) return x;
+    } catch { /* on tente l'autre chaîne */ }
+  }
+  throw new Error("json");
+}
+
 export default function PlanTrainer({
   askAI, ficheTas, matiere, serie, loadSujets,
 }: {
-  askAI: (messages: { role: string; content: string }[], maxTokens?: number) => Promise<string>;
+  askAI: (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
   ficheTas: string;
   matiere: string;
   serie: "generale" | "techno" | null;
@@ -74,9 +88,7 @@ export default function PlanTrainer({
   const preparePlan = async (s: string) => {
     setSujet(s); setPlan(null); resetAnswer(); setLoadingPlan(true);
     try {
-      const txt = await askAI([{
-        role: "user",
-        content: `Sujet de dissertation de philosophie (${niveau}) : « ${s} »
+      const p = await askJSON(askAI, `Sujet de dissertation de philosophie (${niveau}) : « ${s} »
 
 Rédige seulement les deux premières parties d'un plan dialectique, en suivant cette méthode du professeur :
 ${ficheTas}
@@ -87,9 +99,7 @@ Pour chaque partie : un titre (une phrase qui énonce l'idée directrice) et 2 o
 Ne donne SURTOUT PAS la partie III ni aucune piste de synthèse : c'est l'élève qui doit la trouver.
 ${isTechno ? "Langage simple et concret." : ""}
 Réponds uniquement en JSON : {"I":{"titre":"...","arguments":["...","..."]},"II":{"titre":"...","arguments":["...","..."]}}`,
-      }], 700);
-      const p = parseJSONLoose(txt);
-      if (!p?.I?.titre || !p?.II?.titre) throw new Error("plan");
+        1500, (x) => !!(x?.I?.titre && x?.II?.titre));
       setPlan({
         I: { titre: String(p.I.titre), arguments: (p.I.arguments || []).map(String).slice(0, 3) },
         II: { titre: String(p.II.titre), arguments: (p.II.arguments || []).map(String).slice(0, 3) },
@@ -122,9 +132,7 @@ Réponds uniquement en JSON : {"I":{"titre":"...","arguments":["...","..."]},"II
     if (!plan || correcting) return;
     setCorrecting(true); setErr(""); setCorrection(null);
     try {
-      const txt = await askAI([{
-        role: "user",
-        content: `Tu es professeur de philosophie et tu corriges l'exercice d'un élève de ${niveau}.
+      const c = await askJSON(askAI, `Tu es professeur de philosophie et tu corriges l'exercice d'un élève de ${niveau}.
 
 === MÉTHODE DU PROFESSEUR (référence absolue) ===
 ${ficheTas}
@@ -156,9 +164,7 @@ Tutoie l'élève. Commentaires courts (une ou deux phrases). Ne réécris pas to
 Dans "piste", propose UNE partie III possible (2 ou 3 phrases), en précisant que ce n'est pas la seule.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
-      }], 1100);
-      const c = parseJSONLoose(txt);
-      if (!c || !Array.isArray(c.criteres)) throw new Error("correction");
+        2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0);
       setCorrection({
         verdict: ["reussi", "presque", "a_retravailler"].includes(c.verdict) ? c.verdict : "presque",
         criteres: c.criteres.slice(0, 6).map((x: any, i: number) => ({
