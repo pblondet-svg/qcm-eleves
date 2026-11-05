@@ -99,21 +99,20 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
       {(showHlp1 || showTle) && (
         <div className="w-full max-w-2xl mb-6">
           <p className="text-xs font-black uppercase tracking-widest mb-2 px-1 text-gray-500">Révision du cours</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {showHlp1 && (
               <button onClick={() => onSelect("eleve-HLP1-cours")}
-                className="aspect-square sm:aspect-[4/3] bg-white rounded-2xl border-2 border-emerald-200 hover:border-emerald-400 shadow-sm hover:shadow-md p-4 flex flex-col justify-center items-center text-center transition-all group">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Spécialité HLP</p>
-                <h2 className="text-xl font-black text-gray-800 group-hover:text-emerald-700 transition-colors mt-1">Première</h2>
-                <p className="text-xs text-gray-500 mt-2">Tuteur, quiz et citations, séance par séance</p>
+                className="aspect-square bg-white rounded-2xl border-2 border-emerald-200 hover:border-emerald-400 shadow-sm hover:shadow-md p-3 flex flex-col justify-center items-center text-center transition-all group">
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Spécialité HLP</p>
+                <h2 className="text-base font-black text-gray-800 group-hover:text-emerald-700 transition-colors mt-1 leading-tight">Première</h2>
               </button>
             )}
             {showTle && (
               <button onClick={() => onSelect("eleve-cours-tle")}
-                className="aspect-square sm:aspect-[4/3] bg-white rounded-2xl border-2 border-sky-200 hover:border-sky-400 shadow-sm hover:shadow-md p-4 flex flex-col justify-center items-center text-center transition-all group">
-                <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">Philosophie — tronc commun</p>
-                <h2 className="text-xl font-black text-gray-800 group-hover:text-sky-700 transition-colors mt-1">Terminale générale</h2>
-                <p className="text-xs text-gray-500 mt-2">Tuteur, quiz et citations, sujet par sujet</p>
+                className="aspect-square bg-white rounded-2xl border-2 border-sky-200 hover:border-sky-400 shadow-sm hover:shadow-md p-3 flex flex-col justify-center items-center text-center transition-all group">
+                <p className="text-[9px] font-black uppercase tracking-widest text-sky-600">Philosophie</p>
+                <h2 className="text-base font-black text-gray-800 group-hover:text-sky-700 transition-colors mt-1 leading-tight">Terminale générale</h2>
+                <p className="text-[10px] text-gray-400 mt-1">tronc commun</p>
               </button>
             )}
           </div>
