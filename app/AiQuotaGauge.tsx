@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 
 type ProviderKey = "google" | "google-lite" | "groq" | "cerebras" | "mistral";
 type Limits = Record<ProviderKey, number>;
-type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string };
+type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string; last_ok_at?: string };
 
 const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
   { key: "google", nom: "Google Gemini", role: "Principal pour les réponses longues (assistant, corrections, plans)" },
@@ -101,9 +101,11 @@ export default function AiQuotaGauge() {
     const u = used[p.key] || 0;
     const remaining = ex.remaining ?? Math.max(0, limit - u);
     const pctUsed = limit > 0 ? Math.min(100, Math.round(((limit - remaining) / limit) * 100)) : 0;
-    const blocked = isToday(snap?.last_error_at) && isQuotaError(snap?.last_error)
-      && (!snap?.at || new Date(snap.last_error_at!) > new Date(snap.at));
-    const lastError = isToday(snap?.last_error_at) && (!snap?.at || new Date(snap.last_error_at!) > new Date(snap.at)) ? snap?.last_error : "";
+    // Une erreur n'est « actuelle » que si aucun succès ni relevé de quota ne l'a suivie
+    const apres = (a?: string, b?: string) => !b || (!!a && new Date(a) > new Date(b));
+    const erreurActuelle = isToday(snap?.last_error_at) && apres(snap?.last_error_at, snap?.at) && apres(snap?.last_error_at, snap?.last_ok_at);
+    const blocked = erreurActuelle && isQuotaError(snap?.last_error);
+    const lastError = erreurActuelle ? snap?.last_error : "";
     return { ...p, limit, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null, at: snap?.at, blocked, blockedAt: snap?.last_error_at, lastError };
   });
 

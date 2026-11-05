@@ -35,7 +35,7 @@ let lastQuotaWrite = 0;
 function captureLimits(provider, headers) {
   const h = {};
   headers.forEach((v, k) => { if (k.toLowerCase().includes("ratelimit")) h[k.toLowerCase()] = v; });
-  if (Object.keys(h).length) quotaCache[provider] = { headers: h, at: new Date().toISOString() };
+  if (Object.keys(h).length) quotaCache[provider] = { ...(quotaCache[provider] || {}), headers: h, at: new Date().toISOString() };
 }
 async function flushQuota() {
   if (Date.now() - lastQuotaWrite < 60000 || !Object.keys(quotaCache).length) return;
@@ -122,7 +122,10 @@ async function callWithFallback(providers, messages, max_tokens, deep = false) {
   for (const provider of providers) {
     try {
       const text = await provider(messages, max_tokens, deep);
-      return { text, provider: PROVIDER_NAMES.get(provider) || "inconnu" };
+      const name = PROVIDER_NAMES.get(provider) || "inconnu";
+      // Dernier succès : la jauge n'affiche plus une erreur antérieure à ce succès
+      quotaCache[name] = { ...(quotaCache[name] || {}), last_ok_at: new Date().toISOString() };
+      return { text, provider: name };
     } catch (err) {
       console.warn(`Provider failed: ${err.message}, trying next...`);
       const name = PROVIDER_NAMES.get(provider) || "inconnu";
