@@ -40,6 +40,19 @@ const STARTERS: Record<SerieKey, string[]> = {
   ],
 };
 
+// Règle de longueur commune aux assistants méthode (accueil et page Méthode)
+export const REGLE_LONGUEUR = `RÈGLE DE LONGUEUR (impérative) :
+- Par défaut, réponds COURT : 4 à 6 lignes au maximum (environ 80 mots). Va à l'essentiel : l'idée clé et, si besoin, 2 ou 3 étapes très brèves. Pas de longue liste, pas de titres, pas d'introduction.
+- Ne développe (étapes détaillées, exemples, cas particuliers) QUE si l'élève le demande explicitement (« développe », « explique plus », « donne un exemple », « je n'ai pas compris »…). Dans ce cas seulement, tu peux aller jusqu'à 20 lignes.
+- Ne propose pas toi-même de développer : un bouton le permet déjà à l'élève.`;
+
+// Messages envoyés par les boutons rapides sous la dernière réponse
+export const DEMANDES_RAPIDES = [
+  { label: "➕ Développe", texte: "Développe ta réponse, s'il te plaît." },
+  { label: "💡 Un exemple", texte: "Donne-moi un exemple concret, s'il te plaît." },
+  { label: "🤔 Je n'ai pas compris", texte: "Je n'ai pas compris, peux-tu l'expliquer autrement ?" },
+];
+
 // Contexte envoyé à l'IA : fiches + FAQ du professeur pour la série choisie
 export function buildMethodeContext(serie: SerieKey, mc: MethodeFiches, faq: FaqItem[]) {
   const isTechno = serie === "techno";
@@ -66,7 +79,7 @@ ${fichesDissertation}
 ${ficheExpl}${faqContext}
 
 ${serieInstruction}
-Réponds de façon concise (une quinzaine de lignes au plus), avec des étapes claires quand c'est utile. Termine si possible par une petite question ou un exercice pour vérifier que l'élève a compris.
+${REGLE_LONGUEUR}
 Ne rédige jamais le devoir à la place de l'élève : guide-le.
 Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs…), tu peux répondre brièvement mais ramène toujours à la méthode.`;
 }
@@ -250,6 +263,19 @@ export default function MethodeChatHome({
                     </div>
                   </div>
                 )
+              )}
+
+              {!loading && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+                <div className="flex flex-wrap gap-2 pl-10">
+                  {DEMANDES_RAPIDES.map((d) => (
+                    <button
+                      key={d.label}
+                      onClick={() => send(d.texte)}
+                      className="text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 rounded-full px-3 py-1.5 transition-all">
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
               )}
 
               {loading && (

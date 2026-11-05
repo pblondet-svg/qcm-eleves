@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -5391,11 +5391,13 @@ ${fichesDissertation}
 ${ficheExpl}${faqContext}
 
 ${serieInstruction}
+${REGLE_LONGUEUR}
 Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs…), tu peux répondre brièvement mais ramène toujours à la méthode.`;
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = { role: "user", content: input.trim() };
+  const sendMessage = async (preset?: string) => {
+    const text = (preset ?? input).trim();
+    if (!text || loading) return;
+    const userMsg = { role: "user", content: text };
     const newMsgs = [...messages, userMsg];
     setMessages(newMsgs);
     setInput("");
@@ -5469,10 +5471,20 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "bg-gray-800 text-white" : "bg-gray-50 border border-gray-200 text-gray-800"}`}>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.role === "user" ? <p className="whitespace-pre-wrap">{msg.content}</p> : <RichText text={msg.content} />}
                 </div>
               </div>
             ))}
+            {!loading && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+              <div className="flex flex-wrap gap-2">
+                {DEMANDES_RAPIDES.map((d) => (
+                  <button key={d.label} onClick={() => sendMessage(d.texte)}
+                    className="text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:border-amber-400 hover:bg-amber-50 rounded-full px-3 py-1.5 transition-all">
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {loading && (
               <div className="flex justify-start">
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-2">
@@ -5489,7 +5501,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
               className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-amber-400 focus:outline-none"
               placeholder="Ta question sur la méthode…" disabled={loading} />
-            <button onClick={sendMessage} disabled={!input.trim() || loading}
+            <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
               className={`px-4 py-2.5 rounded-xl font-bold text-sm text-white transition-all ${!input.trim() || loading ? "bg-gray-300" : accentBtn}`}>
               <Send className="w-4 h-4" />
             </button>
