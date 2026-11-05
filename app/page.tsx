@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -270,8 +270,63 @@ type MethodeContent = {
 };
 
 const DEFAULT_METHODE_CONTENT: MethodeContent = {
-  hlp_interpretation: "",
-  hlp_essai: "",
+  hlp_interpretation: `L'exercice ressemble un peu à un mini commentaire de texte. Il faut se baser beaucoup sur le texte, et ne pas hésiter à le citer et à l'expliquer en mettant en avant les passages importants par rapport à la question posée. Il n'est pas obligatoire de faire un commentaire linéaire.
+
+I – UNE MINI INTRODUCTION
+1. Présentation de l'œuvre (nom de l'auteur, titre de l'ouvrage, date de parution)
+2. Thème auquel le texte fait référence (par exemple : les métamorphoses du moi, les expressions de la sensibilité, etc.)
+3. Thèse de l'auteur
+4. Définitions des termes du sujet
+5. Paradoxe (s'il existe)
+6. Problématique du sujet
+
+II – UN MINI COMMENTAIRE
+1 paragraphe commenté :
+1. Thèse du texte
+2. Arguments du texte
+3. Citation du texte
+4. Exemple provenant de votre réflexion personnelle
+
+CE QU'ATTEND LE JURY
+- L'exercice n'impose ni un nombre de « parties », ni une forme prédéfinie : ce n'est pas une explication de texte exhaustive, mais une lecture centrée sur certains éléments parmi les plus significatifs.
+- L'interprétation, guidée par la question, demande une attention à la lettre et à la langue du texte, et tout particulièrement au questionnement qu'il développe.
+- On attend une attention soutenue, et si possible une claire compréhension, des idées principales du texte.
+- Une expression claire, dense et correcte ; des analyses au service de l'interprétation défendue, quelle qu'elle soit parmi les possibles, sans faire parler une partie du texte pour le tout, et étayées par des exemples probants.
+- Un candidat capable de soutenir l'une des thèses possibles, en renvoyant au texte sans erreur majeure de compréhension, a montré qu'il sait saisir la portée d'une question et défendre une lecture du texte.
+- Sont valorisées : la capacité à approfondir, à nuancer, à interpréter les termes du sujet.
+- La qualité de l'expression compte (orthographe, syntaxe, précision, justesse de la rédaction).`,
+  hlp_essai: `Attention : ce n'est pas la dissertation du tronc commun de philosophie. L'essai est un exercice d'argumentation ordonnée, plus bref et plus libre que la dissertation.
+
+CONSIGNES OFFICIELLES
+- Pour la « question de réflexion » ou « essai », littéraire comme philosophique, on évalue la compréhension du sens de la question posée et de ce qui la justifie, ainsi que la rigueur de la réponse apportée.
+- On valorise l'attention portée à la question posée, son élucidation, l'organisation d'une réponse qui peut être concise, mais qui doit être précise, ordonnée, argumentée, et faire appel de manière pertinente aux éléments les plus déterminants du texte et aux connaissances acquises pendant l'année.
+- La mobilisation des savoirs ne doit pas être artificielle : l'exercice n'est pas un prétexte à la simple restitution de connaissances.
+- L'essai doit rendre compte d'une pensée personnelle, progressive et ordonnée, appuyée sur des références et des exemples précis. Cette pensée en première personne s'adosse à ce que disent les œuvres et les textes et à ce qu'ils permettent de comprendre des réalités du monde. Le propos progresse librement, mais avec ordre.
+
+I – UNE MINI INTRODUCTION (À PEU PRÈS 20 LIGNES)
+1. Opinion commune (en grec doxa)
+2. Définitions
+3. Paradoxe (en grec para = contre)
+4. Une problématique (possibilité de recopier le sujet)
+5. (Facultatif) Annonce de plan
+
+II – DÉVELOPPEMENT
+Au minimum 1 paragraphe argumenté, mais il est conseillé d'en faire 2. Si 2 paragraphes thèse / antithèse : appliquer la même méthode pour les deux.
+1. Thèse
+2. Arguments de la thèse
+3. Exemple
+4. Citation : vous pouvez prendre une citation qui provient du texte, mais servez-vous aussi de votre cours. Vous expliquez la citation avec vos mots.
+5. Mini conclusion de l'argumentation (pour chaque paragraphe)
+- (Facultatif) Conclusion globale du développement
+
+PRINCIPAUX ÉLÉMENTS ÉVALUÉS
+- Le candidat a vu que le sujet soulevait un problème, il l'a formulé et a tenté de le résoudre.
+- La solution proposée repose sur une argumentation qui la justifie, et non sur de simples affirmations.
+- L'argumentation est construite et ne se réduit pas à une simple juxtaposition d'exemples ou de remarques.
+- Le candidat témoigne d'un minimum de connaissance sur le problème traité (cours du professeur, expériences ou lectures personnelles).
+- Cette connaissance est bien assimilée : elle est l'occasion d'une réflexion personnelle et non de la réplication d'un cours.
+- Le candidat analyse correctement les notions et maîtrise le vocabulaire qu'il emploie.
+- L'expression, destinée à convaincre, est aussi simple, claire et distincte que possible.`,
   intro_dissertation: `INTRODUCTION DE LA DISSERTATION
 1. Opinion commune (la doxa) : Exprimer clairement ce que les gens pensent habituellement sur le sujet. Tout le développement va souvent consister à montrer en quoi cette opinion courante est fausse ou insuffisante.
 2. Définitions des termes du sujet : Définir chaque terme important. S'appuyer sur le dictionnaire, le cours, la culture générale et l'expérience personnelle.
@@ -345,7 +400,10 @@ const loadMethodeContent = async (): Promise<MethodeContent> => {
   try {
     const val = await dbGetConfig("methode_content");
     if (!val) return DEFAULT_METHODE_CONTENT;
-    return { ...DEFAULT_METHODE_CONTENT, ...JSON.parse(val) };
+    const saved = JSON.parse(val) || {};
+    // Une fiche enregistrée vide ne remplace pas la fiche par défaut
+    Object.keys(saved).forEach(k => { if (typeof saved[k] === "string" && !saved[k].trim()) delete saved[k]; });
+    return { ...DEFAULT_METHODE_CONTENT, ...saved };
   } catch { return DEFAULT_METHODE_CONTENT; }
 };
 
@@ -4534,8 +4592,8 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
     { key: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", desc: "Les 5 éléments obligatoires + éléments optionnels", groupe: "philo" },
     { key: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", desc: "Commentaire linéaire : introduction, développement, conclusion", groupe: "philo" },
     { key: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", desc: "Option 1 (A/B/C) et Option 2 (commentaire libre)", groupe: "philo" },
-    { key: "hlp_interpretation", label: "Question d'interprétation", icon: "🔍", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
-    { key: "hlp_essai", label: "Essai", icon: "🖋️", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
+    { key: "hlp_interpretation", label: "Question d'interprétation philosophique", icon: "🔍", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
+    { key: "hlp_essai", label: "Essai — question de réflexion philosophique", icon: "🖋️", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
   ];
 
   const handleSave = async () => {
@@ -5370,8 +5428,8 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
 
   // Fiches disponibles selon la série : la HLP n'a que ses propres fiches
   const fiches = isHLP ? [
-    { id: "hlp_interpretation", label: "Question d'interprétation", icon: "🔍" },
-    { id: "hlp_essai", label: "Essai", icon: "🖋️" },
+    { id: "hlp_interpretation", label: "Question d'interprétation philosophique", icon: "🔍" },
+    { id: "hlp_essai", label: "Essai — question de réflexion philosophique", icon: "🖋️" },
   ] : [
     { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝" },
     { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺" },
@@ -5391,7 +5449,7 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
   const serieInstruction = isTechno
     ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
     : isHLP
-    ? "L'élève est en HLP : les épreuves sont la question d'interprétation et l'essai. N'applique PAS la méthode de dissertation ou d'explication de texte du tronc commun de philosophie. Si les fiches HLP ci-dessus sont vides, dis-le simplement et conseille de demander au professeur."
+    ? HLP_INSTRUCTION
     : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
 
   // Filtrer les FAQ pertinentes pour cette série
@@ -5551,7 +5609,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
             {(activeFiche === "hlp_interpretation" || activeFiche === "hlp_essai") && (
               (mc[activeFiche as keyof MethodeContent] || "").trim()
-                ? <FicheMarkdown title={activeFiche === "hlp_essai" ? "🖋️ Essai — HLP" : "🔍 Question d'interprétation — HLP"} content={mc[activeFiche as keyof MethodeContent]} />
+                ? <FicheMarkdown title={activeFiche === "hlp_essai" ? "🖋️ Essai — question de réflexion philosophique (HLP)" : "🔍 Question d'interprétation philosophique (HLP)"} content={mc[activeFiche as keyof MethodeContent]} />
                 : <div className="h-full flex flex-col items-center justify-center text-center p-10">
                     <div className="text-4xl mb-3">📜</div>
                     <p className="font-black text-gray-800">Fiche HLP bientôt disponible</p>
@@ -5646,7 +5704,7 @@ function FicheMarkdown({ title, content }: { title: string; content: string }) {
           if (!line.trim()) return <div key={i} className="h-2" />;
           if (line.startsWith("===") || line.startsWith("---")) return <hr key={i} className="border-gray-200 my-3" />;
           // Titres (ligne en majuscules ou commençant par un chiffre + point)
-          if (line.match(/^[A-ZÉÈÊÀÙÎÏ\s]{5,}$/) || line.match(/^[A-Z]\./)) {
+          if (line.match(/^[A-ZÉÈÊÀÙÎÏ\s]{5,}$/) || line.match(/^[A-Z]\./) || (!/[a-zà-öø-ÿ]/.test(line) && /[A-ZÀ-Ý]{4}/.test(line))) {
             return <p key={i} className="font-black text-gray-800 text-sm mt-4 mb-1">{line}</p>;
           }
           // Items numérotés

@@ -33,12 +33,21 @@ const STARTERS: Record<SerieKey, string[]> = {
     "Comment utiliser un exemple ?",
   ],
   hlp: [
-    "Comment répondre à une question d'interprétation ?",
-    "Comment construire un essai ?",
-    "Comment articuler littérature et philosophie ?",
-    "Quelle différence avec la dissertation de philo ?",
+    "Comment faire la mini introduction de l'essai (question de réflexion) ?",
+    "Comment répondre à une question d'interprétation philosophique ?",
+    "Comment construire un paragraphe argumenté dans l'essai ?",
+    "Quelle différence entre l'essai et la dissertation de philo ?",
   ],
 };
+
+// Consigne HLP commune aux assistants (accueil et page Méthode)
+export const HLP_INSTRUCTION = `L'élève est en HLP. Ses deux exercices sont :
+1) la QUESTION D'INTERPRÉTATION PHILOSOPHIQUE (un mini commentaire guidé par la question) ;
+2) l'ESSAI, c'est-à-dire la QUESTION DE RÉFLEXION PHILOSOPHIQUE (une argumentation ordonnée, plus brève et plus libre qu'une dissertation).
+- Commence TOUJOURS ta réponse en nommant l'exercice concerné, en gras : « **Pour la question de réflexion philosophique (essai)** » ou « **Pour la question d'interprétation philosophique** ».
+- Si la question de l'élève peut concerner les deux (par exemple « l'introduction »), présente brièvement les deux, chacune sous son nom, ou demande-lui de quel exercice il s'agit.
+- N'emploie jamais le mot « dissertation » pour un exercice de HLP, et n'applique PAS la méthode de dissertation ou d'explication de texte du tronc commun de philosophie.
+- Appuie-toi uniquement sur les fiches HLP du professeur ci-dessus.`;
 
 // Règle de longueur commune aux assistants méthode (accueil et page Méthode)
 export const REGLE_LONGUEUR = `RÈGLE DE LONGUEUR (impérative) :
@@ -68,7 +77,7 @@ export function buildMethodeContext(serie: SerieKey, mc: MethodeFiches, faq: Faq
   const serieInstruction = isTechno
     ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
     : isHLP
-    ? "L'élève est en HLP : les épreuves sont la question d'interprétation et l'essai. N'applique PAS la méthode de dissertation ou d'explication de texte du tronc commun de philosophie. Si les fiches HLP ci-dessus sont vides, dis-le simplement et conseille de demander au professeur."
+    ? HLP_INSTRUCTION
     : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
 
   const fichesBloc = isHLP
@@ -189,7 +198,11 @@ export default function MethodeChatHome({
                 <h2 className="text-lg font-black leading-tight">Assistant Méthode</h2>
                 <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">Révision de la méthode</span>
               </div>
-              <p className="text-xs text-indigo-100 mt-0.5">Dissertation · explication de texte · paragraphe argumenté</p>
+              <p className="text-xs text-indigo-100 mt-0.5">
+                {serie === "hlp"
+                  ? "HLP : question d'interprétation · essai (question de réflexion philosophique)"
+                  : "Philosophie : dissertation · explication de texte · paragraphe argumenté"}
+              </p>
             </div>
             {messages.length > 0 && (
               <button
@@ -231,7 +244,7 @@ export default function MethodeChatHome({
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm flex-shrink-0">📐</div>
                 <div className="max-w-[85%] bg-white border border-indigo-100 shadow-sm rounded-2xl rounded-bl-md px-4 py-3 text-sm text-gray-800 leading-relaxed">
                   <p>
-                    Bonjour{prenom ? ` ${prenom}` : ""} ! On révise la <strong>méthode</strong> ensemble ({current?.label}).
+                    Bonjour{prenom ? ` ${prenom}` : ""} ! On révise la <strong>méthode</strong> ensemble ({serie === "hlp" ? "HLP : question d'interprétation et essai" : current?.label}).
                     Pose ta question, ou choisis-en une ci-dessous.
                   </p>
                 </div>
