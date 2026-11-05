@@ -89,6 +89,7 @@ async function notifyProf(question: string, eleve: string, serie: string | null)
 //  ?visitor_id=xxx  → les questions de cet élève (et leurs réponses)
 //  ?scope=count     → nombre de questions en attente (prof)
 //  ?scope=all       → toutes les questions (prof)
+//  ?scope=popular   → nombre de lectures par question publiée (public)
 export async function GET(req: NextRequest) {
   const client = db();
   const p = req.nextUrl.searchParams;
@@ -108,6 +109,19 @@ export async function GET(req: NextRequest) {
       reponse: q.statut === "repondue" || q.statut === "publiee" ? q.reponse : null,
     }));
     return json({ questions });
+  }
+
+  // Nombre de lectures de chaque question publiée (public, pour « Les plus consultées »)
+  if (scope === "popular") {
+    const { data, error } = await client
+      .from("faq_vues")
+      .select("faq_id, vues")
+      .order("vues", { ascending: false })
+      .limit(50);
+    if (error) return json({ vues: {} }); // table absente : on n'affiche simplement rien
+    const vues: Record<string, number> = {};
+    (data || []).forEach((r: any) => { vues[r.faq_id] = r.vues; });
+    return json({ vues });
   }
 
   if (scope === "count" || scope === "all") {
@@ -173,6 +187,14 @@ export async function POST(req: NextRequest) {
 
     const notified = await notifyProf(question, eleve, serie);
     return json({ ok: true, id: data.id, notified });
+  }
+
+  // Un élève ouvre une réponse de la FAQ (compté une fois par élève côté navigateur)
+  if (body.action === "view") {
+    const id = String(body.id || "").slice(0, 64);
+    if (!id) return json({ error: "invalid" }, 400);
+    await client.rpc("faq_vue_increment", { p_id: id });
+    return json({ ok: true });
   }
 
   // Tout le reste est réservé au prof

@@ -3488,6 +3488,7 @@ export default function QCMApp() {
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
   const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
   const [faqMethode, setFaqMethode] = useState<FaqItem[]>([]);
+  const [methodeView, setMethodeView] = useState<"chat" | "fiche" | "faq">("faq");
   const [eleveQuestions, setEleveQuestions] = useState<EleveQuestion[]>([]);
 
   const loadLib = async () => {
@@ -3611,7 +3612,10 @@ export default function QCMApp() {
     </div>
   );
 
-  if (!role) return <HomeScreenV2 onSelect={(r: string) => setRole(r)} eleveNom={eleveNom} setEleveNom={setEleveNom} saveEleveNom={saveEleveNom} featuresConfig={featuresConfig} />;
+  if (!role) return <HomeScreenV2 onSelect={(r: string) => { setMethodeView("faq"); setRole(r); }} eleveNom={eleveNom} setEleveNom={setEleveNom} saveEleveNom={saveEleveNom} featuresConfig={featuresConfig}
+    methodeContent={methodeContent} faqMethode={faqMethode}
+    askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 800, false, "methode_accueil"))}
+    onOpenMethode={(r: string, v: "fiche" | "faq") => { setMethodeView(v); setRole(r); }} />;
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
@@ -3621,7 +3625,7 @@ export default function QCMApp() {
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}
       onBack={() => setRole(null)} onStartQuiz={setQuizData} onStartRevision={setRevisionData}
       onStartDissertation={(data: any) => setDissertationData(data)} onRefresh={loadLib}
-      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeContent={methodeContent} faqMethode={faqMethode} eleveQuestions={eleveQuestions} onEleveQuestion={(q: EleveQuestion) => { const updated = [q, ...eleveQuestions]; setEleveQuestions(updated); saveEleveQuestions(updated); }} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
+      featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeView={methodeView} methodeContent={methodeContent} faqMethode={faqMethode} eleveQuestions={eleveQuestions} onEleveQuestion={(q: EleveQuestion) => { const updated = [q, ...eleveQuestions]; setEleveQuestions(updated); saveEleveQuestions(updated); }} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
 
@@ -5328,8 +5332,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
-  const [view, setView] = useState<"chat" | "fiche" | "faq">("faq");
+function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: "chat" | "fiche" | "faq"; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
+  const [view, setView] = useState<"chat" | "fiche" | "faq">(initialView || "faq");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
@@ -5512,7 +5516,8 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         </div>
       )}
       {/* VUE FAQ */}
-      {view === "faq" && <FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom} />} {false && (
+      {view === "faq" && <FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}
+        askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 900, true, "faq_quiz"))} />} {false && (
         <div className="flex-1 overflow-y-auto space-y-4">
           {/* Formulaire question élève */}
           <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
@@ -6390,7 +6395,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeContent, faqMethode, onEleveQuestion }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeView, methodeContent, faqMethode, onEleveQuestion }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
@@ -6515,7 +6520,7 @@ ${allContent}` }]);
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {activeTab === "methode" ? (
-          <MethodeMode serie={serie} matiere={matiere} methodeContent={methodeContent} faqMethode={faqMethode || []} eleveNom={eleveNom} onEleveQuestion={onEleveQuestion} />
+          <MethodeMode initialView={methodeView} serie={serie} matiere={matiere} methodeContent={methodeContent} faqMethode={faqMethode || []} eleveNom={eleveNom} onEleveQuestion={onEleveQuestion} />
         ) : !libLoaded ? (
           <div className="text-center py-20 text-gray-700 font-semibold">Chargement…</div>
         ) : filteredLib.length === 0 ? (

@@ -1,11 +1,13 @@
 "use client";
 // app/HomeScreenV2.tsx
-// Remplace HomeScreen : les cartes « Cours » se masquent depuis
-// Mode Prof → Fonctionnalités → « Cours (page d'accueil) ».
+// Accueil élève : Assistant Méthode (chatbot) en tête de page.
+// Les cartes « Cours » et « Dissertation » se masquent depuis
+// Mode Prof → Fonctionnalités.
 
 import { useState } from "react";
 import { Lock, Sparkles, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import MethodeChatHome from "./MethodeChatHome";
 
 const getProfCodeFromDb = async (): Promise<string | null> => {
   const { data, error } = await supabase.from("config").select("value").eq("key", "prof_code").single();
@@ -16,6 +18,7 @@ const getProfCodeFromDb = async (): Promise<string | null> => {
 const TRACKS = [
   {
     title: "🧠 Philosophie — Série Générale",
+    short: "🧠 Philo Générale",
     titleCls: "text-blue-600",
     card: "border-blue-200 hover:border-blue-400",
     hover: "group-hover:text-blue-700",
@@ -24,6 +27,7 @@ const TRACKS = [
   },
   {
     title: "🔧 Philosophie — Série Techno",
+    short: "🔧 Philo Techno",
     titleCls: "text-orange-600",
     card: "border-orange-200 hover:border-orange-400",
     hover: "group-hover:text-orange-700",
@@ -32,6 +36,7 @@ const TRACKS = [
   },
   {
     title: "📜 HLP — Humanités, Littérature & Philosophie",
+    short: "📜 HLP",
     titleCls: "text-emerald-600",
     card: "border-emerald-200 hover:border-emerald-400",
     hover: "group-hover:text-emerald-700",
@@ -40,7 +45,7 @@ const TRACKS = [
   },
 ];
 
-export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveEleveNom, featuresConfig }: any) {
+export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveEleveNom, featuresConfig, askAI, methodeContent, faqMethode, onOpenMethode }: any) {
   const showCours = featuresConfig?.home_cours !== false; const showDissertation = featuresConfig?.home_dissertation !== false;
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
@@ -74,7 +79,7 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
       <div className="text-center mb-8">
         <div className="text-5xl mb-4">📚</div>
         <h1 className="text-4xl font-black text-gray-800 mb-2">QCM Entraînement</h1>
-        <p className="text-gray-700 text-lg">Choisissez votre profil</p>
+        <p className="text-gray-700 text-lg">Révise la méthode avec ton assistant</p>
       </div>
 
       <div className="w-full max-w-2xl mb-6">
@@ -91,30 +96,32 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
         </div>
       </div>
 
-      {/* Une ligne par parcours : Cours (masquable) + Méthode & FAQ */}
-      {TRACKS.map((t) => (
-        <div key={t.title} className="w-full max-w-2xl mb-3">
-          <p className={`text-xs font-black uppercase tracking-widest mb-2 px-1 ${t.titleCls}`}>{t.title}</p>
-          <div className={`grid gap-3 ${showCours ? "grid-cols-2" : "grid-cols-1"}`}>
-            {showCours && (
+      {/* Assistant Méthode : chatbot directement sur l'accueil */}
+      <MethodeChatHome
+        askAI={askAI}
+        methodeContent={methodeContent || {}}
+        faqMethode={faqMethode || []}
+        onOpenMethode={onOpenMethode || ((r: string) => onSelect(r))}
+        eleveNom={eleveNom}
+      />
+
+      {/* Cours par parcours (masquable depuis Mode Prof) */}
+      {showCours && (
+        <div className="w-full max-w-2xl mb-3">
+          <p className="text-xs font-black uppercase tracking-widest mb-2 px-1 text-gray-500">📖 Réviser le cours</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {TRACKS.map((t) => (
               <button
+                key={t.title}
                 onClick={() => onSelect(t.cours)}
-                className={`bg-white rounded-2xl border-2 shadow-sm p-5 hover:shadow-md transition-all group text-center ${t.card}`}>
-                <div className="text-3xl mb-2">📖</div>
-                <h2 className={`text-sm font-black text-gray-800 transition-colors ${t.hover}`}>Cours</h2>
+                className={`bg-white rounded-2xl border-2 shadow-sm p-4 hover:shadow-md transition-all group text-center ${t.card}`}>
+                <h2 className={`text-sm font-black transition-colors ${t.titleCls}`}>{t.short}</h2>
                 <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
               </button>
-            )}
-            <button
-              onClick={() => onSelect(t.methode)}
-              className={`bg-white rounded-2xl border-2 shadow-sm p-5 hover:shadow-md transition-all group text-center ${t.card}`}>
-              <div className="text-3xl mb-2">📐</div>
-              <h2 className={`text-sm font-black text-gray-800 transition-colors ${t.hover}`}>Méthode et FAQ</h2>
-              <p className="text-gray-400 text-xs mt-0.5">Fiches, assistant, questions au professeur</p>
-            </button>
+            ))}
           </div>
         </div>
-      ))}
+      )}
 
       {/* Dissertation */}
       <div className={`${showDissertation ? "flex" : "hidden"} flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4 mt-3`}>

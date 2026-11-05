@@ -1,6 +1,7 @@
 "use client";
 // app/FaqComponents.tsx
-// - FaqEleve         : FAQ côté élève (recherche, catégories, poser une question, "Mes questions")
+// - FaqEleve         : FAQ côté élève (fil élève ↔ prof, question du jour, plus consultées,
+//                      « Teste-toi » vrai/faux, poser une question, "Mes questions")
 // - ProfFaqManager   : gestion prof (questions reçues + FAQ publiée)
 // - usePendingFaqCount : nombre de questions en attente (badge Mode Prof)
 
@@ -122,19 +123,77 @@ const STATUT_UI: Record<string, { label: string; cls: string }> = {
   rejetee: { label: "Non retenue pour la FAQ", cls: "bg-gray-50 text-gray-500 border-gray-200" },
 };
 
+// Questions déjà ouvertes par cet élève (pour ne compter qu'une vue par élève)
+const SEEN_KEY = "faq_vues_locales";
+const getSeen = (): Set<string> => {
+  try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch { return new Set(); }
+};
+const markSeen = (id: string) => {
+  const s = getSeen();
+  if (s.has(id)) return false;
+  s.add(id);
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(s).slice(-300))); } catch { /* ignore */ }
+  return true;
+};
+
+const parseJSONLoose = (txt: string) => {
+  const c = txt.replace(/```json/g, "").replace(/```/g, "").trim();
+  const m = c.match(/[\[{][\s\S]*[\]}]/);
+  return JSON.parse(m ? m[0] : c);
+};
+
+// Petite mise en forme : **gras** et listes
+function Rich({ text }: { text: string }) {
+  return (
+    <div className="space-y-1.5">
+      {text.split("\n").map((raw, i) => {
+        const line = raw.trimEnd();
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        const b = line.match(/^\s*[-*•]\s+(.*)$/);
+        const parts = (b ? b[1] : line).split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+          p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : <span key={j}>{p}</span>);
+        return b
+          ? <div key={i} className="flex gap-2"><span className="opacity-60">•</span><span>{parts}</span></div>
+          : <p key={i}>{parts}</p>;
+      })}
+    </div>
+  );
+}
+
+const Avatar = ({ kind }: { kind: "prof" | "eleve" }) => (
+  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${kind === "prof" ? "bg-indigo-600 text-white" : "bg-amber-100"}`}>
+    {kind === "prof" ? "👩‍🏫" : "🙋"}
+  </div>
+);
+
+type QuizItem = { affirmation: string; vrai: boolean; explication: string; faq_id?: string };
+
 export function FaqEleve({
-  items, serie, matiere, eleveNom,
-}: { items: FaqItem[]; serie: string | null; matiere: string; eleveNom?: string }) {
+  items, serie, matiere, eleveNom, askAI,
+}: {
+  items: FaqItem[]; serie: string | null; matiere: string; eleveNom?: string;
+  askAI?: (messages: { role: string; content: string }[]) => Promise<string>;
+}) {
   const serieKey = matiere === "hlp" ? "hlp" : serie === "techno" ? "techno" : "generale";
 
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
+  const [open, setOpen] = useState<Record<string, "typing" | "shown">>({});
+  const [vues, setVues] = useState<Record<string, number>>({});
   const [question, setQuestion] = useState("");
   const [website, setWebsite] = useState(""); // champ piège anti-spam (invisible)
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [mine, setMine] = useState<MyQuestion[]>([]);
+  // Teste-toi
+  const [quiz, setQuiz] = useState<QuizItem[] | null>(null);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizErr, setQuizErr] = useState("");
+  const [qi, setQi] = useState(0);
+  const [answer, setAnswer] = useState<boolean | null>(null);
+  const [score, setScore] = useState(0);
   const vid = useRef("");
+  const listRef = useRef<HTMLDivElement>(null);
 
   const loadMine = async () => {
     if (!vid.current) return;
@@ -147,7 +206,35 @@ export function FaqEleve({
   useEffect(() => {
     vid.current = getVisitorId();
     loadMine();
+    fetch("/api/faq?scope=popular", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.vues && setVues(d.vues))
+      .catch(() => { /* silencieux */ });
   }, []);
+
+  const byId = useMemo(() => Object.fromEntries(items.map((i) => [i.id, i])), [items]);
+
+  // Ouvre une réponse : petite animation « le prof écrit… » puis la réponse
+  const reveal = (id: string, scroll = false) => {
+    if (open[id]) {
+      if (!scroll) { setOpen((o) => { const n = { ...o }; delete n[id]; return n; }); return; }
+    } else {
+      setOpen((o) => ({ ...o, [id]: "typing" }));
+      setTimeout(() => setOpen((o) => (o[id] ? { ...o, [id]: "shown" } : o)), 650);
+      if (markSeen(id)) {
+        setVues((v) => ({ ...v, [id]: (v[id] || 0) + 1 }));
+        fetch("/api/faq", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "view", id, visitor_id: vid.current }),
+        }).catch(() => { /* silencieux */ });
+      }
+    }
+    if (scroll) {
+      setSearch(""); setCat("all");
+      setTimeout(() => document.getElementById("faq-" + id)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    }
+  };
 
   const cats = useMemo(() => {
     const m: Record<string, number> = {};
@@ -162,6 +249,22 @@ export function FaqEleve({
       .sort((a, b) => Number(!!b.epingle) - Number(!!a.epingle) || b.createdAt - a.createdAt);
   }, [items, search, cat]);
 
+  // Question du jour : change chaque jour, la même pour tous les élèves
+  const duJour = useMemo(() => {
+    if (items.length === 0) return null;
+    const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
+    const day = Math.floor(Date.now() / 86400000);
+    return sorted[day % sorted.length];
+  }, [items]);
+
+  const populaires = useMemo(
+    () => items
+      .filter((i) => (vues[i.id] || 0) > 0)
+      .sort((a, b) => (vues[b.id] || 0) - (vues[a.id] || 0))
+      .slice(0, 3),
+    [items, vues]
+  );
+
   // Questions déjà présentes dans la FAQ qui ressemblent à ce que tape l'élève
   const similar = useMemo(() => {
     const q = tokens(question);
@@ -174,6 +277,41 @@ export function FaqEleve({
       .slice(0, 3)
       .map((x) => x.i);
   }, [question, items]);
+
+  // ── Teste-toi : 5 affirmations vrai/faux tirées de la FAQ ─────────────────
+  const startQuiz = async () => {
+    if (!askAI || items.length === 0 || quizLoading) return;
+    setQuizLoading(true); setQuizErr(""); setQuiz(null); setQi(0); setAnswer(null); setScore(0);
+    const pool = [...items].sort(() => Math.random() - 0.5).slice(0, 10);
+    const corpus = pool.map((f) => `[id:${f.id}]\nQ: ${f.question}\nR: ${f.reponse.slice(0, 450)}`).join("\n\n");
+    try {
+      const txt = await askAI([{
+        role: "user",
+        content: `Voici des questions-réponses rédigées par un professeur de philosophie sur la méthode (dissertation, explication de texte…).
+
+${corpus}
+
+Écris 5 affirmations courtes (une phrase chacune) pour vérifier qu'un élève de Terminale a compris ces réponses. Environ la moitié doivent être vraies, les autres fausses mais plausibles (une erreur de méthode fréquente). Chaque affirmation doit s'appuyer UNIQUEMENT sur les réponses ci-dessus.
+Réponds uniquement en JSON : [{"affirmation":"...","vrai":true,"explication":"une ou deux phrases qui corrigent ou confirment","faq_id":"l'id de la question utilisée"}]`,
+      }]);
+      const arr = parseJSONLoose(txt);
+      const clean: QuizItem[] = (Array.isArray(arr) ? arr : [])
+        .filter((x: any) => x && typeof x.affirmation === "string" && typeof x.vrai === "boolean")
+        .slice(0, 5);
+      if (clean.length === 0) throw new Error("vide");
+      setQuiz(clean);
+    } catch {
+      setQuizErr("Impossible de préparer le test pour l'instant. Réessaie dans un instant.");
+    }
+    setQuizLoading(false);
+  };
+
+  const pick = (v: boolean) => {
+    if (!quiz || answer !== null) return;
+    setAnswer(v);
+    if (v === quiz[qi].vrai) setScore((s) => s + 1);
+  };
+  const nextQ = () => { setAnswer(null); setQi((i) => i + 1); };
 
   const send = async () => {
     const text = question.trim();
@@ -208,9 +346,128 @@ export function FaqEleve({
     setSending(false);
   };
 
+  const current = quiz && qi < quiz.length ? quiz[qi] : null;
+
   return (
-    <div className="space-y-6">
-      {/* Recherche + catégories */}
+    <div className="space-y-5">
+      {/* ── En haut : question du jour + teste-toi ─────────────────────────── */}
+      {items.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {duJour && (
+            <button
+              onClick={() => reveal(duJour.id, true)}
+              className="text-left bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 hover:border-amber-400 rounded-2xl p-4 transition-all">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">☀️ Question du jour</p>
+              <p className="font-bold text-gray-800 text-sm mt-1.5 leading-snug">{duJour.question}</p>
+              <p className="text-xs font-bold text-amber-700 mt-2">Voir la réponse du prof →</p>
+            </button>
+          )}
+          {askAI && (
+            <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border-2 border-violet-200 rounded-2xl p-4 flex flex-col">
+              <p className="text-[10px] font-black uppercase tracking-widest text-violet-700">🎯 Teste-toi</p>
+              <p className="font-bold text-gray-800 text-sm mt-1.5 leading-snug">Vrai ou faux ? 5 affirmations tirées des réponses du prof.</p>
+              <button
+                onClick={startQuiz}
+                disabled={quizLoading}
+                className="mt-auto pt-2 text-left text-xs font-bold text-violet-700 hover:text-violet-900 disabled:text-violet-300">
+                {quizLoading ? "Préparation du test…" : quiz ? "Recommencer un test →" : "Lancer le test →"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Teste-toi : le jeu ─────────────────────────────────────────────── */}
+      {quizErr && <p className="text-sm font-semibold rounded-xl px-3 py-2 border bg-red-50 text-red-700 border-red-200">{quizErr}</p>}
+      {quiz && (
+        <div className="bg-white border-2 border-violet-200 rounded-2xl p-5">
+          {current ? (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-black text-violet-700">Affirmation {qi + 1} / {quiz.length}</p>
+                <div className="flex gap-1">
+                  {quiz.map((_, i) => (
+                    <span key={i} className={`w-6 h-1.5 rounded-full ${i < qi ? "bg-violet-500" : i === qi ? "bg-violet-300" : "bg-gray-200"}`} />
+                  ))}
+                </div>
+              </div>
+              <p className="font-bold text-gray-800 text-base leading-snug">« {current.affirmation} »</p>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                {[true, false].map((v) => {
+                  const chosen = answer === v;
+                  const right = answer !== null && v === current.vrai;
+                  return (
+                    <button
+                      key={String(v)}
+                      onClick={() => pick(v)}
+                      disabled={answer !== null}
+                      className={`py-3 rounded-xl font-black text-sm border-2 transition-all ${
+                        answer === null
+                          ? "border-gray-200 hover:border-violet-400 hover:bg-violet-50 text-gray-700"
+                          : right
+                          ? "border-green-400 bg-green-50 text-green-700"
+                          : chosen
+                          ? "border-red-300 bg-red-50 text-red-600"
+                          : "border-gray-100 text-gray-300"
+                      }`}>
+                      {v ? "✅ Vrai" : "❌ Faux"}
+                    </button>
+                  );
+                })}
+              </div>
+              {answer !== null && (
+                <div className={`mt-4 rounded-xl p-3 text-sm leading-relaxed border ${answer === current.vrai ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-900"}`}>
+                  <p className="font-black mb-1">{answer === current.vrai ? "Bien vu !" : "Pas tout à fait."}</p>
+                  <p>{current.explication}</p>
+                  <div className="flex items-center justify-between mt-3 gap-2">
+                    {current.faq_id && byId[current.faq_id] ? (
+                      <button onClick={() => reveal(current.faq_id!, true)} className="text-xs font-bold underline">
+                        Relire la réponse du prof
+                      </button>
+                    ) : <span />}
+                    <button onClick={nextQ} className="text-xs font-black bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl">
+                      {qi + 1 < quiz.length ? "Suivante →" : "Voir mon score"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-2">
+              <p className="text-3xl mb-1">{score === quiz.length ? "🏆" : score >= quiz.length / 2 ? "👍" : "📚"}</p>
+              <p className="font-black text-gray-800">{score} / {quiz.length} bonnes réponses</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {score === quiz.length ? "Parfait, la méthode est bien en place." : "Relis les réponses du prof ci-dessous, puis retente ta chance."}
+              </p>
+              <div className="flex justify-center gap-2 mt-3">
+                <button onClick={startQuiz} className="text-xs font-black bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl">Nouveau test</button>
+                <button onClick={() => setQuiz(null)} className="text-xs font-bold text-gray-500 px-3 py-2">Fermer</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Les plus consultées ─────────────────────────────────────────────── */}
+      {populaires.length > 0 && (
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-gray-500 px-1 mb-2">🔥 Les plus consultées</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {populaires.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => reveal(p.id, true)}
+                className="flex-1 text-left bg-white border-2 border-rose-100 hover:border-rose-300 rounded-2xl px-4 py-3 transition-all">
+                <span className="text-xs font-black text-rose-500">#{i + 1}</span>
+                <p className="text-xs font-bold text-gray-800 mt-0.5 leading-snug line-clamp-2">{p.question}</p>
+                <p className="text-[11px] text-gray-400 mt-1">{vues[p.id]} élève{vues[p.id] > 1 ? "s l'ont lue" : " l'a lue"}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Recherche + catégories ──────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border-2 border-indigo-100 p-4 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -240,13 +497,13 @@ export function FaqEleve({
         )}
       </div>
 
-      {/* Liste des questions-réponses */}
-      <div className="space-y-2">
+      {/* ── Fil de conversation élève ↔ prof ────────────────────────────────── */}
+      <div ref={listRef} className="space-y-4">
         {items.length === 0 ? (
           <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-            <div className="text-3xl mb-2">❓</div>
-            <p className="font-bold text-gray-600 text-sm">La FAQ est vide pour l'instant</p>
-            <p className="text-xs text-gray-400 mt-1">Pose la première question ci-dessous.</p>
+            <div className="text-3xl mb-2">💬</div>
+            <p className="font-bold text-gray-600 text-sm">Pas encore de questions dans la FAQ</p>
+            <p className="text-xs text-gray-400 mt-1">Pose la première question au professeur ci-dessous.</p>
           </div>
         ) : visible.length === 0 ? (
           <div className="text-center py-8 bg-white rounded-2xl border-2 border-dashed border-gray-200">
@@ -255,40 +512,68 @@ export function FaqEleve({
           </div>
         ) : (
           <>
-            <p className="text-xs text-gray-400 px-1">{visible.length} réponse{visible.length > 1 ? "s" : ""}</p>
-            {visible.map((item) => (
-              <details key={item.id} className="bg-white rounded-2xl border-2 border-indigo-100 overflow-hidden group">
-                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer hover:bg-indigo-50 transition-colors list-none">
-                  <div className="min-w-0">
-                    <span className="font-bold text-gray-800 text-sm">
-                      {item.epingle && <span title="À lire en priorité">⭐ </span>}
-                      {item.question}
-                    </span>
-                    <span className="block text-xs text-gray-400 mt-0.5">{catOf(item)}</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform flex-shrink-0" />
-                </summary>
-                <div className="px-5 pb-5 pt-3 border-t border-indigo-50">
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{item.reponse}</p>
+            <p className="text-xs text-gray-400 px-1">
+              {visible.length} échange{visible.length > 1 ? "s" : ""} · touche une question pour voir la réponse du prof
+            </p>
+            {visible.map((item) => {
+              const st = open[item.id];
+              const n = vues[item.id] || 0;
+              return (
+                <div key={item.id} id={"faq-" + item.id} className="space-y-2">
+                  {/* Bulle élève */}
+                  <button onClick={() => reveal(item.id)} className="w-full flex justify-end items-end gap-2 group text-left">
+                    <div className={`max-w-[85%] rounded-2xl rounded-br-md px-4 py-3 border-2 transition-all ${st ? "bg-amber-50 border-amber-300" : "bg-white border-amber-100 group-hover:border-amber-300"}`}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {item.epingle && <span className="text-[10px] font-black bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">⭐ À lire</span>}
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{catOf(item)}</span>
+                        {n > 0 && <span className="text-[10px] text-gray-400">· 👀 {n}</span>}
+                      </div>
+                      <p className="font-bold text-gray-800 text-sm leading-snug">{item.question}</p>
+                      {!st && <p className="text-[11px] font-bold text-indigo-500 mt-1.5">Voir la réponse du prof ↓</p>}
+                    </div>
+                    <Avatar kind="eleve" />
+                  </button>
+
+                  {/* Bulle prof */}
+                  {st && (
+                    <div className="flex items-end gap-2">
+                      <Avatar kind="prof" />
+                      {st === "typing" ? (
+                        <div className="bg-indigo-600 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1">
+                          <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                          <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-2 h-2 bg-white/70 rounded-full animate-bounce" />
+                        </div>
+                      ) : (
+                        <div className="max-w-[85%] bg-indigo-600 text-white rounded-2xl rounded-bl-md px-4 py-3 text-sm leading-relaxed shadow-sm">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-indigo-200 mb-1">Le professeur</p>
+                          <Rich text={item.reponse} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </details>
-            ))}
+              );
+            })}
           </>
         )}
       </div>
 
-      {/* Poser une question */}
-      <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 space-y-3">
-        <div>
-          <p className="font-black text-indigo-800 text-sm">Tu ne trouves pas ta réponse ?</p>
-          <p className="text-xs text-indigo-600">Pose ta question au professeur. La réponse apparaîtra dans « Mes questions ».</p>
+      {/* ── Écrire au professeur ────────────────────────────────────────────── */}
+      <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Avatar kind="prof" />
+          <div>
+            <p className="font-black text-indigo-800 text-sm">Tu ne trouves pas ta réponse ?</p>
+            <p className="text-xs text-indigo-600">Écris au professeur. Sa réponse arrivera dans « Mes questions ».</p>
+          </div>
         </div>
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={3}
           maxLength={1000}
-          className="w-full px-3 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none text-gray-800"
+          className="w-full px-4 py-3 border-2 border-indigo-200 rounded-2xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none text-gray-800"
           placeholder="Écris ta question en une ou deux phrases…"
         />
         {/* champ piège : invisible pour les élèves, rempli par les robots */}
@@ -302,12 +587,12 @@ export function FaqEleve({
         />
         {similar.length > 0 && (
           <div className="bg-white border border-amber-200 rounded-xl p-3">
-            <p className="text-xs font-bold text-amber-800 mb-2">Ces réponses existent peut-être déjà :</p>
+            <p className="text-xs font-bold text-amber-800 mb-2">Le prof a peut-être déjà répondu :</p>
             <div className="space-y-1.5">
               {similar.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => { setSearch(s.question); setCat("all"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  onClick={() => reveal(s.id, true)}
                   className="block w-full text-left text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
                   {s.question}
                 </button>
@@ -328,20 +613,28 @@ export function FaqEleve({
         </button>
       </div>
 
-      {/* Mes questions */}
+      {/* ── Mes questions ───────────────────────────────────────────────────── */}
       {mine.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h3 className="font-black text-gray-800 text-sm px-1">Mes questions</h3>
           {mine.map((q) => {
             const ui = STATUT_UI[q.statut] || STATUT_UI.en_attente;
             return (
-              <div key={q.id} className="bg-white rounded-2xl border-2 border-gray-200 p-4">
-                <p className="text-sm font-bold text-gray-800">{q.question}</p>
-                <span className={`inline-block mt-2 text-xs font-bold px-2.5 py-1 rounded-full border ${ui.cls}`}>{ui.label}</span>
+              <div key={q.id} className="space-y-2">
+                <div className="flex justify-end items-end gap-2">
+                  <div className="max-w-[85%] bg-white border-2 border-amber-100 rounded-2xl rounded-br-md px-4 py-3">
+                    <p className="text-sm font-bold text-gray-800">{q.question}</p>
+                    <span className={`inline-block mt-2 text-[11px] font-bold px-2 py-0.5 rounded-full border ${ui.cls}`}>{ui.label}</span>
+                  </div>
+                  <Avatar kind="eleve" />
+                </div>
                 {q.reponse && (
-                  <p className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-green-50 border border-green-100 rounded-xl p-3">
-                    {q.reponse}
-                  </p>
+                  <div className="flex items-end gap-2">
+                    <Avatar kind="prof" />
+                    <div className="max-w-[85%] bg-indigo-600 text-white rounded-2xl rounded-bl-md px-4 py-3 text-sm leading-relaxed">
+                      <Rich text={q.reponse} />
+                    </div>
+                  </div>
                 )}
               </div>
             );
