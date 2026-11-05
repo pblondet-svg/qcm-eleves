@@ -61,7 +61,7 @@ const tokens = (s: string): string[] =>
 const catOf = (i: FaqItem) => i.categorie?.trim() || "Général";
 
 const SERIE_LABELS: Record<FaqItem["serie"], string> = {
-  toutes: "Toutes les séries",
+  toutes: "Philo — tronc commun (Générale + Techno)",
   generale: "Série Générale",
   techno: "Série Techno",
   hlp: "HLP",

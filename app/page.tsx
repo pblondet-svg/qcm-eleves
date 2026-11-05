@@ -264,9 +264,14 @@ type MethodeContent = {
   paragraphe: string;
   expl_generale: string;
   expl_techno: string;
+  // Fiches propres à la HLP (vides tant que le professeur ne les a pas rédigées)
+  hlp_interpretation: string;
+  hlp_essai: string;
 };
 
 const DEFAULT_METHODE_CONTENT: MethodeContent = {
+  hlp_interpretation: "",
+  hlp_essai: "",
   intro_dissertation: `INTRODUCTION DE LA DISSERTATION
 1. Opinion commune (la doxa) : Exprimer clairement ce que les gens pensent habituellement sur le sujet. Tout le développement va souvent consister à montrer en quoi cette opinion courante est fausse ou insuffisante.
 2. Définitions des termes du sujet : Définir chaque terme important. S'appuyer sur le dictionnaire, le cours, la culture générale et l'expérience personnelle.
@@ -4523,12 +4528,14 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
   const [saving, setSaving] = useState(false);
   const [activeKey, setActiveKey] = useState<keyof MethodeContent>("intro_dissertation");
 
-  const fiches: { key: keyof MethodeContent; label: string; icon: string; desc: string }[] = [
-    { key: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", desc: "Opinion commune, définitions, paradoxe, problématique, annonce de plan" },
-    { key: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", desc: "Structure dialectique, exemples, astuce synthèse" },
-    { key: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", desc: "Les 5 éléments obligatoires + éléments optionnels" },
-    { key: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", desc: "Commentaire linéaire : introduction, développement, conclusion" },
-    { key: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", desc: "Option 1 (A/B/C) et Option 2 (commentaire libre)" },
+  const fiches: { key: keyof MethodeContent; label: string; icon: string; desc: string; groupe: "philo" | "hlp" }[] = [
+    { key: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", desc: "Opinion commune, définitions, paradoxe, problématique, annonce de plan", groupe: "philo" },
+    { key: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", desc: "Structure dialectique, exemples, astuce synthèse", groupe: "philo" },
+    { key: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", desc: "Les 5 éléments obligatoires + éléments optionnels", groupe: "philo" },
+    { key: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", desc: "Commentaire linéaire : introduction, développement, conclusion", groupe: "philo" },
+    { key: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", desc: "Option 1 (A/B/C) et Option 2 (commentaire libre)", groupe: "philo" },
+    { key: "hlp_interpretation", label: "Question d'interprétation", icon: "🔍", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
+    { key: "hlp_essai", label: "Essai", icon: "🖋️", desc: "Méthode HLP — vue uniquement par les élèves de HLP", groupe: "hlp" },
   ];
 
   const handleSave = async () => {
@@ -4564,12 +4571,21 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
       <div className="flex gap-4">
         {/* Sidebar fiches */}
         <div className="w-56 flex-shrink-0 space-y-1">
-          {fiches.map(f => (
-            <button key={f.key} onClick={() => setActiveKey(f.key)}
-              className={`w-full text-left px-3 py-3 rounded-xl border-2 transition-all ${activeKey === f.key ? "bg-amber-600 text-white border-amber-600" : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
-              <p className="text-xs font-black">{f.icon} {f.label}</p>
-              <p className={`text-xs mt-0.5 ${activeKey === f.key ? "text-amber-100" : "text-gray-400"}`}>{f.desc}</p>
-            </button>
+          {(["philo", "hlp"] as const).map(g => (
+            <div key={g} className={g === "hlp" ? "pt-4" : ""}>
+              <p className={`text-[10px] font-black uppercase tracking-widest px-1 pb-1.5 ${g === "hlp" ? "text-emerald-700" : "text-blue-700"}`}>
+                {g === "philo" ? "🧠 Philosophie (tronc commun)" : "📜 HLP"}
+              </p>
+              <div className="space-y-1">
+                {fiches.filter(f => f.groupe === g).map(f => (
+                  <button key={f.key} onClick={() => setActiveKey(f.key)}
+                    className={`w-full text-left px-3 py-3 rounded-xl border-2 transition-all ${activeKey === f.key ? (g === "hlp" ? "bg-emerald-600 text-white border-emerald-600" : "bg-amber-600 text-white border-amber-600") : "border-gray-200 bg-white text-gray-700 hover:border-amber-300"}`}>
+                    <p className="text-xs font-black">{f.icon} {f.label}{g === "hlp" && !(methodeContent[f.key] || "").trim() && <span className="ml-1 font-semibold opacity-70">(vide)</span>}</p>
+                    <p className={`text-xs mt-0.5 ${activeKey === f.key ? "text-white/80" : "text-gray-400"}`}>{f.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 
@@ -4585,14 +4601,14 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
             </button>
           </div>
           <textarea
-            value={methodeContent[activeKey]}
+            value={methodeContent[activeKey] || ""}
             onChange={e => { setMethodeContent({ ...methodeContent, [activeKey]: e.target.value }); setSaved(false); }}
             className="flex-1 p-4 text-sm text-gray-800 font-mono leading-relaxed resize-none focus:outline-none min-h-96"
-            placeholder="Contenu de la fiche méthode…"
+            placeholder={activeKey.startsWith("hlp_") ? "Écrivez ici votre méthode HLP. Tant que cette fiche est vide, les élèves de HLP verront « fiche bientôt disponible »." : "Contenu de la fiche méthode…"}
             spellCheck={false}
           />
           <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400 flex justify-between">
-            <span>{methodeContent[activeKey].split("\n").length} lignes · {methodeContent[activeKey].length} caractères</span>
+            <span>{(methodeContent[activeKey] || "").split("\n").length} lignes · {(methodeContent[activeKey] || "").length} caractères</span>
             <span>Format libre — le chatbot lira ce texte tel quel</span>
           </div>
         </div>
@@ -4622,7 +4638,7 @@ function ProfFaqPanel({ faqMethode, setFaqMethode, eleveQuestions, setEleveQuest
   const [editSerie, setEditSerie] = useState<FaqItem["serie"]>("toutes");
 
   const SERIE_LABELS: Record<FaqItem["serie"], string> = {
-    toutes: "Toutes les séries",
+    toutes: "Philo — tronc commun (Générale + Techno)",
     generale: "Série Générale uniquement",
     techno: "Série Techno uniquement",
     hlp: "HLP uniquement",
@@ -4729,7 +4745,7 @@ function ProfFaqPanel({ faqMethode, setFaqMethode, eleveQuestions, setEleveQuest
                     <div className="flex items-center gap-2">
                       <select value={repSerie} onChange={e => setRepSerie(e.target.value as FaqItem["serie"])}
                         className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none">
-                        <option value="toutes">Toutes les séries</option>
+                        <option value="toutes">Philo — tronc commun (Générale + Techno)</option>
                         <option value="generale">Série Générale</option>
                         <option value="techno">Série Techno</option>
                         <option value="hlp">HLP</option>
@@ -5336,7 +5352,7 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
   const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView || "faq");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
-  const [activeFiche, setActiveFiche] = useState<string>("intro_dissertation");
+  const [activeFiche, setActiveFiche] = useState<string>(matiere === "hlp" ? "hlp_interpretation" : "intro_dissertation");
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -5352,8 +5368,11 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
   const headerBg = isTechno ? "bg-orange-50 border-orange-200 text-orange-800" : isHLP ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-blue-800";
   const accentBtn = isTechno ? "bg-orange-600 hover:bg-orange-700" : isHLP ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700";
 
-  // Fiches disponibles selon la série
-  const fiches = [
+  // Fiches disponibles selon la série : la HLP n'a que ses propres fiches
+  const fiches = isHLP ? [
+    { id: "hlp_interpretation", label: "Question d'interprétation", icon: "🔍" },
+    { id: "hlp_essai", label: "Essai", icon: "🖋️" },
+  ] : [
     { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝" },
     { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺" },
     { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️" },
@@ -5365,30 +5384,30 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
   // Contexte méthode injecté dans le prompt selon la série
   // Construire le contexte méthode depuis les fiches (contenu Supabase ou défaut)
   const mc = methodeContent || DEFAULT_METHODE_CONTENT;
-  const fichesDissertation = [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].join("\n\n---\n\n");
-  const ficheExpl = isTechno ? mc.expl_techno : mc.expl_generale;
+  const fichesDissertation = isHLP
+    ? [mc.hlp_interpretation, mc.hlp_essai].filter(t => (t || "").trim()).join("\n\n---\n\n")
+    : [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].join("\n\n---\n\n");
+  const ficheExpl = isHLP ? "" : isTechno ? mc.expl_techno : mc.expl_generale;
   const serieInstruction = isTechno
     ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
     : isHLP
-    ? "Adapte tes conseils aux spécificités littéraires et philosophiques de HLP."
+    ? "L'élève est en HLP : les épreuves sont la question d'interprétation et l'essai. N'applique PAS la méthode de dissertation ou d'explication de texte du tronc commun de philosophie. Si les fiches HLP ci-dessus sont vides, dis-le simplement et conseille de demander au professeur."
     : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
 
   // Filtrer les FAQ pertinentes pour cette série
-  const faqRelevantes = (faqMethode || []).filter(f =>
-    f.serie === "toutes" || f.serie === serie || (isHLP && f.serie === "hlp") || (!serie && f.serie === "generale")
+  // HLP : uniquement les questions marquées HLP ; philo : tronc commun + série de l'élève
+  const faqRelevantes = (faqMethode || []).filter(f => isHLP
+    ? f.serie === "hlp"
+    : f.serie === "toutes" || f.serie === serie || (!serie && f.serie === "generale")
   );
   const faqContext = faqRelevantes.length > 0
     ? "\n\n=== FAQ ET CONSEILS DU PROFESSEUR ===\n" + faqRelevantes.map(f => `Q: ${f.question}\nR: ${f.reponse}`).join("\n\n")
     : "";
 
-  const methodeContext = `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie${isTechno ? " (Série Technologique)" : isHLP ? " (HLP)" : " (Série Générale)"} en Terminale.
+  const methodeContext = `Tu es un assistant pédagogique spécialisé en méthodologie ${isHLP ? "de HLP (Humanités, Littérature et Philosophie)" : "de philosophie" + (isTechno ? " (Série Technologique)" : " (Série Générale)")} en Terminale.
 Tu dois répondre en te basant sur les fiches méthode et la FAQ rédigées par le professeur. C'est la référence absolue.
 
-=== FICHES DISSERTATION ===
-${fichesDissertation}
-
-=== FICHE EXPLICATION DE TEXTE ===
-${ficheExpl}${faqContext}
+${isHLP ? "=== FICHES MÉTHODE HLP ===\n" + (fichesDissertation || "(Le professeur n'a pas encore rédigé de fiche HLP.)") : "=== FICHES DISSERTATION ===\n" + fichesDissertation + "\n\n=== FICHE EXPLICATION DE TEXTE ===\n" + ficheExpl}${faqContext}
 
 ${serieInstruction}
 ${REGLE_LONGUEUR}
@@ -5430,10 +5449,12 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "fiche" ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             📋 Fiches méthode
           </button>
+          {!isHLP && (
           <button onClick={() => setView("plan")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "plan" ? "bg-violet-600 hover:bg-violet-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             🎯 S'entraîner
           </button>
+          )}
           <button onClick={() => setView("faq")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "faq" ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             ❓ FAQ {faqRelevantes.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${view === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqRelevantes.length}</span>}
@@ -5528,11 +5549,20 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             {activeFiche === "paragraphe" && <FicheMarkdown title="✍️ Rédiger un paragraphe" content={mc.paragraphe} />}
             {activeFiche === "expl_techno" && <FicheMarkdown title="🔧 Explication de texte — Série Techno" content={mc.expl_techno} />}
             {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
+            {(activeFiche === "hlp_interpretation" || activeFiche === "hlp_essai") && (
+              (mc[activeFiche as keyof MethodeContent] || "").trim()
+                ? <FicheMarkdown title={activeFiche === "hlp_essai" ? "🖋️ Essai — HLP" : "🔍 Question d'interprétation — HLP"} content={mc[activeFiche as keyof MethodeContent]} />
+                : <div className="h-full flex flex-col items-center justify-center text-center p-10">
+                    <div className="text-4xl mb-3">📜</div>
+                    <p className="font-black text-gray-800">Fiche HLP bientôt disponible</p>
+                    <p className="text-sm text-gray-500 mt-1 max-w-sm">Ton professeur prépare cette fiche. Attention : les fiches de philosophie du tronc commun (dissertation, explication de texte) ne s'appliquent pas à la HLP.</p>
+                  </div>
+            )}
           </div>
         </div>
       )}
       {/* VUE ENTRAÎNEMENT AU PLAN */}
-      {view === "plan" && (
+      {view === "plan" && !isHLP && (
         <PlanTrainer
           ficheTas={mc.plan_tas}
           matiere={matiere}

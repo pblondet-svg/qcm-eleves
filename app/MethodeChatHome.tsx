@@ -34,9 +34,9 @@ const STARTERS: Record<SerieKey, string[]> = {
   ],
   hlp: [
     "Comment répondre à une question d'interprétation ?",
-    "Comment rédiger une bonne introduction ?",
+    "Comment construire un essai ?",
     "Comment articuler littérature et philosophie ?",
-    "Comment rédiger un paragraphe argumenté ?",
+    "Quelle différence avec la dissertation de philo ?",
   ],
 };
 
@@ -57,26 +57,28 @@ export const DEMANDES_RAPIDES = [
 export function buildMethodeContext(serie: SerieKey, mc: MethodeFiches, faq: FaqItem[]) {
   const isTechno = serie === "techno";
   const isHLP = serie === "hlp";
-  const fichesDissertation = [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].filter(Boolean).join("\n\n---\n\n");
-  const ficheExpl = (isTechno ? mc.expl_techno : mc.expl_generale) || "";
-  const faqRel = faq.filter((f) => f.serie === "toutes" || f.serie === serie);
+  const fichesDissertation = isHLP
+    ? [mc.hlp_interpretation, mc.hlp_essai].filter((t) => (t || "").trim()).join("\n\n---\n\n")
+    : [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].filter(Boolean).join("\n\n---\n\n");
+  const ficheExpl = isHLP ? "" : (isTechno ? mc.expl_techno : mc.expl_generale) || "";
+  const faqRel = faq.filter((f) => (isHLP ? f.serie === "hlp" : f.serie === "toutes" || f.serie === serie));
   const faqContext = faqRel.length
     ? "\n\n=== FAQ ET CONSEILS DU PROFESSEUR ===\n" + faqRel.map((f) => `Q: ${f.question}\nR: ${f.reponse}`).join("\n\n")
     : "";
   const serieInstruction = isTechno
     ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
     : isHLP
-    ? "Adapte tes conseils aux spécificités littéraires et philosophiques de HLP."
+    ? "L'élève est en HLP : les épreuves sont la question d'interprétation et l'essai. N'applique PAS la méthode de dissertation ou d'explication de texte du tronc commun de philosophie. Si les fiches HLP ci-dessus sont vides, dis-le simplement et conseille de demander au professeur."
     : "Sois précis, pédagogique et encourage la rigueur philosophique. Niveau Série Générale.";
 
-  return `Tu es un assistant pédagogique spécialisé en méthodologie de philosophie${isTechno ? " (Série Technologique)" : isHLP ? " (HLP)" : " (Série Générale)"} en Terminale.
+  const fichesBloc = isHLP
+    ? "=== FICHES MÉTHODE HLP ===\n" + (fichesDissertation || "(Le professeur n'a pas encore rédigé de fiche HLP.)")
+    : "=== FICHES DISSERTATION ===\n" + fichesDissertation + "\n\n=== FICHE EXPLICATION DE TEXTE ===\n" + ficheExpl;
+
+  return `Tu es un assistant pédagogique spécialisé en méthodologie ${isHLP ? "de HLP (Humanités, Littérature et Philosophie)" : "de philosophie" + (isTechno ? " (Série Technologique)" : " (Série Générale)")} en Terminale.
 Tu dois répondre en te basant sur les fiches méthode et la FAQ rédigées par le professeur. C'est la référence absolue.
 
-=== FICHES DISSERTATION ===
-${fichesDissertation}
-
-=== FICHE EXPLICATION DE TEXTE ===
-${ficheExpl}${faqContext}
+${fichesBloc}${faqContext}
 
 ${serieInstruction}
 ${REGLE_LONGUEUR}
@@ -145,7 +147,7 @@ export default function MethodeChatHome({
 
   const current = SERIES.find((s) => s.key === serie) || null;
   const prenom = (eleveNom || "").trim().split(/\s+/)[0];
-  const faqCount = serie ? faqMethode.filter((f) => f.serie === "toutes" || f.serie === serie).length : 0;
+  const faqCount = serie ? faqMethode.filter((f) => (serie === "hlp" ? f.serie === "hlp" : f.serie === "toutes" || f.serie === serie)).length : 0;
 
   const chooseSerie = (s: SerieKey) => {
     if (s === serie) return;
@@ -323,7 +325,8 @@ export default function MethodeChatHome({
           </button>
           <button
             onClick={() => current && onOpenMethode(current.role, "plan")}
-            disabled={!current}
+            disabled={!current || serie === "hlp"}
+            title={serie === "hlp" ? "Exercice réservé à la dissertation de philosophie" : undefined}
             className="flex items-center justify-center gap-2 py-3 text-xs font-bold text-violet-700 hover:bg-violet-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors border-r border-gray-100">
             <Target className="w-4 h-4" /> S'entraîner
           </button>
