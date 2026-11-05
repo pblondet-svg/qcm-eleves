@@ -185,6 +185,7 @@ export function FaqEleve({
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [mine, setMine] = useState<MyQuestion[]>([]);
+  const [askOpen, setAskOpen] = useState(false);
   // Teste-toi
   const [quiz, setQuiz] = useState<QuizItem[] | null>(null);
   const [quizLoading, setQuizLoading] = useState(false);
@@ -377,6 +378,63 @@ Réponds uniquement en JSON : [{"affirmation":"...","vrai":true,"explication":"u
         </div>
       )}
 
+      {/* ── Écrire au professeur ────────────────────────────────────────────── */}
+      <div id="faq-poser" className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4 space-y-3">
+        <button onClick={() => setAskOpen(!askOpen)} className="w-full flex items-center gap-2 text-left">
+          <Avatar kind="prof" />
+          <div className="flex-1">
+            <p className="font-black text-indigo-800 text-sm">Poser une question au professeur</p>
+            <p className="text-xs text-indigo-600">Ta question lui est envoyée ; sa réponse arrivera dans « Mes questions », en bas de cette page.</p>
+          </div>
+          <span className="text-xs font-black text-white bg-indigo-600 rounded-full px-3 py-1.5 flex-shrink-0">{askOpen ? "Fermer" : "Écrire"}</span>
+        </button>
+        {askOpen && (<>
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={3}
+          maxLength={1000}
+          className="w-full px-4 py-3 border-2 border-indigo-200 rounded-2xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none text-gray-800"
+          placeholder="Écris ta question en une ou deux phrases…"
+        />
+        {/* champ piège : invisible pour les élèves, rempli par les robots */}
+        <input
+          tabIndex={-1}
+          autoComplete="off"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          className="hidden"
+          aria-hidden="true"
+        />
+        {similar.length > 0 && (
+          <div className="bg-white border border-amber-200 rounded-xl p-3">
+            <p className="text-xs font-bold text-amber-800 mb-2">Le prof a peut-être déjà répondu :</p>
+            <div className="space-y-1.5">
+              {similar.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => reveal(s.id, true)}
+                  className="block w-full text-left text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
+                  {s.question}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {feedback && (
+          <p className={`text-sm font-semibold rounded-xl px-3 py-2 border ${feedback.type === "ok" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+            {feedback.text}
+          </p>
+        )}
+        <button
+          onClick={send}
+          disabled={question.trim().length < 5 || sending}
+          className={`w-full py-2.5 rounded-xl font-bold text-sm text-white transition-all ${question.trim().length >= 5 && !sending ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300"}`}>
+          {sending ? "Envoi en cours…" : "Envoyer ma question au professeur"}
+        </button>
+        </>)}
+      </div>
+
       {/* ── Teste-toi : le jeu ─────────────────────────────────────────────── */}
       {quizErr && <p className="text-sm font-semibold rounded-xl px-3 py-2 border bg-red-50 text-red-700 border-red-200">{quizErr}</p>}
       {quiz && (
@@ -503,12 +561,12 @@ Réponds uniquement en JSON : [{"affirmation":"...","vrai":true,"explication":"u
           <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
             <div className="text-3xl mb-2">💬</div>
             <p className="font-bold text-gray-600 text-sm">Pas encore de questions dans la FAQ</p>
-            <p className="text-xs text-gray-400 mt-1">Pose la première question au professeur ci-dessous.</p>
+            <p className="text-xs text-gray-400 mt-1">Pose la première question au professeur avec le bouton « Écrire » en haut.</p>
           </div>
         ) : visible.length === 0 ? (
           <div className="text-center py-8 bg-white rounded-2xl border-2 border-dashed border-gray-200">
             <p className="font-bold text-gray-600 text-sm">Aucune réponse ne correspond à ta recherche</p>
-            <p className="text-xs text-gray-400 mt-1">Pose ta question au professeur juste en dessous.</p>
+            <button onClick={() => { setAskOpen(true); document.getElementById("faq-poser")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="text-xs font-bold text-indigo-600 underline mt-1">Pose ta question au professeur</button>
           </div>
         ) : (
           <>
@@ -557,60 +615,6 @@ Réponds uniquement en JSON : [{"affirmation":"...","vrai":true,"explication":"u
             })}
           </>
         )}
-      </div>
-
-      {/* ── Écrire au professeur ────────────────────────────────────────────── */}
-      <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Avatar kind="prof" />
-          <div>
-            <p className="font-black text-indigo-800 text-sm">Tu ne trouves pas ta réponse ?</p>
-            <p className="text-xs text-indigo-600">Écris au professeur. Sa réponse arrivera dans « Mes questions ».</p>
-          </div>
-        </div>
-        <textarea
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          rows={3}
-          maxLength={1000}
-          className="w-full px-4 py-3 border-2 border-indigo-200 rounded-2xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none text-gray-800"
-          placeholder="Écris ta question en une ou deux phrases…"
-        />
-        {/* champ piège : invisible pour les élèves, rempli par les robots */}
-        <input
-          tabIndex={-1}
-          autoComplete="off"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-          className="hidden"
-          aria-hidden="true"
-        />
-        {similar.length > 0 && (
-          <div className="bg-white border border-amber-200 rounded-xl p-3">
-            <p className="text-xs font-bold text-amber-800 mb-2">Le prof a peut-être déjà répondu :</p>
-            <div className="space-y-1.5">
-              {similar.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => reveal(s.id, true)}
-                  className="block w-full text-left text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
-                  {s.question}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {feedback && (
-          <p className={`text-sm font-semibold rounded-xl px-3 py-2 border ${feedback.type === "ok" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-            {feedback.text}
-          </p>
-        )}
-        <button
-          onClick={send}
-          disabled={question.trim().length < 5 || sending}
-          className={`w-full py-2.5 rounded-xl font-bold text-sm text-white transition-all ${question.trim().length >= 5 && !sending ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300"}`}>
-          {sending ? "Envoi en cours…" : "Envoyer ma question au professeur"}
-        </button>
       </div>
 
       {/* ── Mes questions ───────────────────────────────────────────────────── */}

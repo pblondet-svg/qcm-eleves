@@ -5656,8 +5656,8 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         />
       )}
       {/* VUE FAQ */}
-      {view === "faq" && <FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}
-        askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 900, true, "faq_quiz"))} />} {false && (
+      {view === "faq" && <div className="flex-1 overflow-y-auto pb-6"><FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}
+        askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 900, true, "faq_quiz"))} /></div>} {false && (
         <div className="flex-1 overflow-y-auto space-y-4">
           {/* Formulaire question élève */}
           <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
