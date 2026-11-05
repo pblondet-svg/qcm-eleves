@@ -46,7 +46,7 @@ const TRACKS = [
 ];
 
 export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveEleveNom, featuresConfig, askAI, methodeContent, faqMethode, onOpenMethode }: any) {
-  const showCours = featuresConfig?.home_cours !== false; const showDissertation = featuresConfig?.home_dissertation !== false;
+  const showCours = featuresConfig?.home_cours !== false; const showDissertation = featuresConfig?.home_dissertation !== false; const showHlp1 = featuresConfig?.home_hlp1 === true;
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
@@ -103,6 +103,17 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
         onOpenMethode={onOpenMethode || ((r: string) => onSelect(r))}
         eleveNom={eleveNom}
       />
+
+      {/* Révision du cours HLP Première (activable depuis Mode Prof → Fonctionnalités) */}
+      {showHlp1 && (
+        <button
+          onClick={() => onSelect("eleve-HLP1-cours")}
+          className="w-full max-w-2xl mb-6 bg-white rounded-2xl border-2 border-emerald-200 hover:border-emerald-400 shadow-sm hover:shadow-md p-5 text-left transition-all group">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Spécialité HLP — Première</p>
+          <h2 className="text-lg font-black text-gray-800 group-hover:text-emerald-700 transition-colors mt-0.5">Révision du cours</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Tuteur de révision, quiz et explication de citations, séance par séance</p>
+        </button>
+      )}
 
       {/* Cours par parcours (masquable depuis Mode Prof) */}
       {showCours && (
