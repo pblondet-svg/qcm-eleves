@@ -22,7 +22,7 @@ const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
 
 // Limites gratuites indicatives (requêtes par jour) — modifiables ci-dessous,
 // car les fournisseurs les changent régulièrement.
-const DEFAULT_LIMITS: Limits = { google: 250, "google-lite": 1000, groq: 14400, cerebras: 14400, mistral: 5000 };
+const DEFAULT_LIMITS: Limits = { google: 250, "google-lite": 1000, groq: 1000, cerebras: 14400, mistral: 5000 };
 
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const isToday = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date().toDateString();

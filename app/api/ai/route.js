@@ -8,12 +8,24 @@ const supabase = createClient(
 // Laisse le temps aux réponses « réfléchies » (deep) de se terminer sur Vercel
 export const maxDuration = 60;
 
-const GROQ_MODEL = "llama-3.1-8b-instant";
-const GOOGLE_MODEL = "gemini-2.5-flash";
-// Quota gratuit séparé et plus large : prend le relais quand Flash est épuisé
-const GOOGLE_LITE_MODEL = "gemini-2.5-flash-lite";
-const MISTRAL_MODEL = "mistral-small-latest";
-const CEREBRAS_MODEL = "llama-3.3-70b";
+// Modèles utilisés (novembre 2026). Chacun peut être changé sans toucher au code,
+// en ajoutant la variable correspondante dans Vercel (Settings → Environment Variables).
+// - Groq a retiré llama-3.1-8b-instant de son offre gratuite → gpt-oss-20b
+// - Cerebras ne propose plus llama-3.3-70b → gpt-oss-120b (65k de contexte en gratuit)
+// - Google : gemini-2.5-flash n'a plus de quota gratuit pour les nouveaux comptes,
+//   gemini-2.5-flash-lite n'est plus ouvert aux nouveaux utilisateurs → génération 3.x
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const GOOGLE_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+const GOOGLE_LITE_MODEL = process.env.GEMINI_LITE_MODEL || "gemini-3.5-flash-lite";
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-small-latest";
+const CEREBRAS_MODEL = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
+
+// Message d'erreur lisible (statut HTTP + message du fournisseur), affiché dans la jauge
+async function erreurLisible(nom, response) {
+  let msg = "";
+  try { const t = await response.text(); try { const j = JSON.parse(t); msg = j.error?.message || j.message || j.detail || t; } catch { msg = t; } } catch { /* rien */ }
+  return new Error(`${nom} ${response.status} : ${String(msg || response.statusText).slice(0, 300)}`);
+}
 
 // ── Quotas : on garde les en-têtes « x-ratelimit-* » renvoyés par les fournisseurs ──
 // (Groq, Cerebras et Mistral indiquent ce qu'il reste ; Google ne le fait pas).
@@ -36,29 +48,47 @@ async function flushQuota() {
   } catch { /* silencieux */ }
 }
 
-// Appel Groq
-async function callGroq(messages, max_tokens) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({ model: GROQ_MODEL, messages, max_tokens, temperature: 0.7 }),
+// Appel d'une API « compatible OpenAI » (Groq, Cerebras, Mistral)
+// Les modèles gpt-oss raisonnent avant de répondre : on demande un raisonnement court
+// et on ajoute de la marge, sinon la réponse peut être coupée.
+async function callCompat(nom, url, cle, model, messages, max_tokens) {
+  const gptOss = /gpt-oss/.test(model);
+  const corps = (avecRaisonnement) => JSON.stringify({
+    model, messages,
+    max_tokens: gptOss ? max_tokens + 1500 : max_tokens,
+    temperature: 0.7,
+    ...(gptOss && avecRaisonnement ? { reasoning_effort: "low" } : {}),
   });
-  captureLimits("groq", response.headers);
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "Erreur Groq");
+  const envoyer = (avec) => fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cle}` },
+    body: corps(avec),
+  });
+  let response = await envoyer(true);
+  captureLimits(nom, response.headers);
+  if (!response.ok && gptOss && response.status === 400) {
+    // Si le fournisseur refuse le réglage du raisonnement, on réessaie sans
+    const err = await erreurLisible(nom, response);
+    if (!/reasoning/i.test(err.message)) throw err;
+    response = await envoyer(false);
+    captureLimits(nom, response.headers);
   }
+  if (!response.ok) throw await erreurLisible(nom, response);
   const data = await response.json();
-  return data.choices[0].message.content;
+  const text = data.choices?.[0]?.message?.content || "";
+  if (!text.trim()) throw new Error(`${nom} : réponse vide`);
+  return text;
 }
+const callGroq = (m, t) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t);
+const callCerebras = (m, t) => callCompat("cerebras", "https://api.cerebras.ai/v1/chat/completions", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL, m, t);
+const callMistral = (m, t) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t);
 
 // Appel Google Gemini
 async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MODEL) {
   const systemMessage = messages.find((m) => m.role === "system");
   const userMessages = messages.filter((m) => m.role !== "system");
+  // Gemini 3 refuse une conversation qui se termine par une réponse du modèle
+  while (userMessages.length && userMessages[userMessages.length - 1].role === "assistant") userMessages.pop();
   const geminiBody = {
     system_instruction: systemMessage
       ? { parts: [{ text: systemMessage.content }] }
@@ -67,23 +97,18 @@ async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MOD
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    // Par défaut, thinkingBudget: 0 : Gemini 2.5 ne « réfléchit » pas en silence (sinon cette
-    // réflexion consomme les max_tokens et la réponse arrive vide ou coupée).
-    // deep = true : on lui laisse un temps de réflexion, ajouté en plus de la longueur de réponse.
-    generationConfig: {
-      maxOutputTokens: deep ? max_tokens + 3000 : max_tokens,
-      temperature: deep ? 0.5 : 0.7,
-      thinkingConfig: { thinkingBudget: deep ? 3000 : 0 },
-    },
+    // Gemini 3.x : réflexion réglée par niveau (minimal / medium), et plus de « temperature ».
+    // Gemini 2.5 : thinkingBudget 0 (sinon la réflexion consomme les max_tokens).
+    // deep = true : on laisse un temps de réflexion, ajouté en plus de la longueur de réponse.
+    generationConfig: /^gemini-[3-9]/.test(model)
+      ? { maxOutputTokens: max_tokens + (deep ? 4000 : 1000), thinkingConfig: { thinkingLevel: deep ? "medium" : "minimal" } }
+      : { maxOutputTokens: deep ? max_tokens + 3000 : max_tokens, temperature: deep ? 0.5 : 0.7, thinkingConfig: { thinkingBudget: deep ? 3000 : 0 } },
   };
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) }
   );
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "Erreur Google");
-  }
+  if (!response.ok) throw await erreurLisible(model, response);
   const data = await response.json();
   const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
   if (!text.trim()) throw new Error("Réponse Google vide");
@@ -202,10 +227,9 @@ export async function POST(request) {
         messages, max_tokens
       );
     } else {
-      // Requêtes lourdes : Google Flash → Google Flash-Lite → Mistral → Cerebras → Groq
-      // (Mistral avant Cerebras et Groq : il accepte des requêtes plus longues)
+      // Requêtes lourdes : Google Flash → Google Flash-Lite → Cerebras (gpt-oss-120b, long contexte) → Mistral → Groq
       result = await callWithFallback(
-        [callGoogle, callGoogleLite, callMistral, callCerebras, callGroq],
+        [callGoogle, callGoogleLite, callCerebras, callMistral, callGroq],
         messages, max_tokens, !!deep
       );
     }
