@@ -95,15 +95,6 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
         </div>
       </div>
 
-      {/* Assistant Méthode : chatbot directement sur l'accueil */}
-      <MethodeChatHome
-        askAI={askAI}
-        methodeContent={methodeContent || {}}
-        faqMethode={faqMethode || []}
-        onOpenMethode={onOpenMethode || ((r: string) => onSelect(r))}
-        eleveNom={eleveNom}
-      />
-
       {/* Révision du cours HLP Première (activable depuis Mode Prof → Fonctionnalités) */}
       {showHlp1 && (
         <button
@@ -114,6 +105,15 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
           <p className="text-sm text-gray-500 mt-0.5">Tuteur de révision, quiz et explication de citations, séance par séance</p>
         </button>
       )}
+
+      {/* Assistant Méthode : chatbot directement sur l'accueil */}
+      <MethodeChatHome
+        askAI={askAI}
+        methodeContent={methodeContent || {}}
+        faqMethode={faqMethode || []}
+        onOpenMethode={onOpenMethode || ((r: string) => onSelect(r))}
+        eleveNom={eleveNom}
+      />
 
       {/* Cours par parcours (masquable depuis Mode Prof) */}
       {showCours && (
