@@ -48,6 +48,7 @@ export default function AiQuotaGauge() {
   const [draft, setDraft] = useState<Limits>(DEFAULT_LIMITS);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bloques, setBloques] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -56,7 +57,7 @@ export default function AiQuotaGauge() {
       ...PROVIDERS.map((p) =>
         supabase.from("usage_stats").select("*", { count: "exact", head: true }).gte("created_at", since).like("action", `%:${p.key}`)
       ),
-      supabase.from("usage_stats").select("*", { count: "exact", head: true }).gte("created_at", since).neq("action", "call"),
+      supabase.from("usage_stats").select("*", { count: "exact", head: true }).gte("created_at", since).neq("action", "call").neq("action", "limite"),
     ]);
     const u: Record<string, number> = {};
     PROVIDERS.forEach((p, i) => {
@@ -66,6 +67,9 @@ export default function AiQuotaGauge() {
     setUsed(u);
     const t = counts[counts.length - 1];
     setTotalToday(t.status === "fulfilled" ? (t.value as any)?.count ?? null : null);
+
+    const lim = await supabase.from("usage_stats").select("visitor_id").gte("created_at", since).eq("action", "limite").limit(2000);
+    setBloques(lim.error ? null : new Set((lim.data || []).map((r: any) => r.visitor_id)).size);
 
     const cfg = await supabase.from("config").select("key, value").in("key", ["ai_quota", "ai_limits"]);
     (cfg.data || []).forEach((row: any) => {
@@ -164,6 +168,13 @@ export default function AiQuotaGauge() {
           </div>
         ))}
       </div>
+
+      {bloques !== null && (
+        <p className="text-sm text-gray-700">
+          <strong>{bloques}</strong> élève{bloques > 1 ? "s ont" : " a"} atteint sa limite quotidienne aujourd'hui
+          <span className="text-xs text-gray-400"> (réglable dans Fonctionnalités)</span>
+        </p>
+      )}
 
       {totalToday !== null && Object.values(used).reduce((a, b) => a + b, 0) < totalToday && (
         <p className="text-[11px] text-gray-400">

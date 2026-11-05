@@ -145,10 +145,53 @@ async function callWithFallback(providers, messages, max_tokens, deep = false) {
   throw new Error("Tous les providers ont échoué");
 }
 
+// ── Plafonds par élève et par connexion ──────────────────────────────────────
+// Réglés dans Mode Prof → Fonctionnalités (config.ai_limites_eleves), relus au plus une fois par minute.
+let limitesCache = { v: { par_eleve: 40, par_connexion: 150 }, at: 0 };
+async function getLimites() {
+  if (Date.now() - limitesCache.at < 60000) return limitesCache.v;
+  try {
+    const { data } = await supabase.from("config").select("value").eq("key", "ai_limites_eleves").maybeSingle();
+    const v = data?.value ? JSON.parse(data.value) : {};
+    limitesCache = { v: { par_eleve: 40, par_connexion: 150, ...v }, at: Date.now() };
+  } catch { limitesCache.at = Date.now(); }
+  return limitesCache.v;
+}
+// Minuit à Paris, en heure UTC
+function debutJourParis() {
+  const now = new Date();
+  const paris = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Paris" }));
+  const ecart = paris.getTime() - now.getTime();
+  const minuit = new Date(paris); minuit.setHours(0, 0, 0, 0);
+  return new Date(minuit.getTime() - ecart).toISOString();
+}
+async function compteDuJour(colonne, valeur) {
+  const { count, error } = await supabase.from("usage_stats").select("*", { count: "exact", head: true })
+    .gte("created_at", debutJourParis()).eq(colonne, valeur).neq("action", "call").neq("action", "limite");
+  return error ? 0 : count || 0;
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false } = body;
+    const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false, prof = false } = body;
+    const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+
+    // Plafonds (le professeur, en Mode Prof, n'est pas limité)
+    if (!prof) {
+      const lim = await getLimites();
+      const [parEleve, parConnexion] = await Promise.all([
+        lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
+        lim.par_connexion > 0 && ip !== "unknown" ? compteDuJour("ip", ip) : 0,
+      ]);
+      if ((lim.par_eleve > 0 && parEleve >= lim.par_eleve) || (lim.par_connexion > 0 && parConnexion >= lim.par_connexion)) {
+        supabase.from("usage_stats").insert([{ module, action: "limite", ip, visitor_id }]).then(() => {}).catch(() => {});
+        return Response.json({
+          limite: true,
+          content: [{ type: "text", text: "Tu as atteint la limite de réponses de l'IA pour aujourd'hui. Reviens demain, ou relis ton cours et les fiches méthode en attendant !" }],
+        }, { status: 429 });
+      }
+    }
 
     let result = { text: "", provider: "inconnu" };
 
@@ -172,7 +215,7 @@ export async function POST(request) {
     supabase.from("usage_stats").insert([{
       module,
       action: (prefer_groq ? "leger" : "lourd") + ":" + result.provider,
-      ip: request.headers.get("x-forwarded-for") || "unknown",
+      ip,
       visitor_id
     }]).then(() => {}).catch(() => {});
 

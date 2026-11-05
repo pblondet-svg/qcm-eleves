@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -20,12 +20,16 @@ const dbLogUsage = async (module: string, action: string) => {
   } catch { /* silencieux */ }
 };
 
+// Vrai quand le Mode Prof est ouvert : le professeur n'est pas soumis aux limites d'usage de l'IA
+let _isProf = false;
 const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general", deep = false) => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf }),
   });
+  // Limite du jour atteinte : on renvoie le message prévu, que les chats affichent tel quel
+  if (res.status === 429) { const d = await res.json().catch(() => null); if (d?.content) return d; }
   if (!res.ok) throw new Error("Erreur API " + res.status);
   dbLogUsage(module, "call");
   return res.json();
@@ -3596,6 +3600,7 @@ export default function QCMApp() {
     : null;
   const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
+  _isProf = role === "prof";
   if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} />;
 
   // Accès direct au mode dissertation depuis l'accueil
@@ -4555,6 +4560,8 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
       </div>
 
       {/* Sections */}
+      <LimitesIA />
+
       {sections.map(section => (
         <div key={section.title} className={`rounded-2xl border-2 ${section.border} overflow-hidden`}>
           <div className={`${section.bg} px-5 py-3 border-b ${section.border}`}>
