@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import { CoursPremiereEleve, ProfCoursPremiere } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -227,7 +227,7 @@ type FeaturesConfig = {
   rev_flashcards: boolean;
   rev_interrogation: boolean;
   // Général
-show_dashboard: boolean; home_cours: boolean; home_dissertation: boolean; home_hlp1: boolean;};
+show_dashboard: boolean; home_cours: boolean; home_dissertation: boolean; home_hlp1: boolean; home_tle: boolean;};
 
 const DEFAULT_FEATURES: FeaturesConfig = {
   tab_revision: true,
@@ -243,7 +243,7 @@ const DEFAULT_FEATURES: FeaturesConfig = {
   rev_fiche: true,
   rev_flashcards: true,
   rev_interrogation: true,
-show_dashboard: true, home_cours: true, home_dissertation: true, home_hlp1: false,};
+show_dashboard: true, home_cours: true, home_dissertation: true, home_hlp1: false, home_tle: true,};
 
 const loadFeaturesConfig = async (): Promise<FeaturesConfig> => {
   try {
@@ -3689,9 +3689,9 @@ export default function QCMApp() {
     methodeContent={methodeContent} faqMethode={faqMethode}
     askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 800, false, "methode_accueil"))}
     onOpenMethode={(r: string, v: "fiche" | "faq" | "plan") => { setMethodeView(v); setRole(r); }} />;
-  if (role === "eleve-HLP1-cours") return (
-    <CoursPremiereEleve onBack={() => setRole(null)} eleveNom={eleveNom}
-      askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "cours_hlp1"))} />
+  if (role === "eleve-HLP1-cours" || role === "eleve-cours-tle") return (
+    <CoursRevisionEleve niveau={role === "eleve-cours-tle" ? "tle" : "hlp1"} onBack={() => setRole(null)} eleveNom={eleveNom}
+      askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, role === "eleve-cours-tle" ? "cours_tle" : "cours_hlp1"))} />
   );
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
@@ -4526,7 +4526,7 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
       bg: "bg-gray-50",
       border: "border-gray-200",
       items: [
-        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" }, { key: "home_cours", label: "📖 Cours (page d'accueil)", desc: "Cartes Cours sur l'accueil élèves : décocher pour les masquer" }, { key: "home_dissertation", label: "✍️ Dissertation (page d'accueil)", desc: "Cartes Dissertation HLP et Philo sur l'accueil élèves : décocher pour les masquer" }, { key: "home_hlp1", label: "📘 Révision du cours HLP Première (page d'accueil)", desc: "Carte « Révision du cours — Spécialité HLP Première » sur l'accueil élèves" },
+        { key: "show_dashboard", label: "📊 Tableau de bord", desc: "Statistiques et suivi des élèves" }, { key: "home_cours", label: "📖 Cours (page d'accueil)", desc: "Cartes Cours sur l'accueil élèves : décocher pour les masquer" }, { key: "home_dissertation", label: "✍️ Dissertation (page d'accueil)", desc: "Cartes Dissertation HLP et Philo sur l'accueil élèves : décocher pour les masquer" }, { key: "home_hlp1", label: "📘 Révision du cours HLP Première (page d'accueil)", desc: "Carte « Révision du cours — Spécialité HLP Première » sur l'accueil élèves" }, { key: "home_tle", label: "📗 Révision du cours Philo Terminale (page d'accueil)", desc: "Carte « Révision du cours — Philosophie Terminale (tronc commun) » sur l'accueil élèves" },
       ],
     },
   ];
@@ -5090,7 +5090,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
             ["features", "⚙️ Fonctionnalités", "bg-orange-600 border-orange-600", "hover:border-orange-300"],
             ["methode",  "📐 Fiches Méthode",  "bg-amber-600 border-amber-600",   "hover:border-amber-300"],
             ["faq",      `❓ FAQ Méthode${pendingFaq > 0 ? ` (${pendingFaq})` : ""}`,      "bg-violet-600 border-violet-600", "hover:border-violet-300"],
-            ["hlp1",     "📘 Cours HLP 1ère", "bg-emerald-600 border-emerald-600", "hover:border-emerald-300"],
+            ["hlp1",     "📘 Cours (révision)", "bg-emerald-600 border-emerald-600", "hover:border-emerald-300"],
           ] as [string, string, string, string][]).map(([tab, label, activeClass, hoverClass]) => (
             <button key={tab} onClick={() => setProfTab(tab as any)}
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border transition-all ${
@@ -5121,7 +5121,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
         </div>
       ) : profTab === "hlp1" ? (
         <div className="max-w-5xl mx-auto px-6 py-8">
-          <ProfCoursPremiere extractFile={extractFile} />
+          <ProfCoursRevision extractFile={extractFile} />
         </div>
       ) : profTab === "faq" ? (
         <div className="max-w-3xl mx-auto px-6 py-8">
