@@ -41,7 +41,7 @@ const TRACKS = [
 ];
 
 export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveEleveNom, featuresConfig }: any) {
-  const showCours = featuresConfig?.home_cours !== false;
+  const showCours = featuresConfig?.home_cours !== false; const showDissertation = featuresConfig?.home_dissertation !== false;
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
@@ -117,7 +117,7 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
       ))}
 
       {/* Dissertation */}
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4 mt-3">
+      <div className={`${showDissertation ? "flex" : "hidden"} flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4 mt-3`}>
         <button
           onClick={() => onSelect("eleve-HLP-dissertation")}
           className="flex-1 bg-white rounded-3xl border-2 border-rose-200 shadow-lg p-6 hover:border-rose-400 hover:shadow-xl transition-all group text-center">
