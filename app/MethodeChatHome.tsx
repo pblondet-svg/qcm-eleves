@@ -68,7 +68,7 @@ export function buildMethodeContext(serie: SerieKey, mc: MethodeFiches, faq: Faq
   const isHLP = serie === "hlp";
   const fichesDissertation = isHLP
     ? [mc.hlp_interpretation, mc.hlp_essai].filter((t) => (t || "").trim()).join("\n\n---\n\n")
-    : [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].filter(Boolean).join("\n\n---\n\n");
+    : [mc.intro_dissertation, mc.plan_tas, mc.plan_notionnel, mc.plan_critique, mc.paragraphe].filter(Boolean).join("\n\n---\n\n");
   const ficheExpl = isHLP ? "" : (isTechno ? mc.expl_techno : mc.expl_generale) || "";
   const faqRel = faq.filter((f) => (isHLP ? f.serie === "hlp" : f.serie === "toutes" || f.serie === serie));
   const faqContext = faqRel.length

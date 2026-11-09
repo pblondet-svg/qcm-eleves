@@ -265,6 +265,8 @@ const saveFeaturesConfig = async (cfg: FeaturesConfig) => {
 type MethodeContent = {
   intro_dissertation: string;
   plan_tas: string;
+  plan_notionnel: string;
+  plan_critique: string;
   paragraphe: string;
   expl_generale: string;
   expl_techno: string;
@@ -338,15 +340,135 @@ PRINCIPAUX ÉLÉMENTS ÉVALUÉS
 4. Problématique / Reformulation : Reformuler le sujet en soulignant ses paradoxes internes. Montrer pourquoi cette question est utile à poser. On peut utiliser des synonymes, antonymes, ou ajouter des adverbes (« vraiment », « nécessairement »…).
 5. Annonce de plan : Annoncer clairement le cheminement : « Nous verrons dans un premier temps… puis… enfin… ».`,
 
-  plan_tas: `PLAN THÈSE / ANTITHÈSE / SYNTHÈSE (plan dialectique)
-Structure générale :
-- Introduction : position du problème
-- Partie I — Thèse : répond OUI à la question posée. Défend l'affirmation principale.
-- Partie II — Antithèse : répond NON. Objections et limites de la thèse.
-- Partie III — Synthèse : NI compromis NI résumé du I et II. Introduit un concept NOUVEAU et imprévu pour dépasser le oui/non. Reformule le problème autrement.
-- Conclusion : récapitulation de la progression.
-Astuce : recycler l'ouverture de la conclusion pour en faire la question traitée au III.
-Exemple — Sujet « Faut-il être optimiste ? » : I. Oui, le bonheur sur terre est accessible. II. Non, le bonheur est impossible. III. Ni optimiste ni pessimiste : être RÉALISTE — faire coïncider ses désirs au monde réel.`,
+  plan_tas: `LE PRINCIPE
+On examine une première réponse à la question (thèse), puis ses limites, qui conduisent à une réponse opposée (antithèse). La troisième partie (synthèse) dépasse l'opposition en introduisant une distinction ou un concept nouveau, qui fait avancer la question.
+À retenir : la synthèse n'est ni un compromis, ni un mélange, ni un résumé du I et du II. Elle pose le problème autrement.
+
+QUAND L'UTILISER ?
+- Quand le sujet est une question fermée : « Faut-il… ? », « Est-ce… ? »
+- Quand on trouve facilement de bons arguments pour les deux réponses.
+- Quand l'opposition oui / non peut être dépassée par une distinction (deux sens d'un mot, deux points de vue, des conditions).
+
+COMMENT LE CONSTRUIRE ?
+- I. Thèse : la réponse la plus immédiate, argumentée sérieusement.
+- II. Antithèse : les limites de la thèse, qui conduisent à la réponse opposée. Le II doit naître des limites du I, pas seulement le contredire.
+- III. Synthèse : une distinction ou un concept nouveau qui permet de sortir de l'alternative et de répondre mieux à la question.
+
+ASTUCE
+En conclusion, on termine souvent par une question d'ouverture qui élargit le sujet. Ne la gardez pas pour la fin : faites-en le point de départ de votre III. Elle contient souvent le nouveau point de vue qui permet de dépasser l'opposition entre le I et le II. Pour la trouver, demandez-vous quelle autre notion du programme éclaire le sujet autrement.
+
+FORMULATIONS UTILES
+- « Cette première réponse se heurte pourtant à une difficulté… »
+- « Faut-il pour autant en conclure que… ? »
+- « L'opposition entre ces deux réponses n'est peut-être qu'apparente si l'on distingue… »
+
+EXEMPLE 1 — L'homme s'accomplit-il dans le travail ?
+- I. Oui : le travail permet de subvenir à ses besoins, de trouver sa place dans la société et de développer ses capacités.
+- II. Non : le travail peut être une contrainte qui épuise et aliène (travail à la chaîne, chômage, souffrance au travail).
+- III. Tout dépend du sens du travail : il accomplit l'homme quand il s'y reconnaît, et l'aliène quand son travail lui échappe.
+
+EXEMPLE 2 — Faut-il toujours dire la vérité ?
+- I. Oui : mentir, c'est trahir la confiance des autres et rendre la vie en société impossible.
+- II. Non : certaines vérités blessent ou mettent en danger ; le mensonge peut protéger quelqu'un.
+- III. Distinguer ne pas mentir et tout dire : on doit être sincère, mais on peut se taire, choisir le moment et la manière de dire la vérité.
+
+PIÈGE À ÉVITER
+Une synthèse « juste milieu » (« ni oui, ni non, un peu des deux »). Test : ma partie III utilise-t-elle une idée qui n'apparaissait ni dans le I, ni dans le II ? Si non, la synthèse n'en est pas une.
+
+SUJETS DU COURS QUI SE PRÊTENT À CE PLAN
+- Sommes-nous faits pour vivre ensemble ?
+- Sommes-nous libres de nos actions ?
+- Peut-on douter de toute science ?
+- La pitié est-elle un sentiment naturel ? (HLP)
+- L'homme s'accomplit-il dans le travail ?
+- Faut-il toujours dire la vérité ?`,
+
+  plan_notionnel: `LE PRINCIPE
+Chaque partie explore un sens différent du concept clé du sujet, du sens le plus immédiat (le sens commun) au sens le plus exigeant (le sens philosophique). C'est l'insuffisance d'un sens qui oblige à passer au suivant.
+À retenir : dans un plan dialectique, on oppose des réponses. Dans un plan notionnel, on approfondit un concept : la réponse change parce que le sens du mot change.
+
+QUAND L'UTILISER ?
+- Quand le sujet repose sur une notion ambiguë (liberté, bonheur, vérité, nature, travail…).
+- Pour les sujets du type « Qu'est-ce que… ? ».
+- Quand on sent que la réponse dépend de ce qu'on entend par le mot.
+
+COMMENT LE CONSTRUIRE ?
+1. Repérer le concept clé du sujet et faire l'inventaire de ses sens.
+2. Garder trois sens et les classer du plus immédiat au plus exigeant.
+3. Vérifier que chaque sens répond à la question, et montrer dans les transitions ce que chaque sens laisse de côté.
+
+ASTUCE
+Pour trouver les différents sens d'un mot, partez des expressions de la langue courante qui l'utilisent : « être libre de ses mouvements », « avoir l'esprit libre », « se libérer d'une habitude »… Chaque expression cache un sens différent du mot : il ne reste plus qu'à les classer du plus simple au plus exigeant.
+
+FORMULATIONS UTILES
+- « Mais ce premier sens laisse de côté… »
+- « Si l'on s'en tient à cette définition, on ne peut expliquer… »
+- « Il faut donc chercher un sens plus exigeant du mot… »
+
+EXEMPLE 1 — Être libre, est-ce faire ce que l'on veut ?
+- I. Liberté = absence de contrainte : oui, être libre, c'est faire ce que l'on veut.
+- II. Liberté = autonomie (Rousseau) : non, suivre ses envies, c'est être esclave de ses désirs.
+- III. Liberté = compréhension de ce qui nous détermine (Spinoza) : être libre, c'est savoir pourquoi on veut.
+
+EXEMPLE 2 — Faut-il être optimiste ?
+- I. Optimisme = croyance que le monde est bon (Leibniz) : non, elle nie le mal réel (Voltaire).
+- II. Optimisme = humeur : la question n'a pas de sens, une humeur ne se commande pas.
+- III. Optimisme = volonté (Alain) : oui, car c'est une condition de l'action.
+
+PIÈGE À ÉVITER
+Le plan thématique ou « catalogue » (I. aspect économique, II. aspect social, III. aspect moral), qui juxtapose des domaines sans répondre à la question. Test : pourrais-je inverser l'ordre de mes parties sans rien changer ? Si oui, le plan ne progresse pas.
+
+SUJETS DU COURS QUI SE PRÊTENT À CE PLAN
+- La liberté consiste-t-elle à faire tout ce qu'on veut ?
+- Être libre, est-ce faire ce que l'on veut ?
+- La parole est-elle un art ? (HLP)
+- Peut-on parler pour ne rien dire ?
+- Art et religion sont-ils des vecteurs de vérité ?
+- Faut-il être optimiste ?`,
+
+  plan_critique: `LE PRINCIPE
+Toute question tient pour acquises des idées sans le dire : ce sont ses présupposés. On prend d'abord la question au sérieux, puis on examine ce qu'elle suppose, enfin on repose le problème sur de nouvelles bases. « Critique » vient du grec krinein : examiner, juger.
+À retenir : dans un plan dialectique, le II contredit le I. Dans un plan critique, le II creuse sous le I : il interroge ce que le I tenait pour évident.
+
+QUAND L'UTILISER ?
+- Quand le sujet contient une affirmation cachée.
+- Quand le sujet contient des mots qui généralisent : tout, toujours, seulement, jamais.
+- Quand on a l'impression que la question est mal posée.
+
+COMMENT LE CONSTRUIRE ?
+- I. Prendre le sujet au sérieux : répondre à la question telle qu'elle est posée.
+- II. Examiner le présupposé : montrer que la réponse du I reposait sur une idée qui ne va pas de soi.
+- III. Reposer le problème : reformuler la question sur de nouvelles bases et y répondre.
+
+ASTUCE
+Pour trouver le présupposé, complétez la phrase « Pour que cette question ait un sens, il faut que… ». Regardez surtout les petits mots qui semblent aller de soi (tout, toujours, vraiment, soi-même…) : c'est presque toujours là que le présupposé se cache.
+
+FORMULATIONS UTILES
+- « Mais cette réponse suppose que… Or rien ne garantit que… »
+- « Il faut donc remonter plus haut et se demander si… »
+- « La question change alors de sens : il ne s'agit plus de savoir si…, mais si… »
+
+EXEMPLE 1 — Peut-on être esclave de soi-même ?
+- Présupposé : il existe un « soi » libre, maître de ses actes.
+- I. Oui : nous consentons à notre propre servitude par habitude ou passion (La Boétie, Épictète).
+- II. Mais nos actes viennent-ils vraiment de notre volonté ? (Aristote, Gide, Descartes)
+- III. Si tout est déterminé (Spinoza), à quelles conditions devenir l'auteur de ses actes ? (Kant, Sartre)
+
+EXEMPLE 2 — La science peut-elle tout expliquer ?
+- Présupposé : tout est objet d'explication, et la science donne des explications définitives.
+- I. Oui : en droit, rien n'échappe à la science (Laplace).
+- II. Mais toute théorie reste provisoire et réfutable (Popper).
+- III. Expliquer n'est pas comprendre : la science dit comment les choses se produisent, pas quel sens elles ont pour nous.
+
+PIÈGE À ÉVITER
+Refuser le sujet dès l'introduction ou bâcler le I. Test : mon II examine-t-il un présupposé, ou dit-il simplement « non » ? Dans le second cas, c'est un plan dialectique déguisé.
+
+SUJETS DU COURS QUI SE PRÊTENT À CE PLAN
+- Peut-on être esclave de soi-même ?
+- Suis-je ce que j'ai conscience d'être ?
+- Peut-on douter de tout ?
+- Est-ce un devoir d'être heureux ?
+- La science peut-elle tout expliquer ?`,
 
   paragraphe: `RÉDIGER UN PARAGRAPHE ARGUMENTÉ (~20 lignes)
 Les 5 éléments obligatoires (ordre conseillé mais non obligatoire) :
@@ -400,6 +522,9 @@ C. Commentaire (mini-dissertations sans introduction) :
 - Possible : partie thèse (d'accord) + partie antithèse (en désaccord)`,
 };
 
+// Ancien contenu par défaut de la fiche dialectique (avant novembre 2026)
+const OLD_DEFAULT_PLAN_TAS = "PLAN THÈSE / ANTITHÈSE / SYNTHÈSE (plan dialectique)\nStructure générale :\n- Introduction : position du problème\n- Partie I — Thèse : répond OUI à la question posée. Défend l'affirmation principale.\n- Partie II — Antithèse : répond NON. Objections et limites de la thèse.\n- Partie III — Synthèse : NI compromis NI résumé du I et II. Introduit un concept NOUVEAU et imprévu pour dépasser le oui/non. Reformule le problème autrement.\n- Conclusion : récapitulation de la progression.\nAstuce : recycler l'ouverture de la conclusion pour en faire la question traitée au III.\nExemple — Sujet « Faut-il être optimiste ? » : I. Oui, le bonheur sur terre est accessible. II. Non, le bonheur est impossible. III. Ni optimiste ni pessimiste : être RÉALISTE — faire coïncider ses désirs au monde réel.";
+
 const loadMethodeContent = async (): Promise<MethodeContent> => {
   try {
     const val = await dbGetConfig("methode_content");
@@ -407,6 +532,8 @@ const loadMethodeContent = async (): Promise<MethodeContent> => {
     const saved = JSON.parse(val) || {};
     // Une fiche enregistrée vide ne remplace pas la fiche par défaut
     Object.keys(saved).forEach(k => { if (typeof saved[k] === "string" && !saved[k].trim()) delete saved[k]; });
+    // L'ancienne fiche « plan dialectique » par défaut (jamais modifiée par le prof) laisse place à la nouvelle
+    if (typeof saved.plan_tas === "string" && saved.plan_tas.trim() === OLD_DEFAULT_PLAN_TAS.trim()) delete saved.plan_tas;
     return { ...DEFAULT_METHODE_CONTENT, ...saved };
   } catch { return DEFAULT_METHODE_CONTENT; }
 };
@@ -4609,7 +4736,9 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
 
   const fiches: { key: keyof MethodeContent; label: string; icon: string; desc: string; groupe: "philo" | "hlp" }[] = [
     { key: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝", desc: "Opinion commune, définitions, paradoxe, problématique, annonce de plan", groupe: "philo" },
-    { key: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺", desc: "Structure dialectique, exemples, astuce synthèse", groupe: "philo" },
+    { key: "plan_tas", label: "Plan dialectique", icon: "🔺", desc: "Thèse / antithèse / synthèse : principe, construction, astuce, exemples, sujets du cours", groupe: "philo" },
+    { key: "plan_notionnel", label: "Plan notionnel", icon: "🔎", desc: "Distinction des sens : principe, construction, astuce, exemples, sujets du cours", groupe: "philo" },
+    { key: "plan_critique", label: "Plan critique", icon: "🧭", desc: "Examen des présupposés : principe, construction, astuce, exemples, sujets du cours", groupe: "philo" },
     { key: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️", desc: "Les 5 éléments obligatoires + éléments optionnels", groupe: "philo" },
     { key: "expl_generale", label: "Explication de texte — Série Générale", icon: "📖", desc: "Commentaire linéaire : introduction, développement, conclusion", groupe: "philo" },
     { key: "expl_techno", label: "Explication de texte — Série Techno", icon: "🔧", desc: "Option 1 (A/B/C) et Option 2 (commentaire libre)", groupe: "philo" },
@@ -5458,7 +5587,9 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
     { id: "hlp_essai", label: "Essai — question de réflexion philosophique", icon: "🖋️" },
   ] : [
     { id: "intro_dissertation", label: "Introduction — Dissertation", icon: "📝" },
-    { id: "plan_tas", label: "Plan Thèse / Antithèse / Synthèse", icon: "🔺" },
+    { id: "plan_tas", label: "Plan dialectique (Thèse / Antithèse / Synthèse)", icon: "🔺" },
+    { id: "plan_notionnel", label: "Plan notionnel (distinction des sens)", icon: "🔎" },
+    { id: "plan_critique", label: "Plan critique (examen des présupposés)", icon: "🧭" },
     { id: "paragraphe", label: "Rédiger un paragraphe", icon: "✍️" },
     isTechno
       ? { id: "expl_techno", label: "Explication de texte — Techno", icon: "🔧" }
@@ -5470,7 +5601,7 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
   const mc = methodeContent || DEFAULT_METHODE_CONTENT;
   const fichesDissertation = isHLP
     ? [mc.hlp_interpretation, mc.hlp_essai].filter(t => (t || "").trim()).join("\n\n---\n\n")
-    : [mc.intro_dissertation, mc.plan_tas, mc.paragraphe].join("\n\n---\n\n");
+    : [mc.intro_dissertation, mc.plan_tas, mc.plan_notionnel, mc.plan_critique, mc.paragraphe].filter(t => (t || "").trim()).join("\n\n---\n\n");
   const ficheExpl = isHLP ? "" : isTechno ? mc.expl_techno : mc.expl_generale;
   const serieInstruction = isTechno
     ? "Adapte tes explications au niveau Série Technologique : langage clair, exemples concrets du quotidien, encourageant. Pas de références trop académiques."
@@ -5629,7 +5760,9 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           {/* Contenu fiche */}
           <div className="flex-1 bg-white rounded-2xl border-2 border-gray-200 overflow-y-auto">
             {activeFiche === "intro_dissertation" && <FicheMarkdown title="📝 Introduction — Dissertation" content={mc.intro_dissertation} />}
-            {activeFiche === "plan_tas" && <FicheMarkdown title="🔺 Plan Thèse / Antithèse / Synthèse" content={mc.plan_tas} />}
+            {activeFiche === "plan_tas" && <FicheMarkdown title="🔺 Le plan dialectique — Thèse / Antithèse / Synthèse" content={mc.plan_tas} />}
+            {activeFiche === "plan_notionnel" && <FicheMarkdown title="🔎 Le plan notionnel — Distinction des sens" content={mc.plan_notionnel} />}
+            {activeFiche === "plan_critique" && <FicheMarkdown title="🧭 Le plan critique — Examen des présupposés" content={mc.plan_critique} />}
             {activeFiche === "paragraphe" && <FicheMarkdown title="✍️ Rédiger un paragraphe" content={mc.paragraphe} />}
             {activeFiche === "expl_techno" && <FicheMarkdown title="🔧 Explication de texte — Série Techno" content={mc.expl_techno} />}
             {activeFiche === "expl_generale" && <FicheMarkdown title="📖 Explication de texte — Série Générale" content={mc.expl_generale} />}
@@ -5730,7 +5863,7 @@ function FicheMarkdown({ title, content }: { title: string; content: string }) {
           if (!line.trim()) return <div key={i} className="h-2" />;
           if (line.startsWith("===") || line.startsWith("---")) return <hr key={i} className="border-gray-200 my-3" />;
           // Titres (ligne en majuscules ou commençant par un chiffre + point)
-          if (line.match(/^[A-ZÉÈÊÀÙÎÏ\s]{5,}$/) || line.match(/^[A-Z]\./) || (!/[a-zà-öø-ÿ]/.test(line) && /[A-ZÀ-Ý]{4}/.test(line))) {
+          if (line.match(/^[A-ZÉÈÊÀÙÎÏ\s]{5,}$/) || line.match(/^[A-ZÀ-Ý0-9' ]{4,} — /) || line.match(/^[A-Z]\./) || (!/[a-zà-öø-ÿ]/.test(line) && /[A-ZÀ-Ý]{4}/.test(line))) {
             return <p key={i} className="font-black text-gray-800 text-sm mt-4 mb-1">{line}</p>;
           }
           // Items numérotés
