@@ -365,7 +365,7 @@ FORMULATIONS UTILES
 EXEMPLE 1 — L'homme s'accomplit-il dans le travail ?
 - I. Oui : le travail permet de subvenir à ses besoins, de trouver sa place dans la société et de développer ses capacités.
 - II. Non : le travail peut être une contrainte qui épuise et aliène (travail à la chaîne, chômage, souffrance au travail).
-- III. Tout dépend du sens du travail : il accomplit l'homme quand il s'y reconnaît, et l'aliène quand son travail lui échappe.
+- III. Le travail n'est pas le seul lieu où l'homme s'accomplit (l'art, la religion, la vie politique). Mais ces autres lieux montrent à quelle condition le travail accomplit l'homme : quand il y met du sens et s'y reconnaît, comme l'artiste dans son œuvre.
 
 EXEMPLE 2 — Faut-il toujours dire la vérité ?
 - I. Oui : mentir, c'est trahir la confiance des autres et rendre la vie en société impossible.
