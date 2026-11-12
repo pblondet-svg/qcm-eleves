@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -5563,6 +5563,7 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
 function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: "chat" | "fiche" | "faq" | "plan"; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
   const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView || "faq");
+  const [trainer, setTrainer] = useState<"paragraphe" | "plan">("paragraphe");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>(matiere === "hlp" ? "hlp_interpretation" : "intro_dissertation");
@@ -5664,7 +5665,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "fiche" ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             📋 Fiches méthode
           </button>
-          {!isHLP && (
+          {(
           <button onClick={() => setView("plan")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "plan" ? "bg-violet-600 hover:bg-violet-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
             🎯 S'entraîner
@@ -5779,14 +5780,36 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         </div>
       )}
       {/* VUE ENTRAÎNEMENT AU PLAN */}
-      {view === "plan" && !isHLP && (
-        <PlanTrainer
-          ficheTas={mc.plan_tas}
-          matiere={matiere}
-          serie={serie}
-          loadSujets={() => dbLoadSujetsBac(matiere)}
-          askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan", !light))}
-        />
+      {view === "plan" && (
+        <div className="flex-1 flex flex-col gap-3 min-h-0">
+          {!isHLP && (
+            <div className="flex gap-2 flex-shrink-0">
+              {([["paragraphe", "✍️ Le paragraphe argumenté"], ["plan", "🔺 Le plan dialectique"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setTrainer(k)}
+                  className={`px-3 py-1.5 rounded-xl border-2 text-xs font-bold transition-all ${trainer === k ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+          {(isHLP || trainer === "paragraphe") ? (
+            <ParagrapheTrainer
+              fiche={mc.paragraphe}
+              matiere={matiere}
+              serie={serie}
+              loadSujets={() => dbLoadSujetsBac(matiere)}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_paragraphe", !light))}
+            />
+          ) : (
+            <PlanTrainer
+              ficheTas={mc.plan_tas}
+              matiere={matiere}
+              serie={serie}
+              loadSujets={() => dbLoadSujetsBac(matiere)}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan", !light))}
+            />
+          )}
+        </div>
       )}
       {/* VUE FAQ */}
       {view === "faq" && <div className="flex-1 overflow-y-auto pb-6"><FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}

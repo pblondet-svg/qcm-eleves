@@ -337,8 +337,7 @@ export default function MethodeChatHome({
           </button>
           <button
             onClick={() => current && onOpenMethode(current.role, "plan")}
-            disabled={!current || serie === "hlp"}
-            title={serie === "hlp" ? "Exercice réservé à la dissertation de philosophie" : undefined}
+            disabled={!current}
             className="flex items-center justify-center gap-2 py-3 text-xs font-bold text-violet-700 hover:bg-violet-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors border-r border-gray-100">
             <Target className="w-4 h-4" /> S'entraîner
           </button>
