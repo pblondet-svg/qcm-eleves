@@ -161,6 +161,16 @@ async function compteDuJour(colonne, valeur) {
   return error ? 0 : count || 0;
 }
 
+// Enregistre un appel ; si la colonne eleve_nom n'existe pas encore (usage_eleve_nom.sql), on l'enregistre sans le prénom
+function logUsage(row) {
+  supabase.from("usage_stats").insert([row]).then(({ error }) => {
+    if (error && row.eleve_nom !== undefined) {
+      const { eleve_nom, ...sansNom } = row;
+      supabase.from("usage_stats").insert([sansNom]).then(() => {}, () => {});
+    }
+  }, () => {});
+}
+
 // Réponses restantes aujourd'hui pour cet élève (la plus contraignante des deux limites)
 function calculRestant(lim, parEleve, parConnexion) {
   const r = [];
@@ -190,6 +200,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false, prof = false } = body;
+    const eleve_nom = String(body.eleve_nom || "").trim().slice(0, 60) || null;
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
 
     // Plafonds (le professeur, en Mode Prof, n'est pas limité)
@@ -201,7 +212,7 @@ export async function POST(request) {
         lim.par_connexion > 0 && ip !== "unknown" ? compteDuJour("ip", ip) : 0,
       ]);
       if ((lim.par_eleve > 0 && parEleve >= lim.par_eleve) || (lim.par_connexion > 0 && parConnexion >= lim.par_connexion)) {
-        supabase.from("usage_stats").insert([{ module, action: "limite", ip, visitor_id }]).then(() => {}).catch(() => {});
+        logUsage({ module, action: "limite", ip, visitor_id, eleve_nom });
         return Response.json({
           limite: true,
           content: [{ type: "text", text: "Tu as atteint la limite de réponses de l'IA pour aujourd'hui. Reviens demain, ou relis ton cours et les fiches méthode en attendant !" }],
@@ -230,12 +241,7 @@ export async function POST(request) {
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
     // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu
-    supabase.from("usage_stats").insert([{
-      module,
-      action: (prefer_groq ? "leger" : "lourd") + ":" + result.provider,
-      ip,
-      visitor_id
-    }]).then(() => {}).catch(() => {});
+    logUsage({ module, action: (prefer_groq ? "leger" : "lourd") + ":" + result.provider, ip, visitor_id, eleve_nom });
 
     await flushQuota();
     return Response.json({ content: [{ type: "text", text: result.text }], quota });

@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -26,7 +26,7 @@ const callAI = async (messages: { role: string; content: string }[], max_tokens 
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf, eleve_nom: (() => { try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; } })() }),
   });
   // Limite du jour atteinte : on renvoie le message prévu, que les chats affichent tel quel
   if (res.status === 429) { const d = await res.json().catch(() => null); if (d?.quota) signalerQuota(d.quota); if (d?.content) return d; }
@@ -3176,6 +3176,8 @@ function Dashboard({ onBack, sharedLib }: any) {
 
             {activeTab === "usage" && (
               <div className="space-y-4">
+                {/* Élèves proches de la limite */}
+                <UsageElevesIA />
                 {/* Jauge de consommation */}
                 <AiQuotaGauge />
                 {/* KPIs */}
