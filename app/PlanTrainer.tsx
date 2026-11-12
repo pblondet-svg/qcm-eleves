@@ -193,7 +193,7 @@ ${CRITERES.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
 Juge en philosophe : le concept proposé est-il vraiment un concept (et non un mot vague) ? Est-il défini ? Change-t-il réellement les termes du problème ? Un « réalisme » ou un « juste milieu » non défini est un compromis déguisé.
 Tutoie l'élève. Commentaires courts (une ou deux phrases), précis et philosophiques. Ne réécris pas toute sa copie.
-Dans "piste", propose UNE partie III possible (2 ou 3 phrases) : un concept nouveau défini, et un auteur classique du programme qui l'éclaire (auteur + œuvre réelle, sans citation inventée). Précise que ce n'est pas la seule piste.
+Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
         2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0);
@@ -384,7 +384,7 @@ Réponds uniquement en JSON :
           {correction.piste && (
             <details className="bg-white border-2 border-violet-200 rounded-2xl overflow-hidden">
               <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-violet-700 hover:bg-violet-50 list-none">
-                💡 Voir une piste de partie III (une possibilité parmi d'autres)
+                💡 Voir un indice pour trouver ta partie III
               </summary>
               <p className="px-4 pb-4 pt-1 text-sm text-gray-700 leading-relaxed">{correction.piste}</p>
             </details>

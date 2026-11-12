@@ -316,7 +316,8 @@ Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition,
 5 à 7 lignes maximum. Tutoie l'élève. Commence de façon adoucie (« plutôt bien structuré », « assez juste dans l'essentiel »), cite des forces concrètes de la copie, puis « Il y a cependant des fragilités » ou « Les faiblesses touchent à… ». Rappelle le principe de la méthode et explique pourquoi c'est important. Ne parle de relecture que s'il y a de vraies fautes, en précisant si elles sont orthographiques ou typographiques. Pas de formule d'encouragement à la fin.
 ${isTechno ? "Langage clair et accessible, sans perdre en précision." : ""}
 
-Dans "piste", réécris uniquement l'étape la plus faible (3 à 5 phrases), comme exemple d'amélioration à partir des idées de l'élève, sans inventer de citation.
+Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à l'améliorer lui-même.
+Ne réécris aucun passage de la copie dans tes commentaires.
 Réponds uniquement en JSON :
 {"criteres":[{"etape":"these","note":3,"commentaire":"une phrase de justification"},{"etape":"arguments","note":2,"commentaire":"..."},{"etape":"exemple","note":3,"commentaire":"..."},{"etape":"citation","note":2,"commentaire":"..."},{"etape":"conclusion","note":3,"commentaire":"..."}],"appreciation":"...","conseil":"le conseil le plus utile pour progresser","piste_etape":"exemple","piste":"..."}`,
         2200, (x) => Array.isArray(x?.criteres) && x.criteres.length >= 5);
@@ -451,7 +452,7 @@ Réponds uniquement en JSON :
           {correction.piste && (
             <details className="bg-white border-2 border-rose-200 rounded-2xl overflow-hidden">
               <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-rose-700 hover:bg-rose-50 list-none">
-                💡 Voir une amélioration possible{correction.piste_etape ? ` de l'étape « ${ETAPE[correction.piste_etape].label} »` : ""}
+                💡 Voir un indice pour améliorer{correction.piste_etape ? ` l'étape « ${ETAPE[correction.piste_etape].label} »` : " ton paragraphe"}
               </summary>
               <p className="px-4 pb-4 pt-1 text-sm text-gray-700 leading-relaxed">{correction.piste}</p>
             </details>

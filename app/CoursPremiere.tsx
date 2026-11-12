@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BookOpen, CheckCircle2, MessageCircle, Plus, Quote, RotateCcw, Save, Send, Sparkles, Trash2, Upload, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { DEMANDES_RAPIDES, REGLE_LONGUEUR, RichText } from "./MethodeChatHome";
+import { DEMANDES_RAPIDES, REGLE_GUIDAGE, REGLE_LONGUEUR, RichText } from "./MethodeChatHome";
 
 export type CoursDoc = { id: string; titre: string; contenu: string; partie?: string };
 export type Seance = { id: string; semestre: string; theme: string; titre: string; docs: CoursDoc[] };
@@ -367,7 +367,8 @@ Règles :
 - Appuie-toi UNIQUEMENT sur ce cours. Si la réponse n'y est pas, dis-le simplement et conseille de demander au professeur.
 - N'invente aucune citation ni référence. Quand tu cites le cours, cite-le exactement et explique la citation avec des mots simples.
 - Aide l'élève à comprendre et à retenir : pose-lui de temps en temps une petite question pour vérifier.
-- Ne rédige jamais un devoir à sa place.
+- Pour une question sur le cours, explique normalement. Mais si l'élève te demande de faire un exercice ou un devoir à sa place, applique cette règle :
+${REGLE_GUIDAGE}
 ${REGLE_LONGUEUR}`;
 
   const send = async (preset?: string) => {
@@ -595,7 +596,7 @@ Une bonne explication de citation :
 - dit ce que l'auteur veut montrer et le relie au problème de la séance ;
 - reste fidèle au texte, sans contresens.
 Sois bienveillant mais exigeant. Tutoie l'élève. Commentaires courts (deux phrases au plus chacun).
-Dans "piste", propose une explication possible en 3 phrases.
+Dans "piste", ne donne PAS d'explication de la citation : donne un indice (2 phrases au plus, terminé par une question) qui aide l'élève à améliorer lui-même son explication, par exemple un mot de la citation à expliquer ou un lien avec le cours à faire.
 Réponds uniquement en JSON : {"verdict":"reussi|presque|a_retravailler","points_forts":"...","a_ameliorer":"...","piste":"..."}`,
         1200, (o) => !!o?.verdict);
       setCorr({
@@ -661,7 +662,7 @@ Réponds uniquement en JSON : {"verdict":"reussi|presque|a_retravailler","points
           )}
           {corr.piste && (
             <details className="bg-white border-2 border-emerald-200 rounded-2xl overflow-hidden">
-              <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-emerald-700 list-none">Voir une explication possible</summary>
+              <summary className="px-4 py-3 cursor-pointer text-sm font-bold text-emerald-700 list-none">💡 Voir un indice pour améliorer ton explication</summary>
               <p className="px-4 pb-4 text-sm text-gray-700 leading-relaxed">{corr.piste}</p>
             </details>
           )}

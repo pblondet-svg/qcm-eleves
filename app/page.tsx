@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -1105,7 +1105,7 @@ ${newMsgs.map(m => `${m.role === "user" ? "Élève" : "Professeur"} : ${m.conten
 Réponds en JSON UNIQUEMENT :
 {
   "evaluation": "correct" | "partiel" | "incorrect",
-  "feedback": "correction courte et bienveillante (2-3 phrases max) — ce qui est juste, ce qui manque",
+  "feedback": "correction courte et bienveillante (2-3 phrases max) — ce qui est juste, ce qui manque ; si la réponse est incorrecte ou partielle, NE DONNE PAS la bonne réponse : donne un indice qui l'aide à la trouver",
   "prochaine_question": "nouvelle question sur un autre aspect du texte (si évaluation correct ou partiel) OU reformulation de la même question (si incorrect)"
 }` },
         { role: "assistant", content: '{"evaluation":"' }
@@ -1167,6 +1167,10 @@ Règles pour choisir la source :
 - "texte" : la réponse s'appuie DIRECTEMENT sur un passage d'un des textes fournis (précise lequel entre guillemets)
 - "synthese" : la réponse synthétise ou met en lien plusieurs textes du corpus
 - "hors_texte" : l'information demandée ne figure dans AUCUN des textes fournis (commence par "⚠️ Cette information ne figure pas dans les textes du cours.")
+
+Si l'élève te demande de faire un exercice à sa place (explication de texte, réponse à une question du devoir, introduction, plan, paragraphe, dissertation…), applique cette règle :
+${REGLE_GUIDAGE}
+Pour une simple question de compréhension du cours ou du texte, tu peux répondre normalement.
 
 TEXTE PRINCIPAL (celui que l'élève révise) :
 ${selectedEntry.content}
@@ -1755,224 +1759,13 @@ TEXTE RÉDIGÉ PAR L'ÉLÈVE :
 Corrige en 150 mots max, de façon bienveillante et précise :
 1. ✅ Ce qui est bien réussi (1-2 points)
 2. ⚠️ Ce qui manque ou peut être amélioré (1-2 points concrets)
-3. 💡 Conseil prioritaire pour améliorer cette partie
+3. 💡 Une question qui l'aide à améliorer lui-même cette partie
 
+Ne réécris aucun passage et ne propose pas de version corrigée : c'est à l'élève de reprendre son texte.
 Sois direct et encourageant.` }], 400, true, "dissertation");
       setRedacFeedbacks(prev => ({ ...prev, [step]: getText(data) }));
     } catch { setRedacFeedbacks(prev => ({ ...prev, [step]: "Erreur lors de la correction." })); }
     setRedacLoading(false);
-  };
-
-  const genererExplicationLogique = async (planTexte: string, currentSujet: string) => {
-    setPlanLogiqueLoading(true);
-    setPlanLogique("");
-    try {
-      const data = await callAI([{ role: "user", content:
-        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
-Sujet : "${currentSujet}"
-Plan : ${planTexte.slice(0, 1500)}
-
-Explique en 150 mots maximum, de façon claire et pédagogique pour un lycéen :
-1. Pourquoi ce plan progresse de la Thèse vers l'Antithèse puis la Synthèse (la logique dialectique)
-2. Quel est le concept-clé introduit en III qui permet de dépasser le simple "oui/non"
-3. Un conseil sur la transition la plus délicate à rédiger
-
-Sois direct, encourageant, évite le jargon.` }], 400, true, "dissertation");
-      setPlanLogique(getText(data));
-      setPlanLogiqueMessages([{ role: "assistant", content: getText(data) }]);
-      setShowLogiqueChat(true);
-    } catch { setPlanLogique("Erreur."); }
-    setPlanLogiqueLoading(false);
-  };
-
-  const sendLogiqueQuestion = async () => {
-    if (!planLogiqueInput.trim() || planLogiqueChatLoading) return;
-    const userMsg = { role: "user", content: planLogiqueInput.trim() };
-    const newMsgs = [...planLogiqueMessages, userMsg];
-    setPlanLogiqueMessages(newMsgs);
-    setPlanLogiqueInput("");
-    setPlanLogiqueChatLoading(true);
-    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
-    try {
-      const data = await callAI([
-        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Tu expliques la logique dialectique d'un plan de dissertation sur : "${currentSujet}". Réponds en 3-5 phrases max, de façon claire et bienveillante pour un lycéen.` },
-        { role: "assistant", content: "Je suis prêt à t'expliquer la logique du plan." },
-        ...newMsgs,
-      ], 500);
-      setPlanLogiqueMessages([...newMsgs, { role: "assistant", content: getText(data) }]);
-    } catch {}
-    setPlanLogiqueChatLoading(false);
-  };
-
-  // Générer le plan selon le niveau
-  const generatePlan = async (level: PlanLevel) => {
-    setPlanLevel(level);
-    setPlan("");
-    setPlanLogique("");
-    setPlanLogiqueMessages([]);
-    setShowLogiqueChat(false);
-    setShowRedaction(false);
-    setRedacTextes({});
-    setRedacFeedbacks({});
-    setRedacStep("intro");
-    setPlanLoading(true);
-    const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
-
-    const levelPrompts: Record<PlanLevel, string> = {
-      1: `Génère un SQUELETTE DE PLAN en suivant EXACTEMENT cette structure :
-
-═══ INTRODUCTION ═══
-1️⃣ Opinion commune : [en quelques mots — ce que les gens pensent habituellement]
-2️⃣ Définitions : [liste les termes à définir]
-3️⃣ Paradoxe : [en une phrase — pourquoi le sujet semble absurde ou évident, puis révèle sa tension interne]
-4️⃣ Problématique : [reformulation courte du problème]
-5️⃣ Annonce : Nous verrons dans un premier temps [titre I], puis nous montrerons [titre II], enfin nous tenterons de [titre III].
-
-═══ PARTIE I — THÈSE (répond OUI) ═══
-Titre : [formulation courte qui soutient le "oui"]
-A. [sous-partie A — titre court]
-B. [sous-partie B — titre court]
-C. [sous-partie C — titre court]
-→ Transition : [une phrase qui montre la limite du "oui" et ouvre vers le "non"]
-
-═══ PARTIE II — ANTITHÈSE (répond NON) ═══
-Titre : [formulation courte qui soutient le "non"]
-A. [sous-partie A — titre court]
-B. [sous-partie B — titre court]
-C. [sous-partie C — titre court]
-→ Transition : [une phrase qui montre que ni "oui" ni "non" ne suffit, et qu'il faut dépasser]
-
-═══ PARTIE III — SYNTHÈSE (concept nouveau qui dépasse le oui/non) ═══
-Titre : [formulation qui introduit l'angle nouveau — PAS "entre les deux" mais vraiment nouveau]
-A. [sous-partie A — titre court]
-B. [sous-partie B — titre court]
-C. [sous-partie C — titre court]
-
-═══ CONCLUSION ═══
-Bilan : [résumé en une ligne de la progression I → II → III]
-Ouverture : [une nouvelle question vers un autre horizon]`,
-
-      2: `Génère un PLAN AVEC AMORCES DE RÉDACTION en suivant EXACTEMENT cette structure :
-
-═══ INTRODUCTION ═══
-1️⃣ Opinion commune : [rédigée en 1-2 phrases — "On dit souvent que…" / "Il est communément admis que…"]
-2️⃣ Définitions : [définir précisément chaque terme clé du sujet]
-3️⃣ Paradoxe : [montrer en 1-2 phrases pourquoi le sujet est plus complexe qu'il n'y paraît — la tension interne]
-4️⃣ Problématique : [reformulation du sujet avec adverbes : "vraiment", "nécessairement", "inévitablement"]
-5️⃣ Annonce : "Nous verrons dans un premier temps [titre I bref]. Puis nous montrerons [titre II bref]. Enfin, nous tenterons de [titre III bref]."
-
-═══ PARTIE I — THÈSE (OUI) : [titre complet] ═══
-A. [sous-titre]
-   ✏️ Amorce : [1 phrase de début de rédaction pour cette sous-partie]
-B. [sous-titre]
-   ✏️ Amorce : [1 phrase de début de rédaction]
-C. [sous-titre]
-   ✏️ Amorce : [1 phrase de début de rédaction]
-→ Transition : [1 phrase qui montre la limite de la thèse — "Cependant, cette position…"]
-
-═══ PARTIE II — ANTITHÈSE (NON) : [titre complet] ═══
-A. [sous-titre] ✏️ Amorce : [1 phrase]
-B. [sous-titre] ✏️ Amorce : [1 phrase]
-C. [sous-titre] ✏️ Amorce : [1 phrase]
-→ Transition : [1 phrase qui annonce que ni I ni II ne suffisent — "Il faut donc aller plus loin…"]
-
-═══ PARTIE III — SYNTHÈSE : [titre avec le concept nouveau] ═══
-A. [sous-titre] ✏️ Amorce : [1 phrase]
-B. [sous-titre] ✏️ Amorce : [1 phrase]
-C. [sous-titre] ✏️ Amorce : [1 phrase]
-
-═══ CONCLUSION ═══
-Bilan (2-3 phrases) : [récapituler la progression thèse → antithèse → synthèse et la réponse au problème]
-Ouverture : [1 question vers un autre horizon philosophique]`,
-
-      3: `Génère un PLAN SOCRATIQUE en suivant EXACTEMENT cette structure (une question ❓ par sous-partie pour guider la réflexion de l'élève) :
-
-═══ INTRODUCTION ═══
-1️⃣ Opinion commune : [formulée]
-2️⃣ Définitions : [termes clés à définir]
-3️⃣ Paradoxe : [tension interne du sujet]
-4️⃣ Problématique : [reformulation]
-5️⃣ Annonce de plan
-
-═══ PARTIE I — THÈSE (OUI) : [titre] ═══
-A. [sous-titre]
-   ❓ Pour développer : [question qui aide l'élève à trouver l'argument — commence par "En quoi…", "Comment…", "Pourquoi peut-on dire que…"]
-B. [sous-titre]
-   ❓ Pour développer : [question]
-C. [sous-titre]
-   ❓ Pour développer : [question]
-→ ❓ Transition : [question qui fait percevoir la limite de la thèse — "Mais peut-on vraiment dire que…"]
-
-═══ PARTIE II — ANTITHÈSE (NON) : [titre] ═══
-A. [sous-titre] ❓ Pour développer : [question]
-B. [sous-titre] ❓ Pour développer : [question]
-C. [sous-titre] ❓ Pour développer : [question]
-→ ❓ Transition : [question qui ouvre vers le dépassement — "Comment dépasser cette contradiction…"]
-
-═══ PARTIE III — SYNTHÈSE (concept nouveau) : [titre] ═══
-A. [sous-titre] ❓ Pour développer : [question]
-B. [sous-titre] ❓ Pour développer : [question]
-C. [sous-titre] ❓ Pour développer : [question]
-
-═══ CONCLUSION ═══
-Bilan : [récapitulation]
-❓ Ouverture : [question vers un autre horizon]`,
-
-      4: `Génère un PLAN COMPLET en suivant EXACTEMENT cette structure, en mobilisant les textes étudiés :
-
-═══ INTRODUCTION ═══
-1️⃣ Opinion commune (rédigée) : [1-2 phrases — "Il est naturel de penser que…"]
-2️⃣ Définitions (rédigées) : [définir précisément chaque terme clé]
-3️⃣ Paradoxe (rédigé) : [montrer la tension — "Pourtant, si l'on y réfléchit…"]
-4️⃣ Problématique (rédigée) : [reformuler avec "vraiment", "nécessairement" — faire apparaître le problème]
-5️⃣ Annonce de plan (rédigée)
-
-═══ PARTIE I — THÈSE (OUI) : [titre complet] ═══
-A. [sous-titre]
-   📌 Argument : [l'idée principale du paragraphe]
-   📚 Texte/auteur : [extrait des textes étudiés avec explication de pourquoi il illustre l'argument]
-   💬 Citation : [auteur et idée à citer + explication de ce qu'elle apporte]
-   → Mini-conclusion : [montrer en quoi A répond au sujet]
-B. [sous-titre — même structure : Argument / Texte / Citation / Mini-conclusion]
-C. [sous-titre — même structure]
-→ Transition rédigée : ["Si [thèse] semble convaincante, elle ne prend pas en compte…"]
-
-═══ PARTIE II — ANTITHÈSE (NON) : [titre complet] ═══
-A, B, C : même structure 📌 Argument / 📚 Texte / 💬 Citation / Mini-conclusion
-→ Transition rédigée : ["Cependant, se limiter à dire [antithèse] ne suffit pas à rendre compte de…"]
-
-═══ PARTIE III — SYNTHÈSE (concept nouveau imprévu) : [titre — PAS un résumé] ═══
-A, B, C : même structure
-⚠️ RAPPEL : la synthèse introduit un concept NOUVEAU qui n'était pas présent en I et II
-
-═══ CONCLUSION ═══
-Bilan rédigé : [récapituler en 3 temps — "Dans un premier temps… Puis… Enfin…" — et formuler la réponse]
-Ouverture rédigée : [question vers un autre horizon philosophique]`,
-    };
-
-    try {
-      const data = await callAI([{ role: "user", content:
-        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
-Sujet de dissertation : "${currentSujet}"
-Chapitres mobilisés : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nExtraits (résumés) :\n" + contextForAI.slice(0, 1500) : ""}
-
-${METHODE_PROF}
-
-${levelPrompts[level]}
-
-RÈGLES ABSOLUES :
-- L'INTRODUCTION et les PARTIES I, II, III sont des sections ENTIÈREMENT DISTINCTES — ne jamais les confondre
-- La Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau imprévu)
-- La synthèse N'EST PAS un résumé ni un compromis — elle introduit quelque chose d'inédit
-- Respecte EXACTEMENT le format visuel demandé avec les émojis et symboles (═══, 1️⃣, ✏️, ❓, 📌, etc.)
-- Sois précis, pédagogique, adapté au niveau terminale` }], 1200, false, "dissertation");
-      // Générer aussi l'explication de la logique
-      const planTexte = getText(data);
-      genererExplicationLogique(planTexte, currentSujet);
-      setPlan(getText(data));
-    } catch { setPlan("Erreur lors de la génération du plan."); }
-    setPlanLoading(false);
   };
 
   // Brainstorming : premier message auto
@@ -1987,7 +1780,8 @@ Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
 ${contextForAI ? "\n\nAuteurs étudiés (pour référence uniquement, ne pas citer) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
 
-Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.` }], 500, true, "brainstorming");
+Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le brainstorming par une question ouverte sur les termes clés du sujet. Sois bref (3-4 phrases max) et pose UNE seule question à la fin.
+${REGLE_GUIDAGE}` }], 500, true, "brainstorming");
       setBrainstormMessages([{ role: "assistant", content: getText(data) }]);
     } catch { setBrainstormMessages([{ role: "assistant", content: "Commençons ! Qu'est-ce que le sujet te demande selon toi ?" }]); }
     setBrainstormLoading(false);
@@ -2008,7 +1802,8 @@ Guide la réflexion de l'élève sur le SUJET (pas sur les auteurs). Lance le br
 Sujet : "${currentSujet}"
 Chapitres : ${selectedChapters.join(", ")}
 ${contextForAI ? "\n\nAuteurs étudiés (référence uniquement, ne pas s'y limiter) :\n" + activeTextes.map((e: any) => "- " + entryName(e)).join("\n") : ""}
-Règles : guide par des questions, ne donne pas de plan tout fait, encourage la réflexion autonome, sois bienveillant. Pose une seule question à la fois. Réponds en 3-5 phrases max.` },
+Règles : guide par des questions, ne donne pas de plan tout fait, encourage la réflexion autonome, sois bienveillant. Pose une seule question à la fois. Réponds en 3-5 phrases max.
+${REGLE_GUIDAGE}` },
         { role: "assistant", content: "Bien sûr, je suis prêt à guider ta réflexion." },
         ...newMsgs,
       ], 600);
@@ -2039,6 +1834,8 @@ Fournis une correction bienveillante et détaillée :
 4. **Sur la forme** : structure, transitions, introduction/conclusion
 5. **Suggestion principale** : une seule chose prioritaire à travailler
 6. **Note indicative** /20 avec justification courte
+
+Ne réécris aucun passage de la copie et ne propose ni plan, ni introduction, ni paragraphe « modèle » : explique ce qui manque et pose des questions pour que l'élève l'améliore lui-même.
 
 Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, false, "corrige");
       const corrigeTexte = getText(data);
@@ -2304,7 +2101,7 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, f
 
             <div className="grid grid-cols-2 gap-3">
               {([
-                ["plan", "📋 Plan guidé", "Génère un plan I/II/III avec le niveau de détail que tu choisis", "border-indigo-300 hover:border-indigo-500", "bg-indigo-600", "text-indigo-700 bg-indigo-50"],
+                ["plan", "📋 Construction guidée", "Construis toi-même ton introduction et ton plan, étape par étape, avec des indices", "border-indigo-300 hover:border-indigo-500", "bg-indigo-600", "text-indigo-700 bg-indigo-50"],
                 ["brainstorm", "💬 Brainstorming", "L'IA te guide par des questions socratiques pour développer ta réflexion", "border-teal-300 hover:border-teal-500", "bg-teal-600", "text-teal-700 bg-teal-50"],
                 ["corrige", "✏️ Corrigé différé", "Rédige ta dissertation, puis l'IA la corrige et la commente", "border-amber-300 hover:border-amber-500", "bg-amber-600", "text-amber-700 bg-amber-50"],
                 ["combined", "🔀 Vue combinée", "Accède aux 3 modes en simultané dans des onglets", "border-purple-300 hover:border-purple-500", "bg-purple-600", "text-purple-700 bg-purple-50"],
@@ -2355,43 +2152,21 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, f
         />
       )}
 
-      {/* Plan guidé */}
+      {/* Construction guidée (l'élève construit lui-même son introduction et son plan) */}
       {workMode === "plan" && (
         <div className="max-w-3xl mx-auto py-6 px-4">
-          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 mb-5">
-            <h2 className="font-black text-indigo-800 mb-1 flex items-center gap-2"><ListChecks className="w-5 h-5" /> Plan guidé</h2>
-            <p className="text-xs text-indigo-600 mb-4">Choisis ton niveau de détail :</p>
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                [1, "Niveau 1 — Squelette", "Intro (5 étapes) + Thèse / Antithèse / Synthèse + titres de sous-parties + Conclusion"],
-                [2, "Niveau 2 — Amorces rédigées", "Structure complète + amorces de rédaction pour chaque sous-partie + transitions"],
-                [3, "Niveau 3 — Socratique", "Structure complète + questions socratiques ❓ pour guider ta réflexion"],
-                [4, "Niveau 4 — Complet", "Structure + amorces + arguments + exemples des textes + citations + conclusion rédigée"],
-              ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
-                <button key={lvl} onClick={() => generatePlan(lvl)}
-                  className={`text-left p-3 rounded-xl border-2 transition-all ${planLevel === lvl && plan ? "border-indigo-500 bg-white ring-2 ring-indigo-100" : "border-indigo-200 bg-white hover:border-indigo-400"}`}>
-                  <p className="font-bold text-indigo-800 text-xs">{label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-                </button>
-              ))}
-            </div>
+          <div className={showRedaction ? "hidden" : ""}>
+            <DissertationGuidee
+              sujet={currentSujetText}
+              matiere={matiere}
+              methode={METHODE_PROF}
+              contexte={contextForAI}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 450, light = true) => getText(await callAI(m, maxTokens, light, "dissertation_guidee"))}
+              onRediger={(r: string) => { setPlan(r); setRedacTextes({}); setRedacFeedbacks({}); setRedacStep("intro"); setShowRedaction(true); }}
+            />
           </div>
 
-          {planLoading && (
-            <div className="flex flex-col items-center py-16">
-              <Sparkles className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-              <p className="text-gray-600 font-semibold">Génération du plan niveau {planLevel}…</p>
-            </div>
-          )}
-
-          {plan && !planLoading && !showRedaction && (
-            <button onClick={() => setShowRedaction(true)}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md">
-              <PenLine className="w-4 h-4" /> Rédiger partie par partie avec l'IA
-            </button>
-          )}
-
-          {plan && !planLoading && showRedaction && (
+          {plan && showRedaction && (
             <div className="bg-white rounded-2xl border-2 border-violet-200 shadow-sm overflow-hidden">
               {/* Navigation étapes */}
               <div className="flex border-b border-violet-100 overflow-x-auto">
@@ -2466,87 +2241,6 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, f
             </div>
           )}
 
-          {plan && !planLoading && !showRedaction && (
-            <div className="space-y-4">
-              {/* Plan généré */}
-              <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-black text-gray-800 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-indigo-600" />
-                    Plan — Niveau {planLevel}
-                  </h3>
-                  <button onClick={() => generatePlan(planLevel)}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
-                    <RotateCcw className="w-3 h-3" /> Regénérer
-                  </button>
-                </div>
-                <div className="flex gap-2 mb-3 flex-wrap">
-                  <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">🔵 Généré par l'IA Groq</span>
-                  {contextForAI && <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full font-semibold">🟡 Basé sur tes textes du cours</span>}
-                  <span className="text-xs bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">⚠️ À vérifier et personnaliser</span>
-                </div>
-                <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
-              </div>
-
-              {/* Explication de la logique */}
-              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5">
-                <h3 className="font-black text-indigo-800 mb-3 flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4" /> Comprendre la logique de ce plan
-                </h3>
-                {planLogiqueLoading ? (
-                  <div className="flex items-center gap-2 text-indigo-600 text-sm">
-                    <Sparkles className="w-4 h-4 animate-spin" /> Analyse de la progression…
-                  </div>
-                ) : planLogique ? (
-                  <p className="text-sm text-indigo-900 leading-relaxed">{planLogique}</p>
-                ) : null}
-
-                {/* Chat sur la logique */}
-                {showLogiqueChat && (
-                  <div className="mt-4 bg-white rounded-xl border border-indigo-200 overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto p-3 space-y-2">
-                      {planLogiqueMessages.slice(1).map((msg, i) => (
-                        <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${msg.role === "user" ? "bg-indigo-600 text-white" : "bg-indigo-50 border border-indigo-200 text-indigo-900"}`}>
-                            {msg.content}
-                          </div>
-                        </div>
-                      ))}
-                      {planLogiqueChatLoading && (
-                        <div className="flex justify-start">
-                          <div className="bg-indigo-50 rounded-xl px-3 py-2 flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3 animate-spin text-indigo-500" />
-                            <span className="text-xs text-indigo-600">Réflexion…</span>
-                          </div>
-                        </div>
-                      )}
-                      <div ref={planLogiqueRef} />
-                    </div>
-                    <div className="border-t border-indigo-100 p-2 flex gap-2">
-                      <input
-                        value={planLogiqueInput}
-                        onChange={e => setPlanLogiqueInput(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendLogiqueQuestion()}
-                        className="flex-1 px-3 py-2 text-sm border border-indigo-200 rounded-lg focus:outline-none focus:border-indigo-400 text-gray-800"
-                        placeholder="Pose une question sur la logique du plan…"
-                        disabled={planLogiqueChatLoading}
-                      />
-                      <button onClick={sendLogiqueQuestion} disabled={!planLogiqueInput.trim() || planLogiqueChatLoading}
-                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white px-3 py-2 rounded-lg text-sm font-bold transition-all">
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {!showLogiqueChat && planLogique && (
-                  <button onClick={() => setShowLogiqueChat(true)}
-                    className="mt-3 text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1.5 border border-indigo-300 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all">
-                    <MessageCircle className="w-3.5 h-3.5" /> Poser une question sur ce plan
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -2667,9 +2361,6 @@ Sois encourageant mais précis. Termine par un mot d'encouragement.` }], 2000, f
 // ── VUE COMBINÉE ──────────────────────────────────────────────────────────────
 function CombinedDissView({ sujet, selectedChapters, matiere, contextForAI, brainstormMessages, setBrainstormMessages, onStartBrainstorm }: any) {
   const [activeTab, setActiveTab] = useState<"plan" | "brainstorm" | "corrige">("plan");
-  const [planLevel, setPlanLevel] = useState<PlanLevel>(1);
-  const [plan, setPlan] = useState("");
-  const [planLoading, setPlanLoading] = useState(false);
   const [brainstormInput, setBrainstormInput] = useState("");
   const [brainstormLoading, setBrainstormLoading] = useState(false);
   const [eleveTexte, setEleveTexte] = useState("");
@@ -2687,28 +2378,6 @@ function CombinedDissView({ sujet, selectedChapters, matiere, contextForAI, brai
   const METHODE_INTRO_C = `MÉTHODE D'INTRODUCTION : 1. Opinion commune (doxa) → 2. Définitions des termes → 3. Paradoxe du sujet → 4. Problématique (reformulation) → 5. Annonce de plan`;
   const METHODE_PLAN_C = `PLAN DIALECTIQUE : Partie I = THÈSE (oui), Partie II = ANTITHÈSE (non), Partie III = SYNTHÈSE (concept nouveau qui dépasse le oui/non — pas un résumé ni un compromis).`;
 
-  const generatePlan = async (level: PlanLevel) => {
-    setPlanLevel(level); setPlan(""); setPlanLoading(true);
-    const levelPrompts: Record<PlanLevel, string> = {
-      1: `Squelette : INTRODUCTION (5 étapes numérotées) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE, chacune avec sous-parties A, B, C (titres courts) + transitions + CONCLUSION (bilan + ouverture). Pas de rédaction.`,
-      2: `Plan avec amorces : INTRODUCTION rédigée (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + une amorce rédigée (1 phrase) par sous-partie + transitions rédigées + CONCLUSION rédigée.`,
-      3: `Plan socratique : INTRODUCTION (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + une question socratique ❓ par sous-partie pour guider l'élève + transitions sous forme de questions + CONCLUSION.`,
-      4: `Plan complet : INTRODUCTION rédigée (5 étapes) + PARTIE I THÈSE / PARTIE II ANTITHÈSE / PARTIE III SYNTHÈSE avec sous-parties A, B, C + argument + exemple des textes étudiés + citation par sous-partie + transitions rédigées + CONCLUSION rédigée (bilan + ouverture).`,
-    };
-    try {
-      const data = await callAI([{ role: "user", content:
-        `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
-Sujet : "${sujet}" — Chapitres : ${selectedChapters.join(", ")}
-${contextForAI ? "\n\nExtraits :\n" + contextForAI.slice(0, 800) : ""}
-${METHODE_INTRO_C}
-${METHODE_PLAN_C}
-${levelPrompts[level]}
-RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un concept NOUVEAU et IMPRÉVU.` }], 2000, false, "plan_guide");
-      setPlan(getText(data));
-    } catch { setPlan("Erreur."); }
-    setPlanLoading(false);
-  };
-
   const sendBrainstorm = async () => {
     if (!brainstormInput.trim() || brainstormLoading) return;
     const userMsg = { role: "user", content: brainstormInput.trim() };
@@ -2718,7 +2387,7 @@ RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un
     setBrainstormLoading(true);
     try {
       const data = await callAI([
-        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en brainstorming socratique.\nSujet : "${sujet}"\nChapitres : ${selectedChapters.join(", ")}\n\nGuide la réflexion sur le SUJET (pas sur les textes). Lance par une question ouverte sur les termes clés. 3-4 phrases max, UNE seule question.` },
+        { role: "user", content: `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en brainstorming socratique.\nSujet : "${sujet}"\nChapitres : ${selectedChapters.join(", ")}\n\nGuide la réflexion sur le SUJET (pas sur les textes). Lance par une question ouverte sur les termes clés. 3-4 phrases max, UNE seule question.\n${REGLE_GUIDAGE}` },
         { role: "assistant", content: "Bien sûr, je guide ta réflexion." },
         ...newMsgs,
       ], 500);
@@ -2734,7 +2403,8 @@ RÈGLE : Ne jamais confondre Introduction et Partie I. La synthèse introduit un
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale. Sujet : "${sujet}". Chapitres : ${selectedChapters.join(", ")}.
 COPIE : ${eleveTexte}
-Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Forme 5. Suggestion prioritaire 6. Note /20` }], 2000, false, "correction");
+Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Forme 5. Suggestion prioritaire 6. Note /20
+Ne réécris aucun passage de la copie et ne propose ni plan, ni introduction, ni paragraphe « modèle » : explique ce qui manque et pose des questions pour que l'élève l'améliore lui-même.` }], 2000, false, "correction");
       setCorrige(getText(data)); setCorrigeSubmitted(true);
     } catch { setCorrige("Erreur."); }
     setCorrigeLoading(false);
@@ -2744,7 +2414,7 @@ Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Fo
     <div className="max-w-5xl mx-auto py-4 px-4">
       <div className="flex gap-2 mb-4">
         {([
-          ["plan", "📋 Plan guidé", "border-indigo-500 bg-indigo-50 text-indigo-700"],
+          ["plan", "📋 Construction guidée", "border-indigo-500 bg-indigo-50 text-indigo-700"],
           ["brainstorm", "💬 Brainstorming", "border-teal-500 bg-teal-50 text-teal-700"],
           ["corrige", "✏️ Corrigé", "border-amber-500 bg-amber-50 text-amber-700"],
         ] as [string, string, string][]).map(([tab, label, activeClass]) => (
@@ -2756,31 +2426,14 @@ Correction bienveillante : 1. Points forts 2. Points à améliorer 3. Fond 4. Fo
       </div>
 
       {activeTab === "plan" && (
-        <div>
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            {([
-              [1, "Squelette", "Titres seuls"],
-              [2, "Amorces", "Plan + rédaction"],
-              [3, "Socratique", "Plan + questions ❓"],
-              [4, "Complet", "Plan + exemples"],
-            ] as [PlanLevel, string, string][]).map(([lvl, label, desc]) => (
-              <button key={lvl} onClick={() => generatePlan(lvl)}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${planLevel === lvl && plan ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:border-indigo-300"}`}>
-                <p className="font-bold text-xs text-indigo-800">Niv.{lvl} — {label}</p>
-                <p className="text-xs text-gray-500">{desc}</p>
-              </button>
-            ))}
-          </div>
-          {planLoading ? (
-            <div className="flex justify-center py-10"><Sparkles className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-          ) : plan ? (
-            <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5">
-              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">{plan}</pre>
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-400 font-semibold">Choisis un niveau ci-dessus pour générer le plan</div>
-          )}
-        </div>
+        <DissertationGuidee
+          sujet={sujet}
+          matiere={matiere}
+          methode={METHODE_INTRO_C + "\n" + METHODE_PLAN_C}
+          contexte={contextForAI}
+          askAI={async (m: { role: string; content: string }[], maxTokens = 450, light = true) => getText(await callAI(m, maxTokens, light, "dissertation_guidee"))}
+          onRediger={(r: string) => { setEleveTexte(r + "\n\n— Rédige ici ta dissertation à partir de ton travail —\n"); setActiveTab("corrige"); }}
+        />
       )}
 
       {activeTab === "brainstorm" && (
@@ -3543,7 +3196,7 @@ function Dashboard({ onBack, sharedLib }: any) {
                     qcm: "✅ Quiz / QCM",
                     flashcards: "🃏 Flashcards",
                     dissertation: "✍️ Dissertation",
-                    plan_guide: "📋 Plan guidé",
+                    plan_guide: "📋 Plan guidé", dissertation_guidee: "📋 Construction guidée", entrainement_paragraphe: "✍️ Entraînement paragraphe",
                     brainstorming: "💡 Brainstorming",
                     correction: "🔍 Correction",
                     corrige: "📝 Corrigé",
@@ -4634,7 +4287,7 @@ function FeaturesPanel({ featuresConfig, setFeaturesConfig }: { featuresConfig: 
       bg: "bg-rose-50",
       border: "border-rose-200",
       items: [
-        { key: "diss_plan", label: "📋 Plan guidé", desc: "Génère un plan I/II/III dialectique" },
+        { key: "diss_plan", label: "📋 Construction guidée", desc: "L'élève construit son introduction et son plan étape par étape, avec indices" },
         { key: "diss_brainstorm", label: "💬 Brainstorming", desc: "Dialogue socratique avec l'IA" },
         { key: "diss_corrige", label: "✏️ Corrigé différé", desc: "Rédaction puis correction par l'IA" },
         { key: "diss_combined", label: "🔀 Vue combinée", desc: "Accès aux 3 modes en simultané" },
