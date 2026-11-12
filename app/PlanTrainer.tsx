@@ -41,12 +41,10 @@ const parseJSONLoose = (txt: string) => {
 };
 
 const CRITERES = [
-  "Ce n'est ni un compromis ni un mélange du I et du II",
-  "Ce n'est pas un résumé du I et du II, ni une conclusion",
-  "Un concept nouveau, imprévu au départ, est introduit",
+  "Ni compromis, ni résumé du I et du II, ni conclusion",
+  "Un concept nouveau est introduit et défini",
   "Le problème est reformulé : la question avance",
-  "L'ouverture mène bien à la partie III",
-  "La partie III reste dans le sujet",
+  "L'ouverture mène bien au III, sans sortir du sujet",
 ];
 
 const VERDICT_UI: Record<Correction["verdict"], { label: string; cls: string; icon: string }> = {
@@ -88,7 +86,6 @@ export default function PlanTrainer({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [ouverture, setOuverture] = useState("");
-  const [concept, setConcept] = useState("");
   const [partie3, setPartie3] = useState("");
   const [showHint, setShowHint] = useState(false);
   const [correcting, setCorrecting] = useState(false);
@@ -114,7 +111,7 @@ export default function PlanTrainer({
   }, [bank]);
 
   const resetAnswer = () => {
-    setOuverture(""); setConcept(""); setPartie3(""); setCorrection(null); setShowHint(false); setErr("");
+    setOuverture(""); setPartie3(""); setCorrection(null); setShowHint(false); setErr("");
   };
 
   // Les parties I et II sont rédigées par l'IA : l'élève se concentre sur la synthèse
@@ -125,21 +122,17 @@ export default function PlanTrainer({
       const p = await askJSON(askAI, `Tu es professeur agrégé de philosophie. Sujet de dissertation (${niveau}) : « ${sj.sujet} »
 ${notionTxt}
 
-Rédige seulement les deux premières parties d'un plan dialectique, en suivant cette méthode du professeur :
+Donne seulement l'idée directrice des deux premières parties d'un plan dialectique, en UNE phrase courte chacune (20 mots au plus), en suivant la méthode du professeur :
 ${ficheTas}
 
-Exigences philosophiques :
-- Commence par repérer les concepts du sujet et ce qu'ils présupposent ; le plan doit porter sur ces concepts, pas sur des opinions.
-- Partie I (thèse) : répond « oui » avec de vraies raisons philosophiques.
-- Partie II (antithèse) : examine les limites de la thèse (ce qu'elle présuppose, ce qu'elle oublie) et répond « non ».
-- Chaque argument est une idée conceptuelle précise (définition, distinction, raisonnement), jamais un lieu commun ni un exemple d'actualité.
-- Pour chaque partie, donne 1 ou 2 repères tirés d'auteurs classiques du programme de Terminale : l'auteur, une œuvre réellement écrite par lui, et sa thèse en une phrase avec tes mots.
-- N'invente rien : pas de citation entre guillemets, pas d'œuvre douteuse. Si tu n'es pas certain d'une référence, choisis-en une autre que tu connais avec certitude.
-- Ne donne SURTOUT PAS la partie III ni aucune piste de synthèse : c'est l'élève qui doit la trouver.
-${isTechno ? "- Langage clair et accessible, sans perdre la précision des concepts." : ""}
+- Partie I (thèse) : répond « oui » au sujet par une vraie raison philosophique (un concept, une distinction), pas une opinion.
+- Partie II (antithèse) : montre la limite de la thèse et répond « non ».
+- Pas d'arguments détaillés, pas d'auteurs, pas d'exemples : l'élève doit se concentrer sur la partie III.
+- Ne donne SURTOUT PAS la partie III ni aucune piste de synthèse.
+${isTechno ? "- Langage clair et accessible." : ""}
 Réponds uniquement en JSON :
-{"I":{"titre":"idée directrice en une phrase","arguments":["...","..."],"reperes":[{"auteur":"...","oeuvre":"...","idee":"..."}]},"II":{"titre":"...","arguments":["...","..."],"reperes":[{"auteur":"...","oeuvre":"...","idee":"..."}]}}`,
-        2000, (x) => !!(x?.I?.titre && x?.II?.titre));
+{"I":{"titre":"..."},"II":{"titre":"..."}}`,
+        600, (x) => !!(x?.I?.titre && x?.II?.titre));
       setPlan({ I: toPartie(p.I), II: toPartie(p.II) });
     } catch {
       setErr("Impossible de préparer le plan pour l'instant. Réessaie dans un instant.");
@@ -177,29 +170,24 @@ Rappels essentiels de cette méthode :
 
 === PLAN DONNÉ À L'ÉLÈVE ===
 I. ${plan.I.titre}
-${plan.I.arguments.map((a) => "- " + a).join("\n")}
-${plan.I.reperes.map((r) => `(Repère : ${r.auteur}, ${r.oeuvre} : ${r.idee})`).join("\n")}
 II. ${plan.II.titre}
-${plan.II.arguments.map((a) => "- " + a).join("\n")}
-${plan.II.reperes.map((r) => `(Repère : ${r.auteur}, ${r.oeuvre} : ${r.idee})`).join("\n")}
 
 === RÉPONSE DE L'ÉLÈVE ===
 Ouverture de conclusion : ${ouverture.trim() || "(vide)"}
-Concept nouveau : ${concept.trim() || "(vide)"}
 Partie III : ${partie3.trim() || "(vide)"}
 
 Évalue la réponse avec bienveillance mais exigence, critère par critère :
 ${CRITERES.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
 Juge en philosophe : le concept proposé est-il vraiment un concept (et non un mot vague) ? Est-il défini ? Change-t-il réellement les termes du problème ? Un « réalisme » ou un « juste milieu » non défini est un compromis déguisé.
-Tutoie l'élève. Commentaires courts (une ou deux phrases), précis et philosophiques. Ne réécris pas toute sa copie.
+Tutoie l'élève. Sois court et direct : une seule phrase par critère, une phrase pour les points forts, une phrase pour le conseil. Ne réécris pas sa copie.
 Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
         2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0);
       setCorrection({
         verdict: ["reussi", "presque", "a_retravailler"].includes(c.verdict) ? c.verdict : "presque",
-        criteres: c.criteres.slice(0, 6).map((x: any, i: number) => ({
+        criteres: c.criteres.slice(0, CRITERES.length).map((x: any, i: number) => ({
           nom: String(x?.nom || CRITERES[i] || ""), ok: !!x?.ok, commentaire: String(x?.commentaire || ""),
         })),
         points_forts: String(c.points_forts || ""),
@@ -221,8 +209,7 @@ Réponds uniquement en JSON :
         <p className="text-[10px] font-black uppercase tracking-widest text-violet-200">🎯 S'entraîner au plan</p>
         <h3 className="text-lg font-black mt-1">Le plan dialectique : trouve ta synthèse</h3>
         <p className="text-sm text-violet-100 mt-1 leading-relaxed">
-          Tu reçois un vrai sujet de dissertation avec sa thèse (I) et son antithèse (II), appuyées sur des auteurs. À toi de trouver <strong>l'ouverture de ta conclusion</strong>,
-          puis la <strong>partie III</strong> qui en découle.
+          Tu reçois un vrai sujet avec sa thèse (I) et son antithèse (II) en une phrase. À toi de créer la <strong>partie III</strong> : trouve l'ouverture de ta conclusion, puis fais-en la question de ton III.
         </p>
       </div>
 
@@ -248,7 +235,7 @@ Réponds uniquement en JSON :
           {bankErr ? "La banque de sujets n'a pas pu être chargée." : !bank ? "Chargement de la banque de sujets…" : `${bank.length} sujets de dissertation tirés de la banque de vrais sujets.`}
         </p>
         {loadingPlan && (
-          <p className="text-sm text-gray-500 flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin text-violet-500" /> Préparation de la thèse et de l'antithèse (une vingtaine de secondes)…</p>
+          <p className="text-sm text-gray-500 flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin text-violet-500" /> Préparation du sujet…</p>
         )}
       </div>
 
@@ -313,24 +300,14 @@ Réponds uniquement en JSON :
             />
           </div>
           <div>
-            <label className="text-sm font-black text-gray-800">2. Le concept nouveau</label>
-            <p className="text-xs text-gray-500 mb-2">Le mot ou la distinction qui permet de sortir du « oui / non ».</p>
-            <input
-              value={concept}
-              onChange={(e) => setConcept(e.target.value)}
-              className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-violet-400 focus:outline-none text-gray-800"
-              placeholder="Ex. : le réalisme, la distinction individu / humanité…"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-black text-gray-800">3. Ta partie III</label>
-            <p className="text-xs text-gray-500 mb-2">Recycle ton ouverture : c'est la question que traite ton III. Quelle réponse lui donnes-tu ?</p>
+            <label className="text-sm font-black text-gray-800">2. Ta partie III</label>
+            <p className="text-xs text-gray-500 mb-2">En 2 ou 3 phrases : ton concept nouveau, et la réponse qu'il permet de donner à ton ouverture.</p>
             <textarea
               value={partie3}
               onChange={(e) => setPartie3(e.target.value)}
-              rows={4}
+              rows={3}
               className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-violet-400 focus:outline-none resize-none text-gray-800"
-              placeholder="En quelques phrases : l'idée directrice de ton III et comment elle dépasse le I et le II."
+              placeholder="Concept nouveau : … Il permet de répondre que…"
             />
           </div>
 

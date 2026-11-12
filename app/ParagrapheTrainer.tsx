@@ -16,11 +16,11 @@ type Sujet = { sujet: string; notion_principale?: string; source?: string };
 
 type Etape = "these" | "arguments" | "exemple" | "citation" | "conclusion";
 const ETAPES: { key: Etape; label: string; aide: string; cls: string }[] = [
-  { key: "these", label: "Thèse", aide: "L'idée que l'on affirme : une seule idée, formulée clairement, qui répond au sujet.", cls: "bg-blue-50 border-blue-300 text-blue-800" },
-  { key: "arguments", label: "Arguments", aide: "Les raisons qui justifient la thèse : définitions, distinctions, raisonnement (« car », « en effet », « premièrement »).", cls: "bg-indigo-50 border-indigo-300 text-indigo-800" },
-  { key: "exemple", label: "Exemple", aide: "Une situation concrète qui illustre l'argument : on reconnaît un cas particulier, une scène, un fait.", cls: "bg-green-50 border-green-300 text-green-800" },
-  { key: "citation", label: "Citation", aide: "Les mots exacts d'un auteur, entre guillemets, suivis de leur explication.", cls: "bg-amber-50 border-amber-300 text-amber-800" },
-  { key: "conclusion", label: "Conclusion", aide: "Le bilan de l'argumentation : elle répond au sujet et reprend l'idée en la précisant (« donc », « ainsi »).", cls: "bg-rose-50 border-rose-300 text-rose-800" },
+  { key: "these", label: "Thèse", aide: "Une seule idée, qui répond au sujet.", cls: "bg-blue-50 border-blue-300 text-blue-800" },
+  { key: "arguments", label: "Arguments", aide: "Pourquoi ta thèse est vraie : définitions, raisonnement.", cls: "bg-indigo-50 border-indigo-300 text-indigo-800" },
+  { key: "exemple", label: "Exemple", aide: "Une situation concrète de la vie réelle.", cls: "bg-green-50 border-green-300 text-green-800" },
+  { key: "citation", label: "Citation", aide: "Les mots d'un auteur, entre guillemets, puis ton explication.", cls: "bg-amber-50 border-amber-300 text-amber-800" },
+  { key: "conclusion", label: "Conclusion", aide: "Le bilan : réponds clairement au sujet.", cls: "bg-rose-50 border-rose-300 text-rose-800" },
 ];
 const ETAPE = Object.fromEntries(ETAPES.map((e) => [e.key, e])) as Record<Etape, (typeof ETAPES)[number]>;
 
@@ -93,8 +93,7 @@ export default function ParagrapheTrainer({ askAI, fiche, matiere, serie, loadSu
         <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">✍️ S'entraîner au paragraphe</p>
         <h3 className="text-lg font-black mt-1">Le paragraphe argumenté</h3>
         <p className="text-sm text-rose-50 mt-1 leading-relaxed">
-          Cinq étapes : <strong>Thèse</strong>, <strong>Arguments</strong>, <strong>Exemple</strong>, <strong>Citation</strong> (expliquée), <strong>Conclusion</strong>.
-          Commence par les repérer dans un paragraphe du cours, puis rédige le tien.
+          Thèse, Arguments, Exemple, Citation expliquée, Conclusion : repère-les, puis rédige ton paragraphe.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -312,11 +311,11 @@ Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition,
 - Conclusion : fait le bilan de l'argumentation et répond explicitement au sujet, sans simplement répéter la thèse.
 - Signale tout contresens sur un auteur.
 
-=== STYLE DE L'APPRÉCIATION ===
-5 à 7 lignes maximum. Tutoie l'élève. Commence de façon adoucie (« plutôt bien structuré », « assez juste dans l'essentiel »), cite des forces concrètes de la copie, puis « Il y a cependant des fragilités » ou « Les faiblesses touchent à… ». Rappelle le principe de la méthode et explique pourquoi c'est important. Ne parle de relecture que s'il y a de vraies fautes, en précisant si elles sont orthographiques ou typographiques. Pas de formule d'encouragement à la fin.
+=== STYLE DE L'APPRÉCIATION (court et direct) ===
+3 lignes maximum. Chaque commentaire de critère tient en UNE phrase courte. Le conseil tient en UNE phrase. Tutoie l'élève. Commence de façon adoucie (« plutôt bien structuré », « assez juste dans l'essentiel »), cite une force concrète, puis « Il y a cependant des fragilités » et la principale. Ne parle de relecture que s'il y a de vraies fautes, en précisant si elles sont orthographiques ou typographiques. Pas de formule d'encouragement à la fin.
 ${isTechno ? "Langage clair et accessible, sans perdre en précision." : ""}
 
-Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à l'améliorer lui-même.
+Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice (2 phrases au plus, terminé par une question) qui aide l'élève à l'améliorer lui-même.
 Ne réécris aucun passage de la copie dans tes commentaires.
 Réponds uniquement en JSON :
 {"criteres":[{"etape":"these","note":3,"commentaire":"une phrase de justification"},{"etape":"arguments","note":2,"commentaire":"..."},{"etape":"exemple","note":3,"commentaire":"..."},{"etape":"citation","note":2,"commentaire":"..."},{"etape":"conclusion","note":3,"commentaire":"..."}],"appreciation":"...","conseil":"le conseil le plus utile pour progresser","piste_etape":"exemple","piste":"..."}`,
@@ -370,7 +369,7 @@ Réponds uniquement en JSON :
               {sujet.notion_principale && <span className="text-[11px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{sujet.notion_principale}</span>}
               {sujet.source && <span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">📌 {sujet.source}</span>}
             </div>
-            <p className="text-xs text-gray-500 mt-2">Rédige <strong>un</strong> paragraphe argumenté (environ 15 à 20 lignes) qui défend une réponse à ce sujet.</p>
+            <p className="text-xs text-gray-500 mt-2">Rédige un paragraphe argumenté (15 à 20 lignes) qui répond à ce sujet.</p>
           </div>
 
           <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer w-fit">
