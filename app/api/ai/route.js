@@ -161,6 +161,31 @@ async function compteDuJour(colonne, valeur) {
   return error ? 0 : count || 0;
 }
 
+// Réponses restantes aujourd'hui pour cet élève (la plus contraignante des deux limites)
+function calculRestant(lim, parEleve, parConnexion) {
+  const r = [];
+  if (lim.par_eleve > 0) r.push(lim.par_eleve - parEleve);
+  if (lim.par_connexion > 0) r.push(lim.par_connexion - parConnexion);
+  if (!r.length) return null;
+  return Math.max(0, Math.min(...r));
+}
+
+// GET /api/ai?visitor_id=… : compteur affiché à l'élève
+export async function GET(request) {
+  try {
+    const visitor_id = new URL(request.url).searchParams.get("visitor_id") || "unknown";
+    const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+    const lim = await getLimites();
+    const [parEleve, parConnexion] = await Promise.all([
+      lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
+      lim.par_connexion > 0 && ip !== "unknown" ? compteDuJour("ip", ip) : 0,
+    ]);
+    return Response.json({ limite: lim.par_eleve || 0, restant: calculRestant(lim, parEleve, parConnexion) });
+  } catch {
+    return Response.json({ limite: 0, restant: null });
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -168,6 +193,7 @@ export async function POST(request) {
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
 
     // Plafonds (le professeur, en Mode Prof, n'est pas limité)
+    let quota = null;
     if (!prof) {
       const lim = await getLimites();
       const [parEleve, parConnexion] = await Promise.all([
@@ -179,8 +205,11 @@ export async function POST(request) {
         return Response.json({
           limite: true,
           content: [{ type: "text", text: "Tu as atteint la limite de réponses de l'IA pour aujourd'hui. Reviens demain, ou relis ton cours et les fiches méthode en attendant !" }],
+          quota: { limite: lim.par_eleve || 0, restant: 0 },
         }, { status: 429 });
       }
+      const r = calculRestant(lim, parEleve + 1, parConnexion + 1);
+      if (r !== null) quota = { limite: lim.par_eleve || 0, restant: r };
     }
 
     let result = { text: "", provider: "inconnu" };
@@ -209,7 +238,7 @@ export async function POST(request) {
     }]).then(() => {}).catch(() => {});
 
     await flushQuota();
-    return Response.json({ content: [{ type: "text", text: result.text }] });
+    return Response.json({ content: [{ type: "text", text: result.text }], quota });
   } catch (error) {
     await flushQuota();
     return Response.json({ error: error.message }, { status: 500 });

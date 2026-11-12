@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -29,10 +29,12 @@ const callAI = async (messages: { role: string; content: string }[], max_tokens 
     body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf }),
   });
   // Limite du jour atteinte : on renvoie le message prévu, que les chats affichent tel quel
-  if (res.status === 429) { const d = await res.json().catch(() => null); if (d?.content) return d; }
+  if (res.status === 429) { const d = await res.json().catch(() => null); if (d?.quota) signalerQuota(d.quota); if (d?.content) return d; }
   if (!res.ok) throw new Error("Erreur API " + res.status);
   dbLogUsage(module, "call");
-  return res.json();
+  const d = await res.json();
+  if (d?.quota) signalerQuota(d.quota);
+  return d;
 };
 
 const getText = (d: any) =>
@@ -3326,11 +3328,23 @@ function getOrCreateVisitorId(): string {
       id = "v_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
       localStorage.setItem("qcm_visitor_id", id);
     }
+    _visitorId = id;
     return id;
   } catch { return "unknown"; }
 }
 
+// Application + compteur de réponses IA restantes (masqué en Mode Prof et sur le tableau de bord)
 export default function QCMApp() {
+  const [compteurVisible, setCompteurVisible] = useState(true);
+  return (
+    <>
+      <QCMAppMain onCompteurVisible={setCompteurVisible} />
+      {compteurVisible && <CompteurIA visitorId={() => getOrCreateVisitorId()} />}
+    </>
+  );
+}
+
+function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => void }) {
   const [role, setRole] = useState<string | null>(null);
   const [eleveNom, setEleveNom] = useState<string>(() => {
     try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; }
@@ -3381,6 +3395,7 @@ export default function QCMApp() {
   const dissertMatiere = role === "eleve-HLP-dissertation" ? "hlp" : role === "eleve-Philosophie-dissertation" ? "philosophie" : null;
 
   _isProf = role === "prof";
+  useEffect(() => { onCompteurVisible(role !== "prof" && !showDashboard); }, [role, showDashboard]);
   if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} />;
 
   // Accès direct au mode dissertation depuis l'accueil
