@@ -1,15 +1,11 @@
 "use client";
 // app/ParagrapheTrainer.tsx
-// Entraînement au paragraphe argumenté, en deux exercices :
-// 1. « Repère les étapes » : un paragraphe rédigé par le professeur (tiré de ses cours, blocs [Thèse], [Arguments],
-//    [Exemple], [Citation], [Conclusion]) est présenté dans le désordre, sans les étiquettes ; l'élève retrouve
-//    chaque étape. Correction immédiate, sans IA.
-// 2. « Rédige ton paragraphe » : sur un vrai sujet de la banque, l'élève rédige son paragraphe ; l'IA le corrige
-//    avec la grille du professeur (5 étapes notées de 1 à 4, note sur 20).
+// Entraînement au paragraphe argumenté : sur un vrai sujet de la banque, l'élève rédige son paragraphe
+// ([Thèse], [Arguments], [Exemple], [Citation], [Conclusion]) ; l'IA le corrige avec la grille du professeur
+// (5 étapes notées de 1 à 4, note sur 20).
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Lightbulb, RefreshCw, Sparkles, XCircle } from "lucide-react";
-import { loadSeances, type Niveau } from "./CoursPremiere";
+import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
 
 type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
 type Sujet = { sujet: string; notion_principale?: string; source?: string };
@@ -24,48 +20,7 @@ const ETAPES: { key: Etape; label: string; aide: string; cls: string }[] = [
 ];
 const ETAPE = Object.fromEntries(ETAPES.map((e) => [e.key, e])) as Record<Etape, (typeof ETAPES)[number]>;
 
-// ─── Découpage des paragraphes du professeur ────────────────────────────────
-type Segment = { id: string; etape: Etape | null; label: string; texte: string };
-type ParaProf = { id: string; titre: string; segments: Segment[] };
-
-const sansAccents = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-// Étiquette reconnue → étape obligatoire, ou null pour une étape facultative (constat, objection…).
-// undefined : ce n'est pas une étiquette (ex. « [...] » ou « [la volonté] » dans une citation).
-const classer = (raw: string): Etape | null | undefined => {
-  const l = sansAccents(raw);
-  if (/^(objection|contre|conclusion de l.objection)/.test(l)) return null;
-  if (/^(la )?these/.test(l)) return "these";
-  if (/^argument/.test(l)) return "arguments";
-  if (/^exemple/.test(l)) return "exemple";
-  if (/^citation/.test(l)) return "citation";
-  if (/^conclusion/.test(l)) return "conclusion";
-  if (/^(constat|probleme|transition)/.test(l)) return null;
-  return undefined;
-};
-// Retire les intertitres du cours (« II – … », « a) Aristote… », « TRANSITION »)
-const nettoyer = (t: string) =>
-  t.split("\n")
-    .filter((ln) => { const s = ln.trim(); return s && !/^[IVX]+\s*[–-]\s/.test(s) && !/^[a-e]\)\s/.test(s) && !(s === s.toUpperCase() && /[A-Z]/.test(s) && s.length < 40); })
-    .join(" ").replace(/\s+/g, " ").trim();
-
-export function decouperParagraphe(contenu: string): Segment[] | null {
-  const re = /\[([^\[\]\n]{3,60})\]/g;
-  const marques: { idx: number; fin: number; label: string; etape: Etape | null }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(contenu))) {
-    const e = classer(m[1]);
-    if (e !== undefined) marques.push({ idx: m.index, fin: m.index + m[0].length, label: m[1].trim(), etape: e });
-  }
-  const segs: Segment[] = marques.map((mk, i) => ({
-    id: String(i), etape: mk.etape, label: mk.label,
-    texte: nettoyer(contenu.slice(mk.fin, i + 1 < marques.length ? marques[i + 1].idx : contenu.length)),
-  })).filter((s) => s.texte.length > 15);
-  // Utilisable seulement si les 5 étapes obligatoires y figurent, chacune une seule fois
-  const ok = ETAPES.every((e) => segs.filter((s) => s.etape === e.key).length === 1);
-  return ok ? segs : null;
-}
-
-const melanger = <T,>(a: T[]) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const sansAccents = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
 const parseJSONLoose = (txt: string) => {
   const c = txt.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -86,146 +41,16 @@ async function askJSON(askAI: AskAI, prompt: string, maxTokens: number, valid: (
 export default function ParagrapheTrainer({ askAI, fiche, matiere, serie, loadSujets }: {
   askAI: AskAI; fiche: string; matiere: string; serie: "generale" | "techno" | null; loadSujets: () => Promise<Sujet[]>;
 }) {
-  const [exo, setExo] = useState<"reperer" | "rediger">("reperer");
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
       <div className="bg-gradient-to-r from-rose-600 to-orange-500 text-white rounded-2xl p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">✍️ S'entraîner au paragraphe</p>
-        <h3 className="text-lg font-black mt-1">Le paragraphe argumenté</h3>
+        <h3 className="text-lg font-black mt-1">Rédige un paragraphe argumenté</h3>
         <p className="text-sm text-rose-50 mt-1 leading-relaxed">
-          Thèse, Arguments, Exemple, Citation expliquée, Conclusion : repère-les, puis rédige ton paragraphe.
+          Thèse, Arguments, Exemple, Citation expliquée, Conclusion : rédige ton paragraphe sur un vrai sujet, puis fais-le corriger.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        {([["reperer", "1. Repère les étapes", "Dans un paragraphe du cours"], ["rediger", "2. Rédige ton paragraphe", "Sur un vrai sujet, corrigé"]] as const).map(([k, t, d]) => (
-          <button key={k} onClick={() => setExo(k)}
-            className={`text-left rounded-2xl border-2 px-4 py-3 transition-all ${exo === k ? "border-rose-500 bg-rose-50" : "border-gray-200 bg-white hover:border-rose-300"}`}>
-            <p className={`text-sm font-black ${exo === k ? "text-rose-700" : "text-gray-800"}`}>{t}</p>
-            <p className="text-xs text-gray-500">{d}</p>
-          </button>
-        ))}
-      </div>
-      {exo === "reperer"
-        ? <ReperageExercice matiere={matiere} onRediger={() => setExo("rediger")} />
-        : <RedactionExercice askAI={askAI} fiche={fiche} matiere={matiere} serie={serie} loadSujets={loadSujets} />}
-    </div>
-  );
-}
-
-// ─── Exercice 1 : repérer les étapes ────────────────────────────────────────
-function ReperageExercice({ matiere, onRediger }: { matiere: string; onRediger: () => void }) {
-  const [paras, setParas] = useState<ParaProf[] | null>(null);
-  const [cur, setCur] = useState<ParaProf | null>(null);
-  const [ordre, setOrdre] = useState<Segment[]>([]);
-  const [rep, setRep] = useState<Record<string, Etape>>({});
-  const [verifie, setVerifie] = useState(false);
-  const [voirOrdre, setVoirOrdre] = useState(false);
-  const [vus, setVus] = useState<string[]>([]);
-
-  useEffect(() => {
-    const niveaux: Niveau[] = matiere === "hlp" ? ["hlp1", "tle"] : ["tle", "hlp1"];
-    Promise.all(niveaux.map((n) => loadSeances(n).catch(() => [])))
-      .then((lists) => {
-        const out: ParaProf[] = [];
-        lists.flat().forEach((s) => s.docs.forEach((d) => {
-          const segs = decouperParagraphe(d.contenu || "");
-          if (segs) out.push({ id: s.id + "/" + d.id, titre: d.titre.replace(/\s*\((cours|textes)\)\s*$/i, ""), segments: segs });
-        }));
-        setParas(out);
-        if (out.length) choisir(out, []);
-      });
-  }, []);
-
-  const choisir = (liste: ParaProf[], dejaVus: string[]) => {
-    let pool = liste.filter((p) => !dejaVus.includes(p.id));
-    if (!pool.length) { pool = liste; dejaVus = []; }
-    const p = pool[Math.floor(Math.random() * pool.length)];
-    setCur(p); setVus([...dejaVus, p.id]);
-    setOrdre(melanger(p.segments)); setRep({}); setVerifie(false); setVoirOrdre(false);
-  };
-
-  if (!paras) return <p className="text-sm text-gray-500 flex items-center gap-2"><Sparkles className="w-4 h-4 animate-spin text-rose-500" /> Chargement des paragraphes du cours…</p>;
-  if (!paras.length || !cur) return <p className="text-sm text-gray-500 bg-white border-2 border-gray-200 rounded-2xl p-4">Aucun paragraphe du cours n'est encore disponible pour cet exercice.</p>;
-
-  const aRepondre = ordre.filter((s) => s.etape);
-  const complet = aRepondre.every((s) => rep[s.id]);
-  const score = aRepondre.filter((s) => rep[s.id] === s.etape).length;
-
-  return (
-    <div className="space-y-3">
-      <div className="bg-white border-2 border-gray-200 rounded-2xl p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Paragraphe du cours</p>
-        <p className="font-black text-gray-800 text-sm">{cur.titre}</p>
-        <p className="text-xs text-gray-500 mt-1">Les morceaux de ce paragraphe ont été mélangés. Pour chacun, indique l'étape dont il s'agit. Chaque étape apparaît une seule fois.</p>
-      </div>
-
-      {(voirOrdre ? cur.segments : ordre).map((s, i) => {
-        const choix = rep[s.id];
-        const juste = verifie && s.etape && choix === s.etape;
-        const faux = verifie && s.etape && choix !== s.etape;
-        return (
-          <div key={s.id} className={`bg-white rounded-2xl border-2 p-4 space-y-3 ${juste ? "border-green-300" : faux ? "border-rose-300" : "border-gray-200"}`}>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black text-gray-400">{voirOrdre ? `Étape ${i + 1}` : `Morceau ${String.fromCharCode(65 + i)}`}</span>
-              {!s.etape && <span className="text-[11px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Étape facultative : {s.label}</span>}
-              {voirOrdre && s.etape && <span className={`text-[11px] font-black px-2 py-0.5 rounded-full border ${ETAPE[s.etape].cls}`}>{ETAPE[s.etape].label}</span>}
-              {juste && <CheckCircle2 className="w-4 h-4 text-green-600 ml-auto" />}
-              {faux && <XCircle className="w-4 h-4 text-rose-600 ml-auto" />}
-            </div>
-            <p className="text-sm text-gray-700 leading-relaxed">{s.texte}</p>
-            {s.etape && !voirOrdre && (
-              <div className="flex flex-wrap gap-1.5">
-                {ETAPES.map((e) => {
-                  const sel = choix === e.key;
-                  const bon = verifie && e.key === s.etape;
-                  return (
-                    <button key={e.key} disabled={verifie} onClick={() => setRep({ ...rep, [s.id]: e.key })}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full border-2 transition-all ${bon ? "bg-green-600 border-green-600 text-white" : sel ? (verifie ? "bg-rose-500 border-rose-500 text-white" : "bg-gray-800 border-gray-800 text-white") : "bg-white border-gray-200 text-gray-600 hover:border-gray-400"}`}>
-                      {e.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {faux && s.etape && (
-              <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                Il s'agit de l'étape « {ETAPE[s.etape].label} ». {ETAPE[s.etape].aide}
-              </p>
-            )}
-          </div>
-        );
-      })}
-
-      {!verifie ? (
-        <button onClick={() => setVerifie(true)} disabled={!complet}
-          className={`w-full py-3 rounded-xl font-black text-sm text-white transition-all ${complet ? "bg-rose-600 hover:bg-rose-700" : "bg-gray-300"}`}>
-          {complet ? "Vérifier mes réponses" : `Encore ${aRepondre.filter((s) => !rep[s.id]).length} morceau(x) à identifier`}
-        </button>
-      ) : (
-        <div className="space-y-3">
-          <div className={`rounded-2xl border-2 p-4 ${score === 5 ? "bg-green-50 border-green-300 text-green-800" : score >= 3 ? "bg-amber-50 border-amber-300 text-amber-900" : "bg-rose-50 border-rose-300 text-rose-800"}`}>
-            <p className="font-black text-base">{score === 5 ? "🏆" : score >= 3 ? "👍" : "🔁"} {score} / 5 étapes bien repérées</p>
-            <p className="text-sm mt-1">
-              {score === 5 ? "Tu reconnais toutes les étapes. Passe à la rédaction de ton propre paragraphe."
-                : "Relis les explications sous les morceaux mal identifiés, puis regarde le paragraphe dans l'ordre du professeur."}
-            </p>
-            <p className="text-xs mt-2 opacity-80">Remarque : l'ordre des étapes peut varier d'un paragraphe à l'autre, mais les cinq doivent toujours y être.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={() => setVoirOrdre(!voirOrdre)} className="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 border-rose-200 text-rose-700 hover:bg-rose-50">
-              {voirOrdre ? "Revenir à mes réponses" : "Voir le paragraphe dans l'ordre du professeur"}
-            </button>
-            <button onClick={() => choisir(paras, vus)} className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4" /> Autre paragraphe
-            </button>
-            {score === 5 && (
-              <button onClick={onRediger} className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gray-800 hover:bg-gray-900 text-white">
-                Rédiger mon paragraphe →
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <RedactionExercice askAI={askAI} fiche={fiche} matiere={matiere} serie={serie} loadSujets={loadSujets} />
     </div>
   );
 }
