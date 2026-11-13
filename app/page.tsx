@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -264,6 +264,7 @@ const saveFeaturesConfig = async (cfg: FeaturesConfig) => {
   await dbSetConfig("features_config", JSON.stringify(cfg));
 };
 // ── Contenu des fiches méthode (éditable par le prof) ─────────────────────────
+type MethodeView = "chat" | "fiche" | "faq" | "plan" | "intro" | "paragraphe";
 type MethodeContent = {
   intro_dissertation: string;
   plan_tas: string;
@@ -3200,7 +3201,7 @@ function Dashboard({ onBack, sharedLib }: any) {
                     qcm: "✅ Quiz / QCM",
                     flashcards: "🃏 Flashcards",
                     dissertation: "✍️ Dissertation",
-                    plan_guide: "📋 Plan guidé", dissertation_guidee: "📋 Construction guidée", entrainement_paragraphe: "✍️ Entraînement paragraphe",
+                    plan_guide: "📋 Plan guidé", dissertation_guidee: "📋 Construction guidée", entrainement_intro: "📝 Entraînement introduction", entrainement_paragraphe: "✍️ Entraînement paragraphe",
                     brainstorming: "💡 Brainstorming",
                     correction: "🔍 Correction",
                     corrige: "📝 Corrigé",
@@ -3361,7 +3362,7 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
   const [featuresConfig, setFeaturesConfig] = useState<FeaturesConfig>(DEFAULT_FEATURES);
   const [methodeContent, setMethodeContent] = useState<MethodeContent>(DEFAULT_METHODE_CONTENT);
   const [faqMethode, setFaqMethode] = useState<FaqItem[]>([]);
-  const [methodeView, setMethodeView] = useState<"chat" | "fiche" | "faq" | "plan">("faq");
+  const [methodeView, setMethodeView] = useState<MethodeView>("faq");
   const [eleveQuestions, setEleveQuestions] = useState<EleveQuestion[]>([]);
 
   const loadLib = async () => {
@@ -3490,7 +3491,7 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
   if (!role) return <HomeScreenV2 onSelect={(r: string) => { setMethodeView("faq"); setRole(r); }} eleveNom={eleveNom} setEleveNom={setEleveNom} saveEleveNom={saveEleveNom} featuresConfig={featuresConfig}
     methodeContent={methodeContent} faqMethode={faqMethode}
     askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 800, false, "methode_accueil"))}
-    onOpenMethode={(r: string, v: "fiche" | "faq" | "plan") => { setMethodeView(v); setRole(r); }} />;
+    onOpenMethode={(r: string, v: MethodeView) => { setMethodeView(v); setRole(r); }} />;
   if (role === "eleve-HLP1-cours" || role === "eleve-cours-tle") return (
     <CoursRevisionEleve niveau={role === "eleve-cours-tle" ? "tle" : "hlp1"} onBack={() => setRole(null)} eleveNom={eleveNom}
       askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, role === "eleve-cours-tle" ? "cours_tle" : "cours_hlp1"))} />
@@ -5231,9 +5232,9 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
-function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: "chat" | "fiche" | "faq" | "plan"; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
-  const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView || "faq");
-  const [trainer, setTrainer] = useState<"paragraphe" | "plan">("paragraphe");
+function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: MethodeView; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
+  const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView === "intro" || initialView === "paragraphe" ? "plan" : initialView || "faq");
+  const [trainer, setTrainer] = useState<"paragraphe" | "plan" | "intro">(initialView === "intro" && matiere !== "hlp" ? "intro" : "paragraphe");
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>(matiere === "hlp" ? "hlp_interpretation" : "intro_dissertation");
@@ -5455,7 +5456,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           {!isHLP && (
             <div className="flex gap-2 flex-shrink-0">
-              {([["paragraphe", "✍️ Le paragraphe argumenté"], ["plan", "🔺 Le plan dialectique"]] as const).map(([k, l]) => (
+              {([["intro", "📝 L'introduction"], ["paragraphe", "✍️ Le paragraphe argumenté"], ["plan", "🔺 Le plan dialectique"]] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setTrainer(k)}
                   className={`px-3 py-1.5 rounded-xl border-2 text-xs font-bold transition-all ${trainer === k ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
                   {l}
@@ -5463,7 +5464,14 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               ))}
             </div>
           )}
-          {(isHLP || trainer === "paragraphe") ? (
+          {!isHLP && trainer === "intro" ? (
+            <IntroductionTrainer
+              methode={mc.intro_dissertation}
+              matiere={matiere}
+              loadSujets={() => dbLoadSujetsBac(matiere)}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 450, light = true) => getText(await callAI(m, maxTokens, light, "entrainement_intro"))}
+            />
+          ) : (isHLP || trainer === "paragraphe") ? (
             <ParagrapheTrainer
               fiche={mc.paragraphe}
               matiere={matiere}

@@ -12,7 +12,7 @@ import { REGLE_GUIDAGE } from "./MethodeChatHome";
 type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
 
 type Step = { key: string; groupe: string; label: string; consigne: string; placeholder: string; rows: number };
-const STEPS: Step[] = [
+const STEPS_COMPLET: Step[] = [
   { key: "opinion", groupe: "Introduction", label: "Opinion commune", rows: 3,
     consigne: "Ce que les gens pensent habituellement du sujet, la réponse spontanée. Le développement montrera en quoi elle est insuffisante.",
     placeholder: "On pense souvent que…" },
@@ -42,12 +42,21 @@ const STEPS: Step[] = [
     placeholder: "Bilan : … / Ouverture : …" },
 ];
 
+// Version « introduction seule » (exercice Rédiger une introduction) : l'annonce porte sur le plan que l'élève suivrait
+const STEPS_INTRO: Step[] = [
+  ...STEPS_COMPLET.filter((s) => ["opinion", "definitions", "paradoxe", "problematique"].includes(s.key)),
+  { key: "annonce", groupe: "Introduction", label: "Annonce du plan", rows: 3,
+    consigne: "Annonce en une ou deux phrases les grandes étapes que suivrait ta dissertation pour répondre à ta problématique.",
+    placeholder: "Nous verrons dans un premier temps…" },
+];
+
 type Retour = { ok: boolean; texte: string };
 
-export default function DissertationGuidee({ sujet, matiere, methode, contexte, askAI, onRediger }: {
+export default function DissertationGuidee({ sujet, matiere, methode, contexte, askAI, onRediger, introSeule = false }: {
   sujet: string; matiere: string; methode: string; contexte?: string; askAI: AskAI;
-  onRediger: (recap: string) => void;
+  onRediger?: (recap: string) => void; introSeule?: boolean;
 }) {
+  const STEPS = introSeule ? STEPS_INTRO : STEPS_COMPLET;
   const [i, setI] = useState(0);
   const [textes, setTextes] = useState<Record<string, string>>({});
   const [indices, setIndices] = useState<Record<string, string[]>>({});
@@ -65,7 +74,7 @@ export default function DissertationGuidee({ sujet, matiere, methode, contexte, 
 
   const recap = () => STEPS.filter((s) => (textes[s.key] || "").trim()).map((s) => `${s.label.toUpperCase()}\n${textes[s.key].trim()}`).join("\n\n");
 
-  const base = () => `Tu es professeur de ${discipline} en Terminale et tu accompagnes un élève qui construit lui-même sa dissertation, étape par étape.
+  const base = () => `Tu es professeur de ${discipline} en Terminale et tu accompagnes un élève qui construit lui-même ${introSeule ? "l'introduction de sa dissertation" : "sa dissertation"}, étape par étape.
 ${REGLE_GUIDAGE}
 
 ${methode}
@@ -119,7 +128,7 @@ Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essenti
   return (
     <div className="space-y-4">
       <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5">
-        <h2 className="font-black text-indigo-800">📋 Construis ta dissertation pas à pas</h2>
+        <h2 className="font-black text-indigo-800">{introSeule ? "📝 Construis ton introduction pas à pas" : "📋 Construis ta dissertation pas à pas"}</h2>
         <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
           C'est toi qui construis chaque étape. Si tu bloques, demande un indice ; quand tu as une proposition, fais-la vérifier.
           L'IA ne te donnera pas la réponse : elle t'aide à la trouver.
@@ -206,10 +215,10 @@ Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essenti
               className="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center justify-center gap-2">
               <Copy className="w-4 h-4" /> {copied ? "Copié !" : "Copier mon travail"}
             </button>
-            <button onClick={() => onRediger(`Sujet : ${sujet}\n\n${recap()}`)} disabled={!recap()}
+            {onRediger && <button onClick={() => onRediger(`Sujet : ${sujet}\n\n${recap()}`)} disabled={!recap()}
               className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-purple-600 text-white disabled:opacity-40 flex items-center justify-center gap-2">
               <PenLine className="w-4 h-4" /> Rédiger partie par partie
-            </button>
+            </button>}
           </div>
         </div>
       )}

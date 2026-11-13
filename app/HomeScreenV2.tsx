@@ -46,6 +46,16 @@ const TRACKS = [
 ];
 
 export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveEleveNom, featuresConfig, askAI, methodeContent, faqMethode, onOpenMethode }: any) {
+  // Carrés « S'entraîner » : ouvrent l'exercice dans la filière choisie par l'élève (Filière générale par défaut ;
+  // l'introduction de dissertation n'existe pas en HLP, qui a ses propres exercices)
+  const ouvrirEntrainement = (exo: "intro" | "paragraphe") => {
+    let serie = "generale";
+    try { serie = localStorage.getItem("methode_serie") || "generale"; } catch { /* défaut */ }
+    const role = serie === "techno" ? "eleve-Philosophie-techno-methode"
+      : serie === "hlp" && exo === "paragraphe" ? "eleve-HLP-methode"
+      : "eleve-Philosophie-generale-methode";
+    (onOpenMethode || ((r: string) => onSelect(r)))(role, exo);
+  };
   const showCours = featuresConfig?.home_cours !== false; const showDissertation = featuresConfig?.home_dissertation !== false; const showHlp1 = featuresConfig?.home_hlp1 === true; const showTle = featuresConfig?.home_tle !== false;
   const [showCode, setShowCode] = useState(false);
   const [code, setCode] = useState("");
@@ -96,9 +106,12 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
       </div>
 
       {/* Révision du cours : une case par niveau (activables depuis Mode Prof → Fonctionnalités) */}
-      {(showHlp1 || showTle) && (
+      {(
         <div className="w-full max-w-2xl mb-6">
-          <p className="text-xs font-black uppercase tracking-widest mb-2 px-1 text-gray-500">Révision du cours</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-2 px-1">
+            <p className="col-span-2 text-xs font-black uppercase tracking-widest text-gray-500">{(showHlp1 || showTle) ? "Révision du cours" : ""}</p>
+            <p className="col-span-2 text-xs font-black uppercase tracking-widest text-gray-500 hidden sm:block">S'entraîner</p>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {showHlp1 && (
               <button onClick={() => onSelect("eleve-HLP1-cours")}
@@ -115,6 +128,21 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
                 <p className="text-[10px] text-gray-400 mt-1">tronc commun</p>
               </button>
             )}
+            {/* Places vides pour garder les carrés d'entraînement à droite */}
+            {Array.from({ length: Math.max(0, 2 - [showHlp1, showTle].filter(Boolean).length) }).map((_, k) => <div key={k} className="hidden sm:block" />)}
+            <p className="col-span-2 text-xs font-black uppercase tracking-widest text-gray-500 sm:hidden px-1 mt-2">S'entraîner</p>
+            <button onClick={() => ouvrirEntrainement("intro")}
+              className="aspect-square bg-gradient-to-br from-indigo-600 to-sky-500 text-white rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] p-3 flex flex-col justify-center items-center text-center transition-all">
+              <span className="text-2xl">📝</span>
+              <h2 className="text-base font-black mt-1 leading-tight">Rédiger une introduction</h2>
+              <p className="text-[10px] text-indigo-100 mt-1">étape par étape</p>
+            </button>
+            <button onClick={() => ouvrirEntrainement("paragraphe")}
+              className="aspect-square bg-gradient-to-br from-rose-600 to-orange-500 text-white rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] p-3 flex flex-col justify-center items-center text-center transition-all">
+              <span className="text-2xl">✍️</span>
+              <h2 className="text-base font-black mt-1 leading-tight">Rédiger un paragraphe</h2>
+              <p className="text-[10px] text-rose-100 mt-1">corrigé par l'IA</p>
+            </button>
           </div>
         </div>
       )}
