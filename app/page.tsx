@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -3201,7 +3201,7 @@ function Dashboard({ onBack, sharedLib }: any) {
                     qcm: "✅ Quiz / QCM",
                     flashcards: "🃏 Flashcards",
                     dissertation: "✍️ Dissertation",
-                    plan_guide: "📋 Plan guidé", dissertation_guidee: "📋 Construction guidée", entrainement_intro: "📝 Entraînement introduction", entrainement_paragraphe: "✍️ Entraînement paragraphe",
+                    plan_guide: "📋 Plan guidé", dissertation_guidee: "📋 Construction guidée", entrainement_intro: "📝 Entraînement introduction", entrainement_chat_intro: "💬 Chatbot introduction", entrainement_chat_paragraphe: "💬 Chatbot paragraphe", entrainement_chat_plan: "💬 Chatbot plan dialectique", entrainement_paragraphe: "✍️ Entraînement paragraphe",
                     brainstorming: "💡 Brainstorming",
                     correction: "🔍 Correction",
                     corrige: "📝 Corrigé",
@@ -5235,6 +5235,8 @@ function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDa
 function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: MethodeView; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
   const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView === "intro" || initialView === "paragraphe" ? "plan" : initialView || "faq");
   const [trainer, setTrainer] = useState<"paragraphe" | "plan" | "intro">(initialView === "intro" && matiere !== "hlp" ? "intro" : "paragraphe");
+  // Entraînements : chatbot par défaut, version « cadres » au choix de l'élève
+  const [enCadres, setEnCadres] = useState(false);
   const [eleveQ, setEleveQ] = useState("");
   const [eleveQSent, setEleveQSent] = useState(false);
   const [activeFiche, setActiveFiche] = useState<string>(matiere === "hlp" ? "hlp_interpretation" : "intro_dissertation");
@@ -5464,7 +5466,26 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               ))}
             </div>
           )}
-          {!isHLP && trainer === "intro" ? (
+          <div className="flex gap-1.5 flex-shrink-0 items-center">
+            <span className="text-[11px] font-bold text-gray-400 mr-1">Format :</span>
+            {([[false, "💬 Chatbot"], [true, "🧩 Étapes en cadres"]] as const).map(([v, l]) => (
+              <button key={String(v)} onClick={() => setEnCadres(v)}
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all ${enCadres === v ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {!enCadres ? (
+            <EntrainementChat
+              key={(isHLP ? "paragraphe" : trainer) + serie}
+              exercice={isHLP ? "paragraphe" : trainer}
+              methode={isHLP || trainer === "paragraphe" ? mc.paragraphe : trainer === "intro" ? mc.intro_dissertation : mc.plan_tas}
+              matiere={matiere}
+              serie={serie}
+              loadSujets={() => dbLoadSujetsBac(matiere)}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 700) => getText(await callAI(m, maxTokens, false, "entrainement_chat_" + (isHLP ? "paragraphe" : trainer)))}
+            />
+          ) : !isHLP && trainer === "intro" ? (
             <IntroductionTrainer
               methode={mc.intro_dissertation}
               matiere={matiere}
