@@ -75,8 +75,8 @@ export default function EntrainementChat({ exercice, askAI, methode, matiere, se
   serie: "generale" | "techno" | null; loadSujets: () => Promise<Sujet[]>;
   loadTextes?: () => Promise<TexteEntrainement[]>;
 }) {
-  // Paragraphe : à partir d'un texte de la bibliothèque (par défaut) ou d'un sujet seul
-  const [appui, setAppui] = useState<"texte" | "sujet">(exercice === "paragraphe" && loadTextes ? "texte" : "sujet");
+  // Paragraphe : toujours à partir d'un texte (textes du bac et du professeur)
+  const [appui] = useState<"texte" | "sujet">(exercice === "paragraphe" && loadTextes ? "texte" : "sujet"); // le paragraphe se fait toujours à partir d'un texte
   const [textes, setTextes] = useState<Sujet[] | null>(null);
   const avecTexte = exercice === "paragraphe" && appui === "texte";
   const conf = SCRIPTS[avecTexte ? "paragrapheTexte" : exercice];
@@ -182,17 +182,6 @@ ${s.texte ? `TEXTE À ÉTUDIER (${s.sujet}) :\n"""\n${s.texte.slice(0, 4500)}\n"
         <p className="text-sm text-white/90 mt-1 leading-relaxed">{conf.sousTitre}</p>
       </div>
 
-      {exercice === "paragraphe" && loadTextes && (
-        <div className="flex gap-1.5 items-center flex-shrink-0">
-          <span className="text-[11px] font-bold text-gray-400 mr-1">À partir :</span>
-          {([["texte", "📜 d'un texte"], ["sujet", "❓ d'un sujet seul"]] as const).map(([k, l]) => (
-            <button key={k} onClick={() => { setAppui(k); setSujet(null); setMessages([]); setNotion("all"); }} disabled={loading}
-              className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all ${appui === k ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="bg-white border-2 border-gray-200 rounded-2xl p-3 flex flex-col sm:flex-row gap-2 flex-shrink-0">
         <button onClick={tirerSujet} disabled={!source || loading}
@@ -218,7 +207,7 @@ ${s.texte ? `TEXTE À ÉTUDIER (${s.sujet}) :\n"""\n${s.texte.slice(0, 4500)}\n"
       )}
       {avecTexte && textes && textes.length > 0 && <p className="text-[11px] text-gray-400 px-1 -mt-1">{(source || []).length} textes disponibles{textes.some((t) => t.origine === "bac") ? " · sujets d'explication de texte du bac 1996-2024" : ""}.</p>}
       {bankErr && !avecTexte && <p className="text-xs text-red-600 px-1">La banque de sujets n'a pas pu être chargée.</p>}
-      {avecTexte && textes && textes.length === 0 && <p className="text-xs text-gray-500 px-1">Aucun texte n'est encore disponible dans la bibliothèque du professeur : choisis « d'un sujet seul ».</p>}
+      {avecTexte && textes && textes.length === 0 && <p className="text-xs text-gray-500 px-1">Aucun texte n'est encore disponible pour l'instant.</p>}
 
       {sujet && (
         <div className="bg-white border-2 border-gray-200 rounded-2xl flex flex-col min-h-[420px] flex-1 overflow-hidden">

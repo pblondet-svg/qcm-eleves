@@ -167,7 +167,7 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
               className="aspect-square bg-gradient-to-br from-rose-600 to-orange-500 text-white rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] p-3 flex flex-col justify-center items-center text-center transition-all">
               <span className="text-2xl">✍️</span>
               <h2 className="text-base font-black mt-1 leading-tight">Rédiger un paragraphe</h2>
-              <p className="text-[10px] text-rose-100 mt-1">corrigé par l'IA</p>
+              <p className="text-[10px] text-rose-100 mt-1">à partir d'un texte</p>
             </button>
           </div>
         </div>

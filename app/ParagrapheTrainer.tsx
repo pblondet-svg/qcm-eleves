@@ -59,7 +59,7 @@ export default function ParagrapheTrainer({ askAI, fiche, matiere, serie, loadSu
         <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">✍️ S'entraîner au paragraphe</p>
         <h3 className="text-lg font-black mt-1">Rédige un paragraphe argumenté</h3>
         <p className="text-sm text-rose-50 mt-1 leading-relaxed">
-          Thèse, Arguments, Exemple, Citation expliquée, Conclusion : rédige ton paragraphe à partir d'un texte ou d'un vrai sujet, puis fais-le corriger.
+          Thèse, Arguments, Exemple, Citation expliquée, Conclusion : rédige ton paragraphe à partir d'un texte philosophique, puis fais-le corriger.
         </p>
       </div>
       <RedactionExercice askAI={askAI} fiche={fiche} matiere={matiere} serie={serie} loadSujets={loadSujets} loadTextes={loadTextes} />
@@ -85,7 +85,7 @@ function RedactionExercice({ askAI, fiche, matiere, serie, loadSujets, loadTexte
   const [bank, setBank] = useState<Sujet[] | null>(null);
   const [bankErr, setBankErr] = useState(false);
   const [notion, setNotion] = useState("all");
-  const [appui, setAppui] = useState<"texte" | "sujet">(loadTextes ? "texte" : "sujet");
+  const [appui] = useState<"texte" | "sujet">(loadTextes ? "texte" : "sujet"); // toujours à partir d'un texte
   const [textes, setTextes] = useState<Sujet[] | null>(null);
   const avecTexte = appui === "texte";
   const [sujet, setSujet] = useState<Sujet | null>(null);
@@ -203,17 +203,6 @@ Réponds uniquement en JSON :
     <div className="space-y-3">
       {/* Choix du texte ou du sujet */}
       <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 space-y-3">
-        {loadTextes && (
-          <div className="flex gap-1.5 items-center">
-            <span className="text-[11px] font-bold text-gray-400 mr-1">À partir :</span>
-            {([["texte", "📜 d'un texte"], ["sujet", "❓ d'un sujet seul"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => { setAppui(k); setSujet(null); setCorrection(null); setNotion("all"); }}
-                className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all ${appui === k ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="flex flex-col sm:flex-row gap-2">
           <button onClick={tirerSujet} disabled={!source}
             className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all">
@@ -227,7 +216,7 @@ Réponds uniquement en JSON :
         </div>
         <p className="text-[11px] text-gray-400">
           {avecTexte
-            ? (!textes ? "Chargement des textes…" : textes.length ? `${textes.length} textes disponibles${textes.some((t) => t.origine === "bac") ? " (sujets d'explication de texte du bac 1996-2024 et textes du professeur)" : ""}.` : "Aucun texte n'est encore disponible : choisis « d'un sujet seul ».")
+            ? (!textes ? "Chargement des textes…" : textes.length ? `${textes.length} textes disponibles${textes.some((t) => t.origine === "bac") ? " (sujets d'explication de texte du bac 1996-2024 et textes du professeur)" : ""}.` : "Aucun texte n'est encore disponible pour l'instant.")
             : bankErr ? "La banque de sujets n'a pas pu être chargée." : !bank ? "Chargement de la banque de sujets…" : `${bank.length} vrais sujets disponibles.`}
         </p>
       </div>
