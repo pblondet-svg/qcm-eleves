@@ -16,11 +16,14 @@ const premiereVisite = (id: string) => {
   const t = m ? parseInt(m[1], 36) : NaN;
   return Number.isFinite(t) && t > 1.6e12 && t < 2.2e12 ? new Date(t) : null;
 };
+// Rentrée scolaire en cours (1er septembre) : les identifiants créés avant sont archivés
+const rentree = () => { const n = new Date(); const y = n.getMonth() >= 8 ? n.getFullYear() : n.getFullYear() - 1; return new Date(y, 8, 1); };
 const fmt = (d: Date) => d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function VisiteursUniques({ usageStats, prof, onAppareilsChange }: { usageStats: Ligne[]; prof: boolean; onAppareilsChange?: () => void }) {
   const [appareils, setAppareils] = useState<AppareilProf[]>([]);
   const [msg, setMsg] = useState("");
+  const [voirArchives, setVoirArchives] = useState(false);
   useEffect(() => { if (prof) chargerAppareilsProf().then(setAppareils).catch(() => {}); }, [prof]);
 
   const { lignes, connexionLettre } = useMemo(() => {
@@ -54,17 +57,12 @@ export default function VisiteursUniques({ usageStats, prof, onAppareilsChange }
     setAppareils(v); setMsg("Appareil ajouté à vos appareils."); onAppareilsChange?.();
   };
 
-  if (!lignes.length) return null;
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-      <h3 className="font-black text-gray-800">👤 Visiteurs uniques ({lignes.length})</h3>
-      <p className="text-xs text-gray-500 mt-0.5 mb-3">
-        Un identifiant par navigateur, sur les 500 derniers appels. La date indique la première visite depuis ce navigateur
-        {prof ? " ; « même connexion » signale un navigateur utilisé sur la même connexion internet qu'un de vos appareils (chez vous ou au lycée)." : "."}
-      </p>
-      {msg && <p className="text-xs text-green-700 mb-2">{msg}</p>}
-      <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
-        {lignes.map(([id, x], i) => {
+  const debut = rentree();
+  const estArchive = (id: string) => { const d = premiereVisite(id); return !!d && d < debut; };
+  const actuels = lignes.filter(([id]) => !estArchive(id));
+  const archives = lignes.filter(([id]) => estArchive(id));
+
+  const rendreLigne = ([id, x]: (typeof lignes)[number], i: number) => {
           const d = premiereVisite(id);
           const estProf = idsProf.has(id);
           const memeConnexion = !estProf && [...x.ips].some((ip) => ipsProf.has(ip));
@@ -90,8 +88,34 @@ export default function VisiteursUniques({ usageStats, prof, onAppareilsChange }
               </div>
             </div>
           );
-        })}
+        };
+
+  if (!lignes.length) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+      <h3 className="font-black text-gray-800">👤 Visiteurs uniques depuis la rentrée ({actuels.length})</h3>
+      <p className="text-xs text-gray-500 mt-0.5 mb-3">
+        Un identifiant par navigateur, sur les 500 derniers appels. La date indique la première visite depuis ce navigateur
+        {prof ? " ; « même connexion » signale un navigateur utilisé sur la même connexion internet qu'un de vos appareils (chez vous ou au lycée)." : "."}
+      </p>
+      {msg && <p className="text-xs text-green-700 mb-2">{msg}</p>}
+      <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+        {actuels.map(rendreLigne)}
+        {!actuels.length && <p className="text-sm text-gray-400 py-3 text-center">Aucun visiteur depuis la rentrée sur cette période.</p>}
       </div>
+
+      {archives.length > 0 && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <button onClick={() => setVoirArchives(!voirArchives)} className="text-xs font-bold text-gray-500 hover:text-gray-800">
+            {voirArchives ? "▾" : "▸"} Archives : {archives.length} identifiant{archives.length > 1 ? "s" : ""} créé{archives.length > 1 ? "s" : ""} avant la rentrée ({debut.toLocaleDateString("fr-FR")}), {archives.reduce((t, [, x]) => t + x.n, 0)} appels
+          </button>
+          {voirArchives && (
+            <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto mt-1 opacity-75">
+              {archives.map(rendreLigne)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
