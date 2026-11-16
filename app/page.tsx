@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
   Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import AppareilsProf from "./AppareilsProf"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -2694,7 +2694,8 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
 }
 
 // ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
-function Dashboard({ onBack, sharedLib }: any) {
+function Dashboard({ onBack, sharedLib, prof = false }: any) {
+  const [versionAppareils, setVersionAppareils] = useState(0);
   const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision" | "usage">("qcm");
   const [resultats, setResultats] = useState<any[]>([]);
   const [dissertations, setDissertations] = useState<any[]>([]);
@@ -3177,8 +3178,9 @@ function Dashboard({ onBack, sharedLib }: any) {
 
             {activeTab === "usage" && (
               <div className="space-y-4">
-                {/* Élèves proches de la limite */}
-                <UsageElevesIA />
+                {/* Appareils du professeur + élèves proches de la limite */}
+                {prof && <AppareilsProf onChange={() => setVersionAppareils((v) => v + 1)} />}
+                {prof && <UsageElevesIA version={versionAppareils} />}
                 {/* Jauge de consommation */}
                 <AiQuotaGauge />
                 {/* KPIs */}
@@ -3399,7 +3401,7 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
 
   _isProf = role === "prof";
   useEffect(() => { onCompteurVisible(role !== "prof" && !showDashboard); }, [role, showDashboard]);
-  if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} />;
+  if (showDashboard) return <Dashboard onBack={() => setShowDashboard(false)} sharedLib={sharedLib} prof={role === "prof"} />;
 
   // Accès direct au mode dissertation depuis l'accueil
   if (dissertMatiere && !dissertationData) {

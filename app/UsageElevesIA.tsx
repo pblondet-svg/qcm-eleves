@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { chargerAppareilsProf } from "./AppareilsProf";
 
 type Ligne = { visitor_id: string | null; ip: string | null; action: string; eleve_nom?: string | null; created_at: string };
 type Eleve = { id: string; nom: string; utilise: number; bloque: number; derniere: string };
@@ -20,13 +21,14 @@ const debutJourParis = () => {
 };
 const heure = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-export default function UsageElevesIA() {
+export default function UsageElevesIA({ version = 0 }: { version?: number }) {
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [avecNoms, setAvecNoms] = useState(true);
   const [limite, setLimite] = useState(40);
   const [limiteConnexion, setLimiteConnexion] = useState(150);
   const [tous, setTous] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [appareils, setAppareils] = useState<string[]>([]);
 
   const charger = async () => {
     setLoading(true);
@@ -42,14 +44,18 @@ export default function UsageElevesIA() {
     setLignes((r.data as Ligne[]) || []);
     const cfg = await supabase.from("config").select("value").eq("key", "ai_limites_eleves").maybeSingle();
     try { const v = cfg.data?.value ? JSON.parse(cfg.data.value) : {}; setLimite(v.par_eleve ?? 40); setLimiteConnexion(v.par_connexion ?? 150); } catch { /* défaut */ }
+    setAppareils((await chargerAppareilsProf()).map((a) => a.id));
     setLoading(false);
   };
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { charger(); }, [version]);
 
-  const { eleves, connexions } = useMemo(() => {
+  const { eleves, connexions, moi } = useMemo(() => {
     const m: Record<string, Eleve> = {};
     const c: Record<string, number> = {};
+    let moi = 0;
     (lignes || []).forEach((l) => {
+      // Utilisation du professeur sur un de ses appareils : comptée à part
+      if (l.visitor_id && appareils.includes(l.visitor_id)) { if (l.action !== "limite") moi++; return; }
       if (l.action !== "limite" && l.ip) c[l.ip] = (c[l.ip] || 0) + 1;
       if (!l.visitor_id || l.visitor_id === "unknown") return;
       const e = (m[l.visitor_id] ||= { id: l.visitor_id, nom: "", utilise: 0, bloque: 0, derniere: l.created_at });
@@ -60,8 +66,9 @@ export default function UsageElevesIA() {
     return {
       eleves: Object.values(m).sort((a, b) => b.bloque - a.bloque || b.utilise - a.utilise),
       connexions: Object.entries(c).sort((a, b) => b[1] - a[1]),
+      moi,
     };
-  }, [lignes]);
+  }, [lignes, appareils]);
 
   const seuil = Math.ceil(limite * 0.75);
   const proches = eleves.filter((e) => limite > 0 && (e.utilise >= seuil || e.bloque > 0));
@@ -93,6 +100,10 @@ export default function UsageElevesIA() {
           </div>
         ))}
       </div>
+
+      <p className="text-xs bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl px-3 py-2">
+        <strong>Vous (professeur)</strong> : {lignes ? moi : "…"} réponse{moi > 1 ? "s" : ""} de l'IA aujourd'hui sur vos appareils déclarés{appareils.length ? ` (${appareils.length})` : " (aucun appareil déclaré pour l'instant)"}, hors Mode Prof. Elles ne sont pas comptées ci-dessus.
+      </p>
 
       {!avecNoms && (
         <p className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">

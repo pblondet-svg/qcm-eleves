@@ -147,6 +147,18 @@ async function getLimites() {
   } catch { limitesCache.at = Date.now(); }
   return limitesCache.v;
 }
+// Appareils déclarés par le professeur (Mode Prof → Usage IA → « Cet appareil est le mien ») :
+// ils ne sont pas limités, même hors Mode Prof.
+let appareilsCache = { v: [], at: 0 };
+async function getAppareilsProf() {
+  if (Date.now() - appareilsCache.at < 60000) return appareilsCache.v;
+  try {
+    const { data } = await supabase.from("config").select("value").eq("key", "appareils_prof").maybeSingle();
+    const v = data?.value ? JSON.parse(data.value) : [];
+    appareilsCache = { v: Array.isArray(v) ? v.map((a) => a?.id).filter(Boolean) : [], at: Date.now() };
+  } catch { appareilsCache.at = Date.now(); }
+  return appareilsCache.v;
+}
 // Minuit à Paris, en heure UTC
 function debutJourParis() {
   const now = new Date();
@@ -185,6 +197,7 @@ export async function GET(request) {
   try {
     const visitor_id = new URL(request.url).searchParams.get("visitor_id") || "unknown";
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+    if ((await getAppareilsProf()).includes(visitor_id)) return Response.json({ limite: 0, restant: null, prof: true });
     const lim = await getLimites();
     const [parEleve, parConnexion] = await Promise.all([
       lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
@@ -205,7 +218,8 @@ export async function POST(request) {
 
     // Plafonds (le professeur, en Mode Prof, n'est pas limité)
     let quota = null;
-    if (!prof) {
+    const appareilProf = !prof && visitor_id !== "unknown" && (await getAppareilsProf()).includes(visitor_id);
+    if (!prof && !appareilProf) {
       const lim = await getLimites();
       const [parEleve, parConnexion] = await Promise.all([
         lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
