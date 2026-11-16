@@ -22,6 +22,8 @@ export const maxDuration = 60;
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const GOOGLE_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GOOGLE_LITE_MODEL = process.env.GEMINI_LITE_MODEL || "gemini-3.5-flash-lite";
+// Chaque modèle Gemini a son propre quota gratuit : un 3e modèle Google sert de relais supplémentaire
+const GOOGLE_BIS_MODEL = process.env.GEMINI_BIS_MODEL || "gemini-3.8-flash";
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-small-latest";
 
 // Message d'erreur lisible (statut HTTP + message du fournisseur), affiché dans la jauge
@@ -178,7 +180,8 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
 
 // Cascade de fallback
 const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
-const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callOpenRouter, "openrouter"], [callCloudflare, "cloudflare"], [callMistral, "mistral"]]);
+const callGoogleBis = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_BIS_MODEL);
+const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callGoogleBis, "google-bis"], [callOpenRouter, "openrouter"], [callCloudflare, "cloudflare"], [callMistral, "mistral"]]);
 // Une IA qui vient d'échouer (lenteur, quota, paiement requis…) est essayée en dernier pendant 5 minutes :
 // les élèves n'attendent pas 20 secondes à chaque question qu'elle réponde enfin.
 const PANNE_MS = 5 * 60 * 1000;
@@ -329,6 +332,15 @@ async function testerIA(request) {
     cloudflare: [`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/models/search?task=Text%20Generation`, process.env.CLOUDFLARE_API_TOKEN, CLOUDFLARE_MODEL],
   };
   const modelesDisponibles = async (nom) => {
+    if (nom.startsWith("google") && process.env.GOOGLE_AI_API_KEY) {
+      try {
+        const r = await fetchAvecDelai(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=100&key=${process.env.GOOGLE_AI_API_KEY}`, {}, 8000);
+        if (!r.ok) return undefined;
+        return ((await r.json()).models || [])
+          .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent") && /gemini/.test(m.name))
+          .map((m) => m.name.replace("models/", "")).slice(0, 25);
+      } catch { return undefined; }
+    }
     const [url, cle] = MODELES_URL[nom] || [];
     if (!url || !cle) return undefined;
     try {
@@ -339,17 +351,18 @@ async function testerIA(request) {
       return (nom === "openrouter" ? liste.filter((x) => /:free$/.test(x)) : liste).slice(0, 25);
     } catch { return undefined; }
   };
+  const MODELE_GOOGLE = { google: GOOGLE_MODEL, "google-lite": GOOGLE_LITE_MODEL, "google-bis": GOOGLE_BIS_MODEL };
   const resultats = await Promise.all([...PROVIDER_NAMES.entries()].map(async ([fn, nom]) => {
     const t0 = Date.now();
     try {
       await fn(question, 50, false, 15000);
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_ok_at: new Date().toISOString() };
-      return { nom, ok: true, ms: Date.now() - t0, modele: MODELES_URL[nom]?.[2] || (nom === "google" ? GOOGLE_MODEL : nom === "google-lite" ? GOOGLE_LITE_MODEL : undefined) };
+      return { nom, ok: true, ms: Date.now() - t0, modele: MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom] };
     } catch (e) {
       const erreur = String(e?.message || e).slice(0, 200);
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: erreur, last_error_at: new Date().toISOString() };
       const refuse = / (402|403|404) /.test(erreur) || /model/i.test(erreur);
-      return { nom, ok: false, ms: Date.now() - t0, erreur, modele: MODELES_URL[nom]?.[2], modeles: refuse ? await modelesDisponibles(nom) : undefined };
+      return { nom, ok: false, ms: Date.now() - t0, erreur, modele: MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom], modeles: refuse ? await modelesDisponibles(nom) : undefined };
     }
   }));
   await flushQuota();
@@ -430,13 +443,13 @@ export async function POST(request) {
     if (prefer_groq) {
       // Requêtes légères : Groq → Google Flash-Lite → OpenRouter → Cloudflare → Google Flash → Mistral
       result = await callWithFallback(
-        [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callGoogle, callMistral],
+        [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callGoogleBis, callGoogle, callMistral],
         messages, max_tokens
       );
     } else {
-      // Requêtes lourdes : Google Flash → Google Flash-Lite → OpenRouter → Cloudflare → Mistral → Groq
+      // Requêtes lourdes : Google Flash → 2e modèle Google → Google Flash-Lite → OpenRouter → Cloudflare → Mistral → Groq
       result = await callWithFallback(
-        [callGoogle, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq],
+        [callGoogle, callGoogleBis, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq],
         messages, max_tokens, !!deep
       );
     }
