@@ -2,21 +2,22 @@
 // app/AiQuotaGauge.tsx
 // Jauge de consommation IA (Mode Prof → Stats → Usage IA).
 // - « Utilisé aujourd'hui » : appels comptés dans usage_stats (action « leger:groq », « lourd:google »…)
-// - « Reste » : exact quand le fournisseur l'indique (Groq, Mistral via config.ai_quota),
-//   sinon estimé à partir de la limite quotidienne saisie par le professeur (Google ne donne rien).
+// - « Reste » : on prend la limite la plus contraignante entre les requêtes par jour (exactes quand le
+//   fournisseur les indique, sinon estimées) et, pour Groq et Cloudflare, les tokens / neurones par jour,
+//   calculés à partir des tokens réellement consommés (colonnes tokens_in / tokens_out, sql/usage_tokens.sql).
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type ProviderKey = "google" | "google-bis" | "google-lite" | "groq" | "openrouter" | "cloudflare" | "mistral";
-type Limits = Record<ProviderKey, number>;
+type Limits = Record<ProviderKey, number> & { groq_tokens: number; cloudflare_neurones: number };
 type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string; last_ok_at?: string };
 
 const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
   { key: "google", nom: "Google Gemini", role: "Principal pour les réponses longues (assistant, corrections, plans)" },
   { key: "google-bis", nom: "Gemini (2e modèle)", role: "Relais de Gemini, avec son propre quota" },
   { key: "google-lite", nom: "Gemini Flash-Lite", role: "Relais de Gemini quand son quota est épuisé" },
-  { key: "groq", nom: "Groq", role: "Principal pour les réponses courtes (flashcards, FAQ, petits retours)" },
+  { key: "groq", nom: "Groq", role: "Secours rapide (limité aussi en tokens par jour)" },
   { key: "openrouter", nom: "OpenRouter", role: "Secours : modèles gratuits (50 par jour, 1 000 avec 10 $ de crédit)" },
   { key: "cloudflare", nom: "Cloudflare Workers AI", role: "Secours : 10 000 neurones gratuits par jour" },
   { key: "mistral", nom: "Mistral", role: "Dernier secours" },
@@ -24,7 +25,13 @@ const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
 
 // Limites gratuites indicatives (requêtes par jour) — modifiables ci-dessous,
 // car les fournisseurs les changent régulièrement.
-const DEFAULT_LIMITS: Limits = { google: 20, "google-bis": 20, "google-lite": 1000, groq: 1000, openrouter: 50, cloudflare: 300, mistral: 5000 };
+const DEFAULT_LIMITS: Limits = { google: 20, "google-bis": 20, "google-lite": 1000, groq: 1000, openrouter: 50, cloudflare: 1000, mistral: 5000,
+  groq_tokens: 200000, cloudflare_neurones: 10000 };
+// Quand les tokens réels ne sont pas encore enregistrés : consommation moyenne d'une réponse du site
+const MOYENNE_TOKENS = 3000;
+const MOYENNE_NEURONES = 150;
+// Cloudflare (llama-3.3-70b-instruct-fp8-fast) : neurones par token d'entrée et de sortie
+const neurones = (tin: number, tout: number) => tin * 0.0264 + tout * 0.2045;
 
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const isToday = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date().toDateString();
@@ -42,6 +49,8 @@ const isQuotaError = (msg?: string) => !!msg && /429|quota|rate.?limit|exhaust|t
 
 export default function AiQuotaGauge() {
   const [used, setUsed] = useState<Record<string, number>>({});
+  const [tokens, setTokens] = useState<Record<string, { tok: number; neur: number; mesures: number }>>({});
+  const [tokensDispo, setTokensDispo] = useState(true);
   const [totalToday, setTotalToday] = useState<number | null>(null);
   const [quota, setQuota] = useState<Record<string, QuotaSnap>>({});
   const [limits, setLimits] = useState<Limits>(DEFAULT_LIMITS);
@@ -66,6 +75,20 @@ export default function AiQuotaGauge() {
       if (r.status === "fulfilled") u[p.key] = (r.value as any)?.count || 0;
     });
     setUsed(u);
+
+    // Tokens réellement consommés aujourd'hui, par fournisseur
+    const tk = await supabase.from("usage_stats").select("action, tokens_in, tokens_out").gte("created_at", since).like("action", "%:%").limit(10000);
+    setTokensDispo(!tk.error);
+    const t2: Record<string, { tok: number; neur: number; mesures: number }> = {};
+    (tk.data || []).forEach((r: any) => {
+      if (r.tokens_in == null && r.tokens_out == null) return;
+      const k = String(r.action).split(":").pop() as string;
+      const x = (t2[k] ||= { tok: 0, neur: 0, mesures: 0 });
+      x.tok += (r.tokens_in || 0) + (r.tokens_out || 0);
+      x.neur += neurones(r.tokens_in || 0, r.tokens_out || 0);
+      x.mesures++;
+    });
+    setTokens(t2);
     const t = counts[counts.length - 1];
     setTotalToday(t.status === "fulfilled" ? (t.value as any)?.count ?? null : null);
 
@@ -98,16 +121,33 @@ export default function AiQuotaGauge() {
   const rows = PROVIDERS.map((p) => {
     const snap = quota[p.key];
     const ex = isToday(snap?.at) ? exactDaily(p.key, snap) : { limit: null, remaining: null };
-    const limit = ex.limit ?? limits[p.key];
+    const limReq = ex.limit ?? limits[p.key];
     const u = used[p.key] || 0;
-    const remaining = ex.remaining ?? Math.max(0, limit - u);
-    const pctUsed = limit > 0 ? Math.min(100, Math.round(((limit - remaining) / limit) * 100)) : 0;
+    const resteReq = ex.remaining ?? Math.max(0, limReq - u);
+    // Limite en tokens (Groq) ou en neurones (Cloudflare) : on estime le nombre de réponses restantes
+    let resteTok: number | null = null;
+    let detailTok = "";
+    const m = tokens[p.key];
+    if (p.key === "groq" || p.key === "cloudflare") {
+      const parNeurones = p.key === "cloudflare";
+      const plafond = parNeurones ? limits.cloudflare_neurones : limits.groq_tokens;
+      const moyenneDefaut = parNeurones ? MOYENNE_NEURONES : MOYENNE_TOKENS;
+      const mesure = m && m.mesures ? (parNeurones ? m.neur : m.tok) : 0;
+      const moyenne = m && m.mesures ? mesure / m.mesures : moyenneDefaut;
+      // appels non mesurés (avant l'enregistrement des tokens) : comptés à la moyenne
+      const consomme = mesure + Math.max(0, u - (m?.mesures || 0)) * moyenne;
+      resteTok = Math.max(0, Math.floor((plafond - consomme) / Math.max(1, moyenne)));
+      detailTok = `~${Math.round(consomme).toLocaleString("fr-FR")} ${parNeurones ? "neurones" : "tokens"} utilisés sur ${plafond.toLocaleString("fr-FR")} / jour`;
+    }
+    const remaining = resteTok === null ? resteReq : Math.min(resteReq, resteTok);
+    const limit = u + remaining;
+    const pctUsed = limit > 0 ? Math.min(100, Math.round((u / limit) * 100)) : 0;
     // Une erreur n'est « actuelle » que si aucun succès ni relevé de quota ne l'a suivie
     const apres = (a?: string, b?: string) => !b || (!!a && new Date(a) > new Date(b));
     const erreurActuelle = isToday(snap?.last_error_at) && apres(snap?.last_error_at, snap?.at) && apres(snap?.last_error_at, snap?.last_ok_at);
     const blocked = erreurActuelle && isQuotaError(snap?.last_error);
     const lastError = erreurActuelle ? snap?.last_error : "";
-    return { ...p, limit, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null, at: snap?.at, blocked, blockedAt: snap?.last_error_at, lastError };
+    return { ...p, limit, limReq, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null && resteTok === null, at: snap?.at, blocked, blockedAt: snap?.last_error_at, lastError, detailTok, parTokens: resteTok !== null && resteTok < resteReq };
   });
 
   const main = rows[0];
@@ -163,7 +203,9 @@ export default function AiQuotaGauge() {
               <div className={`h-2 rounded-full ${color(r.pctUsed)}`} style={{ width: `${Math.max(r.pctUsed, 1)}%` }} />
             </div>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              {r.used.toLocaleString("fr-FR")} appel{r.used > 1 ? "s" : ""} aujourd'hui · {r.exact ? `reste exact relevé à ${heure(r.at)}` : `estimation sur une limite de ${r.limit.toLocaleString("fr-FR")} / jour`}
+              {r.used.toLocaleString("fr-FR")} appel{r.used > 1 ? "s" : ""} aujourd'hui · {r.detailTok
+                ? <>{r.detailTok}{r.parTokens ? " (c'est cette limite qui compte)" : ""}</>
+                : r.exact ? `reste exact relevé à ${heure(r.at)}` : `estimation sur une limite de ${r.limReq.toLocaleString("fr-FR")} réponses / jour`}
             </p>
             {r.lastError && (
               <p className="text-[11px] text-red-500 mt-0.5 break-words">Dernière erreur ({heure(r.blockedAt)}) : {r.lastError}</p>
@@ -171,6 +213,12 @@ export default function AiQuotaGauge() {
           </div>
         ))}
       </div>
+
+      {!tokensDispo && (
+        <p className="text-[11px] bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">
+          Pour Groq et Cloudflare, l'estimation se fait pour l'instant sur une consommation moyenne. Pour une estimation précise, exécute une fois <strong>sql/usage_tokens.sql</strong> dans Supabase (SQL Editor).
+        </p>
+      )}
 
       {bloques !== null && (
         <p className="text-sm text-gray-700">
@@ -197,7 +245,8 @@ export default function AiQuotaGauge() {
               Requêtes gratuites par jour. Pour Google, vérifie ta limite dans Google AI Studio (rubrique « Rate limit ») : c'est la plus importante, car Google n'indique pas ce qu'il reste.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {PROVIDERS.map((p) => (
+              {[...PROVIDERS.map((p) => ({ key: p.key as keyof Limits, nom: p.nom + " (réponses)" })),
+                { key: "groq_tokens" as keyof Limits, nom: "Groq (tokens)" }, { key: "cloudflare_neurones" as keyof Limits, nom: "Cloudflare (neurones)" }].map((p) => (
                 <label key={p.key} className="text-xs font-bold text-gray-600">
                   {p.nom}
                   <input

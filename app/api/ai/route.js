@@ -55,6 +55,13 @@ async function flushQuota() {
   } catch { /* silencieux */ }
 }
 
+// Texte de la réponse, accompagné des tokens consommés (pour estimer les quotas restants dans la jauge)
+function avecTokens(text, entree, sortie) {
+  const t = new String(text);
+  t.tokens = { in: Number(entree) || 0, out: Number(sortie) || 0 };
+  return t;
+}
+
 // Les IA de secours refusent certaines conversations que Gemini accepte (deux messages de suite du même rôle,
 // conversation qui commence ou finit par une réponse de l'IA) : on remet la conversation en forme.
 function normaliserMessages(messages) {
@@ -118,12 +125,13 @@ async function callCompat(nom, url, cleBrute, model, messages, max_tokens, delai
   if (!response.ok) throw await erreurLisible(nom, response);
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content || "";
+  const u = data.usage || {};
   if (!text.trim()) {
     const e = new Error(`${nom} : réponse vide (modèle ${data.model || model}${data.choices?.[0]?.finish_reason ? ", arrêt : " + data.choices[0].finish_reason : ""})`);
     e.reponseVide = true;
     throw e;
   }
-  return text;
+  return avecTokens(text, u.prompt_tokens, u.completion_tokens);
 }
 const callGroq = (m, t, deep, delai) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t, delai);
 const callMistral = (m, t, deep, delai) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t, delai);
@@ -206,8 +214,9 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
   if (!response.ok) throw await erreurLisible(model, response);
   const data = await response.json();
   const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+  const um = data.usageMetadata || {};
   if (!text.trim()) throw new Error("Réponse Google vide");
-  return text;
+  return avecTokens(text, um.promptTokenCount, (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0));
 }
 
 // Cascade de fallback
@@ -238,11 +247,12 @@ async function callWithFallback(providersDemandes, messages, max_tokens, deep = 
     const restantes = providers.length - i - 1;
     const delai = Math.min(deep ? 35000 : 20000, restantes ? reste - Math.min(restantes, 2) * 6000 : reste);
     try {
-      const text = await provider(messages, max_tokens, deep, delai);
+      const brut = await provider(messages, max_tokens, deep, delai);
+      const text = String(brut);
       const name = PROVIDER_NAMES.get(provider) || "inconnu";
       // Dernier succès : la jauge n'affiche plus une erreur antérieure à ce succès
       quotaCache[name] = { ...(quotaCache[name] || {}), last_ok_at: new Date().toISOString() };
-      return { text, provider: name };
+      return { text, provider: name, tokens: brut?.tokens };
     } catch (err) {
       console.warn(`Provider failed: ${err.message}, trying next...`);
       const name = PROVIDER_NAMES.get(provider) || "inconnu";
@@ -331,15 +341,16 @@ async function controleSeance(lim, session_id, visitor_id, module) {
 
 const quotaEntrainements = (c) => c?.max > 0 ? { limite: c.max, restant: Math.max(0, c.max - c.seances) } : null;
 
-// Enregistre un appel ; si la colonne eleve_nom n'existe pas encore (sql/usage_eleve_nom.sql), on l'enregistre sans le prénom
+// Enregistre un appel. Si des colonnes facultatives n'existent pas encore (sql/usage_eleve_nom.sql, sql/usage_tokens.sql),
+// on réessaie sans elles, pour ne jamais perdre la ligne.
 function logUsage(row) {
-  supabase.from("usage_stats").insert([row]).then(({ error }) => {
-    if (error && row.eleve_nom !== undefined) {
-      const sansNom = { ...row };
-      delete sansNom.eleve_nom;
-      supabase.from("usage_stats").insert([sansNom]).then(() => {}, () => {});
-    }
+  const sansTokens = { ...row }; delete sansTokens.tokens_in; delete sansTokens.tokens_out;
+  const minimal = { ...sansTokens }; delete minimal.eleve_nom;
+  const essais = [row, sansTokens, minimal];
+  const essayer = (k) => supabase.from("usage_stats").insert([essais[k]]).then(({ error }) => {
+    if (error && k + 1 < essais.length) essayer(k + 1);
   }, () => {});
+  essayer(0);
 }
 
 // Réponses restantes aujourd'hui pour cet élève (la plus contraignante des deux limites)
@@ -489,7 +500,8 @@ export async function POST(request) {
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
     // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu
-    logUsage({ module, action: (seance ? "seance:" : "") + (prefer_groq ? "leger" : "lourd") + ":" + result.provider, ip, visitor_id, eleve_nom });
+    logUsage({ module, action: (seance ? "seance:" : "") + (prefer_groq ? "leger" : "lourd") + ":" + result.provider, ip, visitor_id, eleve_nom,
+      tokens_in: result.tokens?.in ?? null, tokens_out: result.tokens?.out ?? null });
     if (seance) {
       await admin.from("productions_eleves").update({ nb_reponses: seance.utilisees + 1, updated_at: new Date().toISOString() }).eq("id", session_id).then(() => {}, () => {});
     }
