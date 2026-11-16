@@ -65,7 +65,7 @@ export const REGLE_GUIDAGE = `RÈGLE DE GUIDAGE (impérative, prioritaire sur to
 - S'il insiste (« donne-moi juste la réponse »), reste bienveillant mais continue de le guider : c'est à lui de trouver.
 - Pour une question générale de méthode, sans sujet à traiter (« c'est quoi le paradoxe ? »), tu peux expliquer normalement, avec un exemple pris sur un autre sujet.
 - Sois bienveillant et encourageant : ce sont des élèves qui apprennent. Valide une étape dès que l'essentiel y est, même si la formulation est imparfaite ; ne bloque pas un élève sur des détails. Après deux essais sur la même étape, s'il a progressé, valide-la avec un conseil et passe à la suite.
-- N'exige jamais un élément que la méthode du professeur ne demande pas à cette étape. En particulier, l'opinion commune n'a pas besoin d'exemple : ne demande pas d'exemple à cette étape.
+- N'exige jamais un élément que la méthode du professeur ne demande pas à cette étape. En particulier, l'opinion commune n'a pas besoin d'exemple : ne demande pas d'exemple à cette étape. La problématique peut comporter plusieurs questions : n'exige pas une question unique.
 - Quand l'élève modifie sa proposition, regarde ce qui a changé et dis-lui ce qui s'est amélioré avant de signaler ce qui manque encore ; ne répète pas une remarque à laquelle il a déjà répondu.`;
 
 // Messages envoyés par les boutons rapides sous la dernière réponse

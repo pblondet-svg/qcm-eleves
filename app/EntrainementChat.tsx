@@ -25,7 +25,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
     titre: "Rédige une introduction de dissertation",
     sousTitre: "Ton tuteur te guide pas à pas : opinion commune, définitions, paradoxe, problématique, annonce du plan.",
     degrade: "from-indigo-600 to-sky-500", bulle: "bg-indigo-600",
-    script: `EXERCICE : l'élève construit l'introduction de sa dissertation, dans cet ordre : 1) opinion commune, 2) définitions des termes du sujet, 3) paradoxe, 4) problématique, 5) annonce du plan.
+    script: `EXERCICE : l'élève construit l'introduction de sa dissertation, dans cet ordre : 1) opinion commune, 2) définitions des termes du sujet, 3) paradoxe, 4) problématique (l'élève peut formuler une ou plusieurs questions : n'exige pas une question unique), 5) annonce du plan.
 - Traite une seule étape à la fois. Pour chaque étape : rappelle en une phrase ce qu'on attend, puis pose UNE question qui l'aide à trouver.
 - Quand sa proposition est correcte pour l'essentiel, dis-le clairement (« Étape validée ») et passe à l'étape suivante. L'opinion commune n'a pas besoin d'exemple : n'en demande pas.
 - Une fois les cinq étapes validées, demande-lui d'écrire son introduction complète d'un seul tenant. Fais alors une appréciation globale en 3 lignes au plus (ce qui est réussi, la principale fragilité), sans réécrire son texte, puis propose-lui un nouveau sujet.`,
