@@ -16,12 +16,37 @@ import { FicheMarkdown } from "./ComposantsCommuns";
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
+// Sujets d'explication de texte du bac (1996-2024), chargés une seule fois et seulement quand on en a besoin
+type TexteBac = { id: string; auteur: string; reference: string; session: number; notions: string[]; texte: string; notes: string };
+let textesBacCache: Promise<{ id: string; titre: string; chapitre: string; contenu: string; notions: string[]; origine: "bac" }[]> | null = null;
+const chargerTextesBac = () => (textesBacCache ||= fetch("/data/textes-bac.json")
+  .then((r) => r.json())
+  .then((d: { textes: TexteBac[] }) => d.textes.map((t) => ({
+    id: t.id,
+    titre: `${t.auteur}${t.reference ? ", " + t.reference : ""} (bac ${t.session})`,
+    chapitre: t.notions[0] || "",
+    contenu: t.texte + (t.notes ? "\n\n" + t.notes : ""),
+    notions: t.notions,
+    origine: "bac" as const,
+  })))
+  .catch(() => { textesBacCache = null; return []; }));
+
 export function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: MethodeView; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
   // Textes philosophiques de la bibliothèque du professeur, pour le paragraphe « à partir d'un texte »
   // (hors cours rédigés, ni trop courts ni trop longs pour un exercice)
-  const chargerTextesEntrainement = async () => (await dbLoadTextes())
-    .filter((e: any) => matchesMatiere(e, matiere) && e.type !== "cours" && (e.content || "").trim().length >= 300 && (e.content || "").length <= 9000)
-    .map((e: any) => ({ id: String(e.id), titre: entryName(e), chapitre: entryChapter(e), contenu: String(e.content).trim() }));
+  // + sujets d'explication de texte du bac 1996-2024 (public/data/textes-bac.json, philosophie uniquement)
+  const chargerTextesEntrainement = async () => {
+    const [prof, bac] = await Promise.all([
+      dbLoadTextes().catch(() => []),
+      matiere === "philosophie" ? chargerTextesBac() : Promise.resolve([]),
+    ]);
+    return [
+      ...prof
+        .filter((e: any) => matchesMatiere(e, matiere) && e.type !== "cours" && (e.content || "").trim().length >= 300 && (e.content || "").length <= 9000)
+        .map((e: any) => ({ id: String(e.id), titre: entryName(e), chapitre: entryChapter(e), contenu: String(e.content).trim(), origine: "prof" as const })),
+      ...bac,
+    ];
+  };
   const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView === "intro" || initialView === "paragraphe" ? "plan" : initialView || "faq");
   const [trainer, setTrainer] = useState<"paragraphe" | "plan" | "intro">(initialView === "intro" && matiere !== "hlp" ? "intro" : "paragraphe");
   // Entraînements : chatbot par défaut, version « cadres » au choix de l'élève

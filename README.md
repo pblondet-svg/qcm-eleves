@@ -28,6 +28,10 @@ déployé sur Vercel à chaque `git push` sur `main`.
 - `ComposantsCommuns.tsx` : sélecteur de chapitres, validation des métadonnées, rendu des fiches méthode.
 - Routes serveur (`app/api/`) : `ai` (IA et limites), `faq` (questions et e-mails), `productions`, `extract` (lecture de fichiers).
 
+## Données
+- `public/data/textes-bac.json` : 1 161 sujets d'explication de texte du bac (1996-2024), utilisés par l'entraînement
+  au paragraphe argumenté « à partir d'un texte ». Mise à jour avec une nouvelle édition du recueil : voir `scripts/textes-bac/`.
+
 ## Scripts SQL (`sql/`)
 À exécuter une fois dans Supabase (SQL Editor) :
 - `faq_vues.sql` : compteur de consultations de la FAQ.

@@ -10,8 +10,8 @@ import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
 
 import { nouvelleSeance, sauverProduction, type AskAIAvecSeance } from "./productions";
 type AskAI = AskAIAvecSeance;
-type Sujet = { sujet: string; notion_principale?: string; source?: string; texte?: string };
-import type { TexteEntrainement } from "./EntrainementChat";
+type Sujet = { sujet: string; notion_principale?: string; source?: string; texte?: string; notions?: string[]; origine?: "bac" | "prof" };
+import { notionsDe, type TexteEntrainement } from "./EntrainementChat";
 
 type Etape = "these" | "arguments" | "exemple" | "citation" | "conclusion";
 const ETAPES: { key: Etape; label: string; aide: string; cls: string }[] = [
@@ -103,20 +103,21 @@ function RedactionExercice({ askAI, fiche, matiere, serie, loadSujets, loadTexte
       .then((all) => setBank((all || []).filter((x) => x?.sujet && x.sujet.trim().endsWith("?"))))
       .catch(() => setBankErr(true));
     loadTextes?.()
-      .then((l) => setTextes(l.map((t) => ({ sujet: t.titre, notion_principale: t.chapitre, texte: t.contenu }))))
+      .then((l) => setTextes(l.map((t) => ({ sujet: t.titre, notion_principale: t.chapitre, texte: t.contenu, notions: t.notions, origine: t.origine }))))
       .catch(() => setTextes([]));
   }, []);
 
   const source = avecTexte ? textes : bank;
   const notions = useMemo(() => {
     const m: Record<string, number> = {};
-    (source || []).forEach((x) => { const n = (x.notion_principale || "").trim(); if (n) m[n] = (m[n] || 0) + 1; });
-    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0], "fr"));
+    (source || []).forEach((x) => notionsDe(x).forEach((n) => { m[n] = (m[n] || 0) + 1; }));
+    const cle = (n: string) => n.replace(/^(l[’']|le |la |les )/i, "");
+    return Object.entries(m).sort((a, b) => cle(a[0]).localeCompare(cle(b[0]), "fr"));
   }, [source]);
 
   const tirerSujet = () => {
     setErr("");
-    const pool = (source || []).filter((x) => notion === "all" || (x.notion_principale || "").trim() === notion);
+    const pool = (source || []).filter((x) => notion === "all" || notionsDe(x).includes(notion));
     if (!pool.length) { setErr(avecTexte ? "Aucun texte disponible pour l'instant." : "Aucun sujet disponible pour cette notion."); return; }
     let pick = pool[Math.floor(Math.random() * pool.length)];
     if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
@@ -220,13 +221,13 @@ Réponds uniquement en JSON :
           </button>
           <select value={notion} onChange={(e) => setNotion(e.target.value)} disabled={!source || notions.length === 0}
             className="flex-1 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-rose-400 focus:outline-none text-gray-800 bg-white">
-            <option value="all">{avecTexte ? "Tous les chapitres" : "Toutes les notions"}</option>
+            <option value="all">Toutes les notions</option>
             {notions.map(([n, c]) => <option key={n} value={n}>{n} ({c})</option>)}
           </select>
         </div>
         <p className="text-[11px] text-gray-400">
           {avecTexte
-            ? (!textes ? "Chargement des textes…" : textes.length ? `${textes.length} texte${textes.length > 1 ? "s" : ""} de la bibliothèque du professeur.` : "Aucun texte n'est encore disponible : choisis « d'un sujet seul ».")
+            ? (!textes ? "Chargement des textes…" : textes.length ? `${textes.length} textes disponibles${textes.some((t) => t.origine === "bac") ? " (sujets d'explication de texte du bac 1996-2024 et textes du professeur)" : ""}.` : "Aucun texte n'est encore disponible : choisis « d'un sujet seul ».")
             : bankErr ? "La banque de sujets n'a pas pu être chargée." : !bank ? "Chargement de la banque de sujets…" : `${bank.length} vrais sujets disponibles.`}
         </p>
       </div>
@@ -242,7 +243,7 @@ Réponds uniquement en JSON :
               <div className="mt-2 max-h-72 overflow-y-auto bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-serif">{sujet.texte}</div>
             )}
             <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {sujet.notion_principale && <span className="text-[11px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{sujet.notion_principale}</span>}
+              {notionsDe(sujet).map((n) => <span key={n} className="text-[11px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">{n}</span>)}
               {sujet.source && <span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">📌 {sujet.source}</span>}
             </div>
             <p className="text-xs text-gray-500 mt-2">{sujet.texte

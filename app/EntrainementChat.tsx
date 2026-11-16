@@ -11,9 +11,12 @@ import { REGLE_GUIDAGE, RichText } from "./MethodeChatHome";
 import { nouvelleSeance, noteDepuisTexte, sauverProduction, type AskAIAvecSeance } from "./productions";
 
 type AskAI = AskAIAvecSeance;
-type Sujet = { sujet: string; notion_principale?: string; source?: string; texte?: string };
+type Sujet = { sujet: string; notion_principale?: string; source?: string; texte?: string; notions?: string[]; origine?: "bac" | "prof" };
 // Texte de la bibliothèque du professeur, pour le paragraphe argumenté « à partir d'un texte »
-export type TexteEntrainement = { id: string; titre: string; chapitre: string; contenu: string };
+export type TexteEntrainement = { id: string; titre: string; chapitre: string; contenu: string; notions?: string[]; origine?: "bac" | "prof" };
+// Notions d'un sujet ou d'un texte (un texte du bac peut relever de plusieurs notions)
+export const notionsDe = (x: { notion_principale?: string; notions?: string[] }) =>
+  x.notions?.length ? x.notions : [(x.notion_principale || "").trim()].filter(Boolean);
 type Msg = { role: "user" | "assistant"; content: string };
 export type ExerciceChat = "intro" | "paragraphe" | "plan";
 
@@ -97,17 +100,20 @@ export default function EntrainementChat({ exercice, askAI, methode, matiere, se
   useEffect(() => {
     if (exercice !== "paragraphe" || !loadTextes) return;
     loadTextes()
-      .then((l) => setTextes(l.map((t) => ({ sujet: t.titre, notion_principale: t.chapitre, source: "texte", texte: t.contenu }))))
+      .then((l) => setTextes(l.map((t) => ({ sujet: t.titre, notion_principale: t.chapitre, source: "texte", texte: t.contenu, notions: t.notions, origine: t.origine }))))
       .catch(() => setTextes([]));
   }, []);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading]);
 
-  const source = avecTexte ? textes : bank;
+  const [origine, setOrigine] = useState<"tous" | "bac" | "prof">("tous");
+  const aDesTextesProf = !!textes?.some((t) => t.origine === "prof");
+  const source = avecTexte ? (textes || null)?.filter((t) => origine === "tous" || t.origine === origine) ?? null : bank;
   const notions = useMemo(() => {
     const m: Record<string, number> = {};
-    (source || []).forEach((x) => { const n = (x.notion_principale || "").trim(); if (n) m[n] = (m[n] || 0) + 1; });
-    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0], "fr"));
+    (source || []).forEach((x) => notionsDe(x).forEach((n) => { m[n] = (m[n] || 0) + 1; }));
+    const cle = (n: string) => n.replace(/^(l[’']|le |la |les )/i, "");
+    return Object.entries(m).sort((a, b) => cle(a[0]).localeCompare(cle(b[0]), "fr"));
   }, [source]);
 
   const contexte = (s: Sujet) => `Tu es le tuteur de philosophie d'un élève de ${matiere === "hlp" ? "spécialité HLP" : serie === "techno" ? "Terminale technologique" : "Terminale générale"}. Tu le tutoies, avec bienveillance et exigence.
@@ -148,7 +154,7 @@ ${s.texte ? `TEXTE À ÉTUDIER (${s.sujet}) :\n"""\n${s.texte.slice(0, 4500)}\n"
 
   const tirerSujet = () => {
     setErr("");
-    const pool = (source || []).filter((x) => notion === "all" || (x.notion_principale || "").trim() === notion);
+    const pool = (source || []).filter((x) => notion === "all" || notionsDe(x).includes(notion));
     if (!pool.length) { setErr(avecTexte ? "Aucun texte disponible pour l'instant." : "Aucun sujet disponible pour cette notion."); return; }
     let pick = pool[Math.floor(Math.random() * pool.length)];
     if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
@@ -194,17 +200,29 @@ ${s.texte ? `TEXTE À ÉTUDIER (${s.sujet}) :\n"""\n${s.texte.slice(0, 4500)}\n"
         </button>
         <select value={notion} onChange={(e) => setNotion(e.target.value)} disabled={!source || notions.length === 0}
           className="flex-1 px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-gray-400 focus:outline-none text-gray-800 bg-white">
-          <option value="all">{avecTexte ? "Tous les chapitres" : "Toutes les notions"}</option>
+          <option value="all">Toutes les notions</option>
           {notions.map(([n, c]) => <option key={n} value={n}>{n} ({c})</option>)}
         </select>
       </div>
+      {avecTexte && aDesTextesProf && (
+        <div className="flex gap-1.5 items-center flex-shrink-0 -mt-1">
+          <span className="text-[11px] font-bold text-gray-400 mr-1">Textes :</span>
+          {([["tous", "tous"], ["bac", "sujets du bac"], ["prof", "du professeur"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => { setOrigine(k); setNotion("all"); }} disabled={loading}
+              className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all ${origine === k ? "bg-rose-600 border-rose-600 text-white" : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+      {avecTexte && textes && textes.length > 0 && <p className="text-[11px] text-gray-400 px-1 -mt-1">{(source || []).length} textes disponibles{textes.some((t) => t.origine === "bac") ? " · sujets d'explication de texte du bac 1996-2024" : ""}.</p>}
       {bankErr && !avecTexte && <p className="text-xs text-red-600 px-1">La banque de sujets n'a pas pu être chargée.</p>}
       {avecTexte && textes && textes.length === 0 && <p className="text-xs text-gray-500 px-1">Aucun texte n'est encore disponible dans la bibliothèque du professeur : choisis « d'un sujet seul ».</p>}
 
       {sujet && (
         <div className="bg-white border-2 border-gray-200 rounded-2xl flex flex-col min-h-[420px] flex-1 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{sujet.texte ? "Texte" : "Sujet"}{sujet.notion_principale ? ` · ${sujet.notion_principale}` : ""}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{sujet.texte ? "Texte" : "Sujet"}{notionsDe(sujet).length ? ` · ${notionsDe(sujet).join(", ")}` : ""}</p>
             <p className="text-sm font-black text-gray-800">{sujet.texte ? sujet.sujet : `« ${sujet.sujet} »`}</p>
             {sujet.texte && (
               <details open className="mt-2">
