@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 
-type Quota = { limite: number; restant: number | null };
+type Quota = { limite: number; restant: number | null; entrainements?: { limite: number; restant: number } | null };
 const EVT = "philo-quota-ia";
 
 // Appelée par callAI à chaque réponse de l'API
@@ -28,7 +28,18 @@ export default function CompteurIA({ visitorId }: { visitorId: () => string }) {
       fetch(`/api/ai?visitor_id=${encodeURIComponent(visitorId())}`)
         .then((r) => r.json()).then((d) => setQ(d)).catch(() => {});
     charger();
-    const onQuota = (e: Event) => setQ((e as CustomEvent<Quota>).detail);
+    // Fusion : une réponse d'entraînement ne renvoie que la partie « entraînements » du quota
+    const onQuota = (e: Event) => {
+      const d = (e as CustomEvent<Partial<Quota>>).detail || {};
+      setQ((prev) => {
+        const base: Quota = prev || { limite: 0, restant: null };
+        return {
+          limite: d.limite ?? base.limite,
+          restant: d.restant !== undefined ? d.restant : base.restant,
+          entrainements: d.entrainements !== undefined ? d.entrainements : base.entrainements,
+        };
+      });
+    };
     // À minuit (ou après une longue absence), on relit le compteur quand l'élève revient sur l'onglet
     const onVisible = () => { if (document.visibilityState === "visible") charger(); };
     window.addEventListener(EVT, onQuota);
@@ -52,9 +63,10 @@ export default function CompteurIA({ visitorId }: { visitorId: () => string }) {
     setPrecedent(r);
   }, [q?.restant]);
 
-  // Pas de limite fixée par le professeur : rien à afficher
+  // Pas de limite fixée par le professeur (ou appareil du professeur) : rien à afficher
   if (!q || q.restant === null) return null;
 
+  const ent = q.entrainements;
   const max = q.limite || Math.max(q.restant, 1);
   const ratio = q.restant / max;
   const ton = q.restant === 0 ? "bg-rose-600 text-white border-rose-700"
@@ -88,9 +100,14 @@ export default function CompteurIA({ visitorId }: { visitorId: () => string }) {
             <div className={`h-full rounded-full transition-all ${barre}`} style={{ width: `${Math.round(Math.min(1, ratio) * 100)}%` }} />
           </div>
         )}
+        {ent && (
+          <p className="text-[11px] font-bold mt-1.5 opacity-90 whitespace-nowrap">
+            ✍️ Entraînements : {ent.restant} / {ent.limite} restant{ent.restant > 1 ? "s" : ""}
+          </p>
+        )}
         {ouvert && (
           <p className="text-xs mt-2 leading-snug max-w-[240px] font-medium opacity-95">
-            Chaque réponse de l'IA (assistant, correction, indice…) compte pour une question. Le compteur repart à zéro à minuit.
+            Chaque réponse de l'IA (assistant, correction, indice…) compte pour une question, sauf dans les entraînements : un exercice complet compte pour un seul entraînement. Le compteur repart à zéro à minuit.
             {q.restant > 0 ? " Pose des questions précises pour en tirer le meilleur parti." : " En attendant, relis ton cours et les fiches méthode."}
           </p>
         )}

@@ -52,9 +52,10 @@ const STEPS_INTRO: Step[] = [
 
 type Retour = { ok: boolean; texte: string };
 
-export default function DissertationGuidee({ sujet, matiere, methode, contexte, askAI, onRediger, introSeule = false }: {
+export default function DissertationGuidee({ sujet, matiere, methode, contexte, askAI, onRediger, introSeule = false, onProgress }: {
   sujet: string; matiere: string; methode: string; contexte?: string; askAI: AskAI;
   onRediger?: (recap: string) => void; introSeule?: boolean;
+  onProgress?: (recap: string, valides: number, total: number) => void;
 }) {
   const STEPS = introSeule ? STEPS_INTRO : STEPS_COMPLET;
   const [i, setI] = useState(0);
@@ -116,7 +117,9 @@ ${t}
 Vérifie cette proposition, avec bienveillance et exigence, en 4 phrases maximum : dis ce qui est juste, puis ce qui manque ou ce qui ne va pas, puis termine par UNE question qui l'aide à améliorer lui-même sa proposition. Ne réécris pas sa proposition et ne donne pas de version corrigée.
 Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essentiel, sinon par « À REVOIR : ».` }], 450, true);
       const ok = /^\s*\**\s*VALID/i.test(r);
-      setRetours({ ...retours, [step.key]: { ok, texte: r.replace(/^\s*\**\s*(VALIDÉ|VALIDE|À REVOIR|A REVOIR)\s*\**\s*:?\s*/i, "").trim() } });
+      const nouveaux = { ...retours, [step.key]: { ok, texte: r.replace(/^\s*\**\s*(VALIDÉ|VALIDE|À REVOIR|A REVOIR)\s*\**\s*:?\s*/i, "").trim() } };
+      setRetours(nouveaux);
+      onProgress?.(recap(), STEPS.filter((x) => nouveaux[x.key]?.ok).length, STEPS.length);
     } catch { setErr("La vérification n'a pas pu être faite. Réessaie dans un instant."); }
     setLoading("");
   };

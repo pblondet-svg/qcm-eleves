@@ -7,8 +7,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import DissertationGuidee from "./DissertationGuidee";
+import { nouvelleSeance, sauverProduction, type AskAIAvecSeance } from "./productions";
 
-type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
+type AskAI = AskAIAvecSeance;
 type Sujet = { sujet: string; notion_principale?: string; source?: string };
 
 export default function IntroductionTrainer({ askAI, methode, matiere, loadSujets }: {
@@ -19,6 +20,7 @@ export default function IntroductionTrainer({ askAI, methode, matiere, loadSujet
   const [notion, setNotion] = useState("all");
   const [sujet, setSujet] = useState<Sujet | null>(null);
   const [tirage, setTirage] = useState(0);
+  const [seance, setSeance] = useState("");
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -41,6 +43,8 @@ export default function IntroductionTrainer({ askAI, methode, matiere, loadSujet
     if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     setSujet({ ...pick, sujet: pick.sujet.trim() });
     setTirage((t) => t + 1);
+    const id = nouvelleSeance(); setSeance(id);
+    sauverProduction({ id, exercice: "intro", format: "cadres", sujet: pick.sujet.trim(), contenu: "" });
   };
 
   return (
@@ -81,7 +85,9 @@ export default function IntroductionTrainer({ askAI, methode, matiere, loadSujet
         )}
       </div>
 
-      {sujet && <DissertationGuidee key={tirage} introSeule sujet={sujet.sujet} matiere={matiere} methode={methode} askAI={askAI} />}
+      {sujet && <DissertationGuidee key={tirage} introSeule sujet={sujet.sujet} matiere={matiere} methode={methode}
+        askAI={(m, t, l) => askAI(m, t, l, seance)}
+        onProgress={(recap, valides, total) => sauverProduction({ id: seance, exercice: "intro", format: "cadres", sujet: sujet.sujet, contenu: recap, note: `${valides}/${total} étapes validées` })} />}
     </div>
   );
 }

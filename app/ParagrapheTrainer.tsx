@@ -7,7 +7,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
 
-type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
+import { nouvelleSeance, sauverProduction, type AskAIAvecSeance } from "./productions";
+type AskAI = AskAIAvecSeance;
 type Sujet = { sujet: string; notion_principale?: string; source?: string };
 
 type Etape = "these" | "arguments" | "exemple" | "citation" | "conclusion";
@@ -27,10 +28,10 @@ const parseJSONLoose = (txt: string) => {
   const m = c.match(/[\[{][\s\S]*[\]}]/);
   return JSON.parse(m ? m[0] : c);
 };
-async function askJSON(askAI: AskAI, prompt: string, maxTokens: number, valid: (x: any) => boolean) {
+async function askJSON(askAI: AskAI, prompt: string, maxTokens: number, valid: (x: any) => boolean, session?: string) {
   for (const light of [false, true]) {
     try {
-      const x = parseJSONLoose(await askAI([{ role: "user", content: prompt }], maxTokens, light));
+      const x = parseJSONLoose(await askAI([{ role: "user", content: prompt }], maxTokens, light, session));
       if (valid(x)) return x;
     } catch { /* on tente l'autre chaîne de modèles */ }
   }
@@ -73,6 +74,7 @@ function RedactionExercice({ askAI, fiche, matiere, serie, loadSujets }: {
   const [bankErr, setBankErr] = useState(false);
   const [notion, setNotion] = useState("all");
   const [sujet, setSujet] = useState<Sujet | null>(null);
+  const [seance, setSeance] = useState("");
   const [bloc, setBloc] = useState(false);
   const [parts, setParts] = useState<Record<Etape, string>>({ these: "", arguments: "", exemple: "", citation: "", conclusion: "" });
   const [texteBloc, setTexteBloc] = useState("");
@@ -100,6 +102,8 @@ function RedactionExercice({ askAI, fiche, matiere, serie, loadSujets }: {
     let pick = pool[Math.floor(Math.random() * pool.length)];
     if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     setSujet({ ...pick, sujet: pick.sujet.trim() });
+    const id = nouvelleSeance(); setSeance(id);
+    sauverProduction({ id, exercice: "paragraphe", format: "cadres", sujet: pick.sujet.trim(), contenu: "" });
     setParts({ these: "", arguments: "", exemple: "", citation: "", conclusion: "" }); setTexteBloc(""); setCorrection(null); setShowHint(false);
   };
 
@@ -144,7 +148,15 @@ Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice 
 Ne réécris aucun passage de la copie dans tes commentaires.
 Réponds uniquement en JSON :
 {"criteres":[{"etape":"these","note":3,"commentaire":"une phrase de justification"},{"etape":"arguments","note":2,"commentaire":"..."},{"etape":"exemple","note":3,"commentaire":"..."},{"etape":"citation","note":2,"commentaire":"..."},{"etape":"conclusion","note":3,"commentaire":"..."}],"appreciation":"...","conseil":"le conseil le plus utile pour progresser","piste_etape":"exemple","piste":"..."}`,
-        2200, (x) => Array.isArray(x?.criteres) && x.criteres.length >= 5);
+        2200, (x) => Array.isArray(x?.criteres) && x.criteres.length >= 5, seance);
+      const criteres = ETAPES.map((e, i) => {
+        const x = c.criteres.find((k: any) => sansAccents(String(k?.etape || "")).startsWith(e.key.slice(0, 5))) || c.criteres[i] || {};
+        return Math.min(4, Math.max(1, Math.round(Number(x.note) || 1)));
+      });
+      const totalNote = Math.max(0, criteres.reduce((a: number, b: number) => a + b, 0) - (trop_court ? 1 : 0));
+      sauverProduction({ id: seance, exercice: "paragraphe", format: "cadres", sujet: sujet.sujet,
+        contenu: copie + "\n\n— Correction —\n" + ETAPES.map((e, i) => `${e.label} : ${criteres[i]}/4`).join(" · ") + "\n" + String(c.appreciation || ""),
+        note: `${totalNote}/20` });
       setCorrection({
         criteres: ETAPES.map((e, i) => {
           const x = c.criteres.find((k: any) => sansAccents(String(k?.etape || "")).startsWith(e.key.slice(0, 5))) || c.criteres[i] || {};

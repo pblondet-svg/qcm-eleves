@@ -5,6 +5,11 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Client serveur (clé service_role, déjà utilisée pour la FAQ) : productions des élèves, inaccessibles aux navigateurs
+const admin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+  : null;
+
 // Laisse le temps aux réponses « réfléchies » (deep) de se terminer sur Vercel
 export const maxDuration = 60;
 
@@ -143,7 +148,7 @@ async function getLimites() {
   try {
     const { data } = await supabase.from("config").select("value").eq("key", "ai_limites_eleves").maybeSingle();
     const v = data?.value ? JSON.parse(data.value) : {};
-    limitesCache = { v: { par_eleve: 40, par_connexion: 150, ...v }, at: Date.now() };
+    limitesCache = { v: { par_eleve: 40, par_connexion: 150, entrainements_par_eleve: 10, reponses_par_entrainement: 30, ...v }, at: Date.now() };
   } catch { limitesCache.at = Date.now(); }
   return limitesCache.v;
 }
@@ -167,11 +172,52 @@ function debutJourParis() {
   const minuit = new Date(paris); minuit.setHours(0, 0, 0, 0);
   return new Date(minuit.getTime() - ecart).toISOString();
 }
+// Réponses du jour, hors réponses données dans un entraînement (action « seance:… », comptées par exercice)
 async function compteDuJour(colonne, valeur) {
   const { count, error } = await supabase.from("usage_stats").select("*", { count: "exact", head: true })
-    .gte("created_at", debutJourParis()).eq(colonne, valeur).neq("action", "call").neq("action", "limite");
+    .gte("created_at", debutJourParis()).eq(colonne, valeur).neq("action", "call").neq("action", "limite")
+    .not("action", "like", "seance:%");
   return error ? 0 : count || 0;
 }
+
+// ─── Entraînements : un exercice complet compte pour une seule « question » ───
+// Chaque exercice a un identifiant (session_id) et une ligne dans productions_eleves.
+// L'élève a droit à `entrainements_par_eleve` exercices par jour, de `reponses_par_entrainement` réponses chacun.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EXERCICE_DU_MODULE = (m) => (/intro/.test(m) ? "intro" : /plan/.test(m) ? "plan" : "paragraphe");
+
+// Exercices commencés aujourd'hui par l'élève (les plus anciens d'abord), ou null si la table n'existe pas
+async function seancesDuJour(visitor_id) {
+  if (!admin || !visitor_id || visitor_id === "unknown") return null;
+  const { data, error } = await admin.from("productions_eleves").select("id, nb_reponses")
+    .eq("visitor_id", visitor_id).gte("created_at", debutJourParis()).order("created_at", { ascending: true }).limit(500);
+  return error ? null : data || [];
+}
+
+// Vérifie qu'une réponse peut être donnée dans cet exercice. Renvoie null si le système
+// d'entraînement n'est pas disponible (on revient alors au comptage normal).
+async function controleSeance(lim, session_id, visitor_id, module) {
+  const seances = await seancesDuJour(visitor_id);
+  if (!seances) return null;
+  const max = lim.entrainements_par_eleve || 0;
+  let idx = seances.findIndex((x) => x.id === session_id);
+  if (idx === -1) {
+    const { data: autre } = await admin.from("productions_eleves").select("visitor_id").eq("id", session_id).maybeSingle();
+    if (autre) return null; // exercice d'un autre jour ou d'un autre navigateur : comptage normal
+    if (max > 0 && seances.length >= max) return { refus: "entrainements", seances: seances.length, max };
+    const { error } = await admin.from("productions_eleves").insert({ id: session_id, visitor_id, exercice: EXERCICE_DU_MODULE(module), nb_reponses: 0 });
+    if (error) return null;
+    seances.push({ id: session_id, nb_reponses: 0 });
+    idx = seances.length - 1;
+  }
+  if (max > 0 && idx >= max) return { refus: "entrainements", seances: seances.length, max };
+  const cap = lim.reponses_par_entrainement || 0;
+  const utilisees = seances[idx].nb_reponses || 0;
+  if (cap > 0 && utilisees >= cap) return { refus: "seance", cap };
+  return { ok: true, utilisees, cap, seances: seances.length, max };
+}
+
+const quotaEntrainements = (c) => c?.max > 0 ? { limite: c.max, restant: Math.max(0, c.max - c.seances) } : null;
 
 // Enregistre un appel ; si la colonne eleve_nom n'existe pas encore (sql/usage_eleve_nom.sql), on l'enregistre sans le prénom
 function logUsage(row) {
@@ -204,7 +250,12 @@ export async function GET(request) {
       lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
       lim.par_connexion > 0 && ip !== "unknown" ? compteDuJour("ip", ip) : 0,
     ]);
-    return Response.json({ limite: lim.par_eleve || 0, restant: calculRestant(lim, parEleve, parConnexion) });
+    const seances = await seancesDuJour(visitor_id);
+    const max = lim.entrainements_par_eleve || 0;
+    return Response.json({
+      limite: lim.par_eleve || 0, restant: calculRestant(lim, parEleve, parConnexion),
+      entrainements: seances && max > 0 ? { limite: max, restant: Math.max(0, max - seances.length) } : null,
+    });
   } catch {
     return Response.json({ limite: 0, restant: null });
   }
@@ -214,13 +265,31 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { messages, max_tokens = 2000, prefer_groq = false, module = "inconnu", visitor_id = "unknown", deep = false, prof = false } = body;
+    const session_id = UUID.test(String(body.session_id || "")) && String(module).startsWith("entrainement_") ? String(body.session_id) : null;
     const eleve_nom = String(body.eleve_nom || "").trim().slice(0, 60) || null;
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
 
     // Plafonds (le professeur, en Mode Prof, n'est pas limité)
     let quota = null;
+    let seance = null; // exercice d'entraînement en cours (compté à part)
     const appareilProf = !prof && visitor_id !== "unknown" && (await getAppareilsProf()).includes(visitor_id);
-    if (!prof && !appareilProf) {
+    if (!prof && !appareilProf && session_id) {
+      const lim = await getLimites();
+      const c = await controleSeance(lim, session_id, visitor_id, module);
+      if (c?.refus) {
+        logUsage({ module, action: "limite", ip, visitor_id, eleve_nom });
+        const text = c.refus === "seance"
+          ? `Cet exercice a atteint ${c.cap} réponses du tuteur. Termine-le de ton côté, ou commence un nouvel exercice avec un nouveau sujet.`
+          : `Tu as fait tes ${c.max} entraînements pour aujourd'hui. Reviens demain pour un nouvel exercice !`;
+        return Response.json({ limite: true, content: [{ type: "text", text }],
+          quota: { entrainements: c.refus === "entrainements" ? { limite: c.max, restant: 0 } : undefined } }, { status: 429 });
+      }
+      if (c?.ok) {
+        seance = c;
+        quota = { entrainements: quotaEntrainements(c), seance: { limite: c.cap, utilisees: c.utilisees + 1 } };
+      }
+    }
+    if (!prof && !appareilProf && !seance) {
       const lim = await getLimites();
       const [parEleve, parConnexion] = await Promise.all([
         lim.par_eleve > 0 && visitor_id !== "unknown" ? compteDuJour("visitor_id", visitor_id) : 0,
@@ -256,7 +325,10 @@ export async function POST(request) {
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
     // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu
-    logUsage({ module, action: (prefer_groq ? "leger" : "lourd") + ":" + result.provider, ip, visitor_id, eleve_nom });
+    logUsage({ module, action: (seance ? "seance:" : "") + (prefer_groq ? "leger" : "lourd") + ":" + result.provider, ip, visitor_id, eleve_nom });
+    if (seance) {
+      await admin.from("productions_eleves").update({ nb_reponses: seance.utilisees + 1, updated_at: new Date().toISOString() }).eq("id", session_id).then(() => {}, () => {});
+    }
 
     await flushQuota();
     return Response.json({ content: [{ type: "text", text: result.text }], quota });

@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { chargerAppareilsProf } from "./AppareilsProf";
 
 type Ligne = { visitor_id: string | null; ip: string | null; action: string; eleve_nom?: string | null; created_at: string };
-type Eleve = { id: string; nom: string; utilise: number; bloque: number; derniere: string };
+type Eleve = { id: string; nom: string; utilise: number; bloque: number; seance: number; derniere: string };
 
 const debutJourParis = () => {
   const now = new Date();
@@ -56,10 +56,11 @@ export default function UsageElevesIA({ version = 0 }: { version?: number }) {
     (lignes || []).forEach((l) => {
       // Utilisation du professeur sur un de ses appareils : comptée à part
       if (l.visitor_id && appareils.includes(l.visitor_id)) { if (l.action !== "limite") moi++; return; }
-      if (l.action !== "limite" && l.ip) c[l.ip] = (c[l.ip] || 0) + 1;
+      const enSeance = l.action.startsWith("seance:");
+      if (l.action !== "limite" && !enSeance && l.ip) c[l.ip] = (c[l.ip] || 0) + 1;
       if (!l.visitor_id || l.visitor_id === "unknown") return;
-      const e = (m[l.visitor_id] ||= { id: l.visitor_id, nom: "", utilise: 0, bloque: 0, derniere: l.created_at });
-      if (l.action === "limite") e.bloque++; else e.utilise++;
+      const e = (m[l.visitor_id] ||= { id: l.visitor_id, nom: "", utilise: 0, bloque: 0, seance: 0, derniere: l.created_at });
+      if (l.action === "limite") e.bloque++; else if (enSeance) e.seance++; else e.utilise++;
       if (!e.nom && l.eleve_nom) e.nom = l.eleve_nom;
       if (l.created_at > e.derniere) e.derniere = l.created_at;
     });
@@ -134,7 +135,7 @@ export default function UsageElevesIA({ version = 0 }: { version?: number }) {
                 </div>
                 {limite > 0 && <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1"><div className={`h-full ${couleur}`} style={{ width: `${Math.max(pct, 2)}%` }} /></div>}
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Dernière réponse à {heure(e.derniere)}{e.bloque > 0 ? ` · bloqué ${e.bloque} fois par la limite` : ""}
+                  Dernière réponse à {heure(e.derniere)}{e.seance > 0 ? ` · ${e.seance} réponse${e.seance > 1 ? "s" : ""} en entraînement (non comptées)` : ""}{e.bloque > 0 ? ` · bloqué ${e.bloque} fois par une limite` : ""}
                 </p>
               </div>
             );

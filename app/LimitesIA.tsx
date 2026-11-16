@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export const LIMITES_DEFAUT = { par_eleve: 40, par_connexion: 150 };
+export const LIMITES_DEFAUT = { par_eleve: 40, par_connexion: 150, entrainements_par_eleve: 10, reponses_par_entrainement: 30 };
 
 export default function LimitesIA() {
   const [v, setV] = useState(LIMITES_DEFAUT);
@@ -43,7 +43,10 @@ export default function LimitesIA() {
       <div className="p-5 grid sm:grid-cols-2 gap-4">
         {field("par_eleve", "Par élève", "Compté par navigateur (identifiant anonyme), même sans prénom")}
         {field("par_connexion", "Par connexion internet", "Plus large : au lycée, une classe partage souvent la même connexion")}
+        {field("entrainements_par_eleve", "Entraînements par élève", "Exercices d'introduction, de paragraphe ou de plan par jour ; un exercice complet compte pour un seul")}
+        {field("reponses_par_entrainement", "Réponses par entraînement", "Nombre maximum de réponses de l'IA dans un même exercice")}
       </div>
+      <p className="px-5 pb-3 -mt-2 text-[11px] text-gray-500">Le décompte par exercice nécessite la table des productions (script sql/productions_eleves.sql). Sans elle, chaque réponse d'entraînement compte comme une question.</p>
       <div className="px-5 pb-4 flex items-center gap-3">
         <button onClick={save} disabled={saving} className="text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl">
           {saving ? "Enregistrement…" : "Enregistrer les limites"}

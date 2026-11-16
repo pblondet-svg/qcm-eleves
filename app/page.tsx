@@ -8,7 +8,7 @@ import {
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
   BookOpen, Send, MessageCircle, User, Layers, PenLine,
   Shuffle, ChevronDown, FileText, Brain, Zap,
-} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import AppareilsProf from "./AppareilsProf"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
+} from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import AppareilsProf from "./AppareilsProf"; import ProductionsEleves from "./ProductionsEleves"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 let _visitorId = "unknown";
@@ -22,11 +22,12 @@ const dbLogUsage = async (module: string, action: string) => {
 
 // Vrai quand le Mode Prof est ouvert : le professeur n'est pas soumis aux limites d'usage de l'IA
 let _isProf = false;
-const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general", deep = false) => {
+// session_id : identifiant de l'exercice d'entraînement en cours (un exercice complet compte pour une seule « question »)
+const callAI = async (messages: { role: string; content: string }[], max_tokens = 2000, prefer_groq = false, module = "general", deep = false, session_id?: string) => {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf, eleve_nom: (() => { try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; } })() }),
+    body: JSON.stringify({ messages, max_tokens, prefer_groq, module, visitor_id: _visitorId, deep, prof: _isProf, session_id, eleve_nom: (() => { try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; } })() }),
   });
   // Limite du jour atteinte : on renvoie le message prévu, que les chats affichent tel quel
   if (res.status === 429) { const d = await res.json().catch(() => null); if (d?.quota) signalerQuota(d.quota); if (d?.content) return d; }
@@ -2657,7 +2658,7 @@ function QuizMode({ questions, chapter, eleveNom, onBack }: any) {
 // ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
 function Dashboard({ onBack, sharedLib, prof = false }: any) {
   const [versionAppareils, setVersionAppareils] = useState(0);
-  const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision" | "usage">("qcm");
+  const [activeTab, setActiveTab] = useState<"qcm" | "notions" | "dissertations" | "revision" | "usage" | "productions">("qcm");
   const [resultats, setResultats] = useState<any[]>([]);
   const [dissertations, setDissertations] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -2763,6 +2764,7 @@ function Dashboard({ onBack, sharedLib, prof = false }: any) {
     ["dissertations", "✍️ Dissertations", dFiltered.length],
     ["revision", "📖 Révision", sFiltered.length],
     ["usage", "📡 Usage IA", usageStats.length],
+    ...(prof ? [["productions", "✍️ Productions", null]] : []),
   ] as [string, string, number | null][];
 
   return (
@@ -3136,6 +3138,8 @@ function Dashboard({ onBack, sharedLib, prof = false }: any) {
                 )}
               </div>
             )}
+
+            {activeTab === "productions" && prof && <ProductionsEleves />}
 
             {activeTab === "usage" && (
               <div className="space-y-4">
@@ -5062,14 +5066,14 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               matiere={matiere}
               serie={serie}
               loadSujets={() => dbLoadSujetsBac(matiere)}
-              askAI={async (m: { role: string; content: string }[], maxTokens = 700) => getText(await callAI(m, maxTokens, false, "entrainement_chat_" + (isHLP ? "paragraphe" : trainer)))}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 700, light = false, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_chat_" + (isHLP ? "paragraphe" : trainer), false, session))}
             />
           ) : !isHLP && trainer === "intro" ? (
             <IntroductionTrainer
               methode={mc.intro_dissertation}
               matiere={matiere}
               loadSujets={() => dbLoadSujetsBac(matiere)}
-              askAI={async (m: { role: string; content: string }[], maxTokens = 450, light = true) => getText(await callAI(m, maxTokens, light, "entrainement_intro"))}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 450, light = true, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_intro", false, session))}
             />
           ) : (isHLP || trainer === "paragraphe") ? (
             <ParagrapheTrainer
@@ -5077,7 +5081,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               matiere={matiere}
               serie={serie}
               loadSujets={() => dbLoadSujetsBac(matiere)}
-              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_paragraphe", !light))}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_paragraphe", !light, session))}
             />
           ) : (
             <PlanTrainer
@@ -5085,7 +5089,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               matiere={matiere}
               serie={serie}
               loadSujets={() => dbLoadSujetsBac(matiere)}
-              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false) => getText(await callAI(m, maxTokens, light, "entrainement_plan", !light))}
+              askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_plan", !light, session))}
             />
           )}
         </div>

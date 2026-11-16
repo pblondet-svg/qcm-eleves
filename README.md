@@ -25,6 +25,7 @@ déployé sur Vercel à chaque `git push` sur `main`.
 À exécuter une fois dans Supabase (SQL Editor) :
 - `faq_vues.sql` : compteur de consultations de la FAQ.
 - `usage_eleve_nom.sql` : prénom de l'élève dans les statistiques d'usage de l'IA.
+- `productions_eleves.sql` : productions des élèves dans les entraînements (Mode Prof → Stats → Productions) et décompte « un exercice = un entraînement ».
 
 ## Développement
 ```bash

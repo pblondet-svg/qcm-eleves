@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
+import { nouvelleSeance, sauverProduction, type AskAIAvecSeance } from "./productions";
 
 type Sujet = { sujet: string; notion_principale?: string; notions?: string[]; source?: string };
 type Repere = { auteur: string; oeuvre: string; idee: string };
@@ -55,12 +56,12 @@ const VERDICT_UI: Record<Correction["verdict"], { label: string; cls: string; ic
 
 // Demande du JSON à l'IA ; si la réponse est illisible, on réessaie une fois avec l'autre chaîne de modèles
 async function askJSON(
-  askAI: (m: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>,
-  prompt: string, maxTokens: number, valid: (x: any) => boolean,
+  askAI: AskAIAvecSeance,
+  prompt: string, maxTokens: number, valid: (x: any) => boolean, session?: string,
 ) {
   for (const light of [false, true]) {
     try {
-      const x = parseJSONLoose(await askAI([{ role: "user", content: prompt }], maxTokens, light));
+      const x = parseJSONLoose(await askAI([{ role: "user", content: prompt }], maxTokens, light, session));
       if (valid(x)) return x;
     } catch { /* on tente l'autre chaîne */ }
   }
@@ -70,7 +71,7 @@ async function askJSON(
 export default function PlanTrainer({
   askAI, ficheTas, matiere, serie, loadSujets,
 }: {
-  askAI: (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
+  askAI: AskAIAvecSeance;
   ficheTas: string;
   matiere: string;
   serie: "generale" | "techno" | null;
@@ -79,6 +80,7 @@ export default function PlanTrainer({
   const isTechno = serie === "techno";
   const niveau = isTechno ? "Terminale technologique" : matiere === "hlp" ? "Terminale HLP" : "Terminale générale";
 
+  const [seance, setSeance] = useState("");
   const [sujet, setSujet] = useState<Sujet | null>(null);
   const [bank, setBank] = useState<Sujet[] | null>(null);
   const [bankErr, setBankErr] = useState(false);
@@ -117,6 +119,9 @@ export default function PlanTrainer({
   // Les parties I et II sont rédigées par l'IA : l'élève se concentre sur la synthèse
   const preparePlan = async (sj: Sujet) => {
     setSujet(sj); setPlan(null); resetAnswer(); setLoadingPlan(true);
+    // Nouvel exercice : enregistré avant le premier appel, il compte pour un entraînement du jour
+    const id = nouvelleSeance(); setSeance(id);
+    await sauverProduction({ id, exercice: "plan", format: "cadres", sujet: sj.sujet, contenu: "" });
     const notionTxt = sj.notion_principale ? `Notion principale du programme : ${sj.notion_principale}.` : "";
     try {
       const p = await askJSON(askAI, `Tu es professeur agrégé de philosophie. Sujet de dissertation (${niveau}) : « ${sj.sujet} »
@@ -132,7 +137,7 @@ ${ficheTas}
 ${isTechno ? "- Langage clair et accessible." : ""}
 Réponds uniquement en JSON :
 {"I":{"titre":"..."},"II":{"titre":"..."}}`,
-        600, (x) => !!(x?.I?.titre && x?.II?.titre));
+        600, (x) => !!(x?.I?.titre && x?.II?.titre), id);
       setPlan({ I: toPartie(p.I), II: toPartie(p.II) });
     } catch {
       setErr("Impossible de préparer le plan pour l'instant. Réessaie dans un instant.");
@@ -184,7 +189,11 @@ Tutoie l'élève. Sois court et direct : une seule phrase par critère, une phra
 Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
-        2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0);
+        2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0, seance);
+      const verdict = ["reussi", "presque", "a_retravailler"].includes(c.verdict) ? c.verdict : "presque";
+      sauverProduction({ id: seance, exercice: "plan", format: "cadres", sujet: sujet?.sujet || "",
+        contenu: `I. ${plan.I.titre}\nII. ${plan.II.titre}\n\nOuverture de l'élève : ${ouverture.trim()}\nPartie III de l'élève : ${partie3.trim()}\n\n— Correction —\n${String(c.points_forts || "")}\n${String(c.conseil || "")}`,
+        note: verdict === "reussi" ? "Réussi" : verdict === "presque" ? "Presque" : "À retravailler" });
       setCorrection({
         verdict: ["reussi", "presque", "a_retravailler"].includes(c.verdict) ? c.verdict : "presque",
         criteres: c.criteres.slice(0, CRITERES.length).map((x: any, i: number) => ({

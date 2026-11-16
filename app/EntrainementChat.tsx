@@ -8,8 +8,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GraduationCap, RefreshCw, Send } from "lucide-react";
 import { REGLE_GUIDAGE, RichText } from "./MethodeChatHome";
+import { nouvelleSeance, noteDepuisTexte, sauverProduction, type AskAIAvecSeance } from "./productions";
 
-type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
+type AskAI = AskAIAvecSeance;
 type Sujet = { sujet: string; notion_principale?: string; source?: string };
 type Msg = { role: "user" | "assistant"; content: string };
 export type ExerciceChat = "intro" | "paragraphe" | "plan";
@@ -55,6 +56,8 @@ export default function EntrainementChat({ exercice, askAI, methode, matiere, se
   const [bankErr, setBankErr] = useState(false);
   const [notion, setNotion] = useState("all");
   const [sujet, setSujet] = useState<Sujet | null>(null);
+  const [seance, setSeance] = useState("");
+  const [note, setNote] = useState<string | undefined>();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -87,7 +90,9 @@ STYLE : réponses courtes et directes (3 à 5 phrases au plus), une seule questi
 
 SUJET : « ${s.sujet} »`;
 
-  const repondre = async (s: Sujet, histo: Msg[]) => {
+  const transcription = (h: Msg[]) => h.map((m) => `${m.role === "user" ? "ÉLÈVE" : "TUTEUR"} : ${m.content}`).join("\n\n");
+
+  const repondre = async (s: Sujet, histo: Msg[], id: string) => {
     setLoading(true); setErr("");
     try {
       // On garde les derniers échanges pour limiter la taille des requêtes
@@ -97,8 +102,12 @@ SUJET : « ${s.sujet} »`;
       const reply = await askAI([
         { role: "user", content: contexte(s) + "\n\nCommence l'exercice : présente le sujet en une phrase et pose ta première question." },
         ...recents,
-      ], 700);
-      setMessages([...histo, { role: "assistant", content: reply.trim() || "Je n'ai pas réussi à répondre. Reformule ta proposition ?" }]);
+      ], 700, false, id);
+      const fin: Msg[] = [...histo, { role: "assistant", content: reply.trim() || "Je n'ai pas réussi à répondre. Reformule ta proposition ?" }];
+      setMessages(fin);
+      const n = noteDepuisTexte(reply) || note;
+      if (n) setNote(n);
+      sauverProduction({ id, exercice, format: "chat", sujet: s.sujet, contenu: transcription(fin), note: n });
     } catch {
       setErr("Le tuteur n'a pas pu répondre. Réessaie dans un instant.");
     }
@@ -112,8 +121,11 @@ SUJET : « ${s.sujet} »`;
     let pick = pool[Math.floor(Math.random() * pool.length)];
     if (pool.length > 1 && sujet && pick.sujet === sujet.sujet) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     const s = { ...pick, sujet: pick.sujet.trim() };
-    setSujet(s); setMessages([]); setInput("");
-    repondre(s, []);
+    const id = nouvelleSeance();
+    setSujet(s); setMessages([]); setInput(""); setSeance(id); setNote(undefined);
+    setLoading(true);
+    // L'exercice est enregistré avant la première réponse : il compte pour un entraînement du jour
+    sauverProduction({ id, exercice, format: "chat", sujet: s.sujet, contenu: "" }).then(() => repondre(s, [], id));
   };
 
   const envoyer = () => {
@@ -121,7 +133,7 @@ SUJET : « ${s.sujet} »`;
     if (!t || !sujet || loading) return;
     const histo: Msg[] = [...messages, { role: "user", content: t }];
     setMessages(histo); setInput("");
-    repondre(sujet, histo);
+    repondre(sujet, histo, seance);
   };
 
   return (
