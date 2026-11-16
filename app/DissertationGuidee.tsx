@@ -3,7 +3,7 @@
 // Construction guidée de la dissertation (remplace l'ancien « Plan guidé » qui générait un plan tout fait).
 // L'élève construit lui-même son introduction, ses trois parties et sa conclusion, étape par étape.
 // L'IA ne rédige jamais une étape à sa place : elle donne des indices de plus en plus précis (sous forme de
-// questions) et vérifie les propositions de l'élève (ce qui est juste, ce qui manque, une question pour améliorer).
+// questions) et vérifie les propositions de l'élève (ce qui est juste, ce qui s'est amélioré, une piste pour progresser).
 
 import { useState } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, Copy, Lightbulb, PenLine, Sparkles } from "lucide-react";
@@ -50,7 +50,7 @@ const STEPS_INTRO: Step[] = [
     placeholder: "Nous verrons dans un premier temps…" },
 ];
 
-type Retour = { ok: boolean; texte: string };
+type Retour = { ok: boolean; texte: string; propositionVerifiee: string };
 
 export default function DissertationGuidee({ sujet, matiere, methode, contexte, askAI, onRediger, introSeule = false, onProgress }: {
   sujet: string; matiere: string; methode: string; contexte?: string; askAI: AskAI;
@@ -107,17 +107,28 @@ L'élève demande un indice (niveau ${deja.length + 1}). Donne UN indice, un peu
   const verifier = async () => {
     const t = (textes[step.key] || "").trim();
     if (!t || loading) return;
+    // Remarque précédente sur une autre version : l'IA la voit, pour tenir compte des modifications
+    const precedent = retours[step.key] && retours[step.key].propositionVerifiee !== t ? retours[step.key] : null;
     setLoading("verif"); setErr("");
     try {
       const r = await askAI([{ role: "user", content: `${base()}
 
-PROPOSITION DE L'ÉLÈVE POUR CETTE ÉTAPE :
+${precedent ? `VERSION PRÉCÉDENTE DE L'ÉLÈVE (déjà vérifiée) :
+${precedent.propositionVerifiee}
+TA REMARQUE PRÉCÉDENTE :
+${precedent.texte}
+
+` : ""}PROPOSITION ${precedent ? "MODIFIÉE " : ""}DE L'ÉLÈVE POUR CETTE ÉTAPE :
 ${t}
 
-Vérifie cette proposition, avec bienveillance et exigence, en 4 phrases maximum : dis ce qui est juste, puis ce qui manque ou ce qui ne va pas, puis termine par UNE question qui l'aide à améliorer lui-même sa proposition. Ne réécris pas sa proposition et ne donne pas de version corrigée.
+Vérifie cette proposition avec bienveillance, en 3 ou 4 phrases :
+${precedent ? "- commence par dire ce que l'élève a amélioré par rapport à sa version précédente (s'il l'a modifiée) ;\n" : ""}- dis ce qui est juste ;
+- s'il manque quelque chose d'important, termine par une seule piste concrète formulée comme une consigne (« Précise… », « Ajoute… »), PAS par une question : l'élève ne peut pas te répondre, il ne peut que modifier sa proposition et la refaire vérifier.
+Ne réécris pas sa proposition et ne donne pas de version corrigée. N'exige rien que la méthode ne demande pas à cette étape (pas d'exemple dans l'opinion commune, par exemple).
+Sois encourageant : c'est un élève qui apprend. Valide dès que l'essentiel de l'étape est là, même si la formulation peut encore être améliorée${precedent ? " ; s'il a tenu compte de ta remarque précédente, valide" : ""}.
 Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essentiel, sinon par « À REVOIR : ».` }], 450, true);
       const ok = /^\s*\**\s*VALID/i.test(r);
-      const nouveaux = { ...retours, [step.key]: { ok, texte: r.replace(/^\s*\**\s*(VALIDÉ|VALIDE|À REVOIR|A REVOIR)\s*\**\s*:?\s*/i, "").trim() } };
+      const nouveaux = { ...retours, [step.key]: { ok, texte: r.replace(/^\s*\**\s*(VALIDÉ|VALIDE|À REVOIR|A REVOIR)\s*\**\s*:?\s*/i, "").trim(), propositionVerifiee: t } };
       setRetours(nouveaux);
       onProgress?.(recap(), STEPS.filter((x) => nouveaux[x.key]?.ok).length, STEPS.length);
     } catch { setErr("La vérification n'a pas pu être faite. Réessaie dans un instant."); }
@@ -170,12 +181,16 @@ Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essenti
             </div>
           ))}
 
-          {retours[step.key] && (
-            <div className={`rounded-xl border-2 px-3 py-2.5 text-sm leading-relaxed ${retours[step.key].ok ? "bg-green-50 border-green-300 text-green-900" : "bg-rose-50 border-rose-200 text-rose-900"}`}>
-              <p className="font-black text-xs mb-0.5">{retours[step.key].ok ? "✅ Étape validée" : "🔁 À revoir"}</p>
-              {retours[step.key].texte}
-            </div>
-          )}
+          {retours[step.key] && (() => {
+            const r = retours[step.key];
+            const modifiee = r.propositionVerifiee !== (textes[step.key] || "").trim();
+            return (
+              <div className={`rounded-xl border-2 px-3 py-2.5 text-sm leading-relaxed ${modifiee ? "bg-gray-50 border-gray-200 text-gray-600" : r.ok ? "bg-green-50 border-green-300 text-green-900" : "bg-amber-50 border-amber-300 text-amber-950"}`}>
+                <p className="font-black text-xs mb-0.5">{r.ok ? "✅ Étape validée" : "✏️ Encore un petit effort"}{modifiee ? " · tu as modifié ta proposition : fais-la vérifier à nouveau" : ""}</p>
+                {r.texte}
+              </div>
+            );
+          })()}
 
           {err && <p className="text-sm font-semibold rounded-xl px-3 py-2 border bg-red-50 text-red-700 border-red-200">{err}</p>}
 

@@ -181,12 +181,12 @@ II. ${plan.II.titre}
 Ouverture de conclusion : ${ouverture.trim() || "(vide)"}
 Partie III : ${partie3.trim() || "(vide)"}
 
-Évalue la réponse avec bienveillance mais exigence, critère par critère :
+Évalue la réponse avec bienveillance, critère par critère (un critère globalement respecté compte comme réussi) :
 ${CRITERES.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
 Juge en philosophe : le concept proposé est-il vraiment un concept (et non un mot vague) ? Est-il défini ? Change-t-il réellement les termes du problème ? Un « réalisme » ou un « juste milieu » non défini est un compromis déguisé.
 Tutoie l'élève. Sois court et direct : une seule phrase par critère, une phrase pour les points forts, une phrase pour le conseil. Ne réécris pas sa copie.
-Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, terminé par une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
+Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, formulé comme une consigne, pas comme une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
         2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0, seance);

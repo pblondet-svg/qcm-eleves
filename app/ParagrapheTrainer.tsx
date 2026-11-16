@@ -156,7 +156,7 @@ Consigne donnée à l'élève : rédiger un paragraphe argumenté qui reconstitu
 ${copie}
 
 === GRILLE DU PROFESSEUR ===
-Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition, 3 = Acquis, 4 = Très bonne maîtrise. Notes exigeantes et discriminantes : 4 seulement si l'étape est vraiment maîtrisée. Une étape vide ou absente vaut 1.
+Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition, 3 = Acquis, 4 = Très bonne maîtrise. Note avec bienveillance : ce sont des élèves en entraînement. Une étape présente et globalement juste vaut au moins 3 ; 4 si elle est vraiment réussie ; 2 si elle est présente mais confuse ; 1 seulement si elle est vide ou absente.
 - Thèse : une seule idée, claire, qui répond au sujet posé.
 - Arguments : de vraies raisons qui reconstituent un raisonnement, et non la répétition de la thèse ; les concepts importants sont définis (le professeur conseille de définir les mots importants pour argumenter ; valorise-le quand l'élève le fait).
 - Exemple : une situation concrète de la vie réelle, de préférence trouvée par l'élève lui-même, qui illustre bien l'argument (et non une autre idée). Une référence à un auteur ou à une personne qui fait autorité n'est pas un exemple concret ; une référence culturelle montre une bonne culture générale, mais ne remplace pas l'exemple.
@@ -168,7 +168,7 @@ Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition,
 3 lignes maximum. Chaque commentaire de critère tient en UNE phrase courte. Le conseil tient en UNE phrase. Tutoie l'élève. Commence de façon adoucie (« plutôt bien structuré », « assez juste dans l'essentiel »), cite une force concrète, puis « Il y a cependant des fragilités » et la principale. Ne parle de relecture que s'il y a de vraies fautes, en précisant si elles sont orthographiques ou typographiques. Pas de formule d'encouragement à la fin.
 ${isTechno ? "Langage clair et accessible, sans perdre en précision." : ""}
 
-Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice (2 phrases au plus, terminé par une question) qui aide l'élève à l'améliorer lui-même.
+Dans "piste", ne réécris rien : pour l'étape la plus faible, donne un indice (2 phrases au plus, formulé comme une consigne, pas comme une question) qui aide l'élève à l'améliorer lui-même.
 Ne réécris aucun passage de la copie dans tes commentaires.
 Réponds uniquement en JSON :
 {"criteres":[{"etape":"these","note":3,"commentaire":"une phrase de justification"},{"etape":"arguments","note":2,"commentaire":"..."},{"etape":"exemple","note":3,"commentaire":"..."},{"etape":"citation","note":2,"commentaire":"..."},{"etape":"conclusion","note":3,"commentaire":"..."}],"appreciation":"...","conseil":"le conseil le plus utile pour progresser","piste_etape":"exemple","piste":"..."}`,
