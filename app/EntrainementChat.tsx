@@ -33,7 +33,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
     degrade: "from-rose-600 to-orange-500", bulle: "bg-rose-600",
     script: `EXERCICE : l'élève rédige un paragraphe argumenté qui répond au sujet, en suivant les étapes du professeur, dans cet ordre : [Thèse], [Arguments], [Exemple], [Citation] (toujours expliquée), [Conclusion].
 - Traite une seule étape à la fois. Pour chaque étape : rappelle en une phrase ce qu'on attend, puis pose UNE question qui l'aide à trouver.
-- Pour argumenter, l'élève peut définir les mots importants, comme le fait Spinoza dans la Lettre à Schuller (il définit « libre » et « contraint ») ou Aristote dans le texte sur le volontaire (Éthique à Nicomaque, livre III : volontaire et involontaire, par contrainte ou par ignorance) : rappelle-lui ce conseil à l'étape [Arguments].
+- Pour argumenter, l'élève peut définir les mots importants (du sujet ou du texte), comme le font les philosophes eux-mêmes avant de raisonner : rappelle-lui ce conseil à l'étape [Arguments], sans lui donner les définitions.
 - Exemple : une situation concrète de la vie réelle, trouvée par l'élève ; une référence à un auteur ou à une personne célèbre n'est pas un exemple.
 - Citation : entre guillemets, d'un auteur identifié, et c'est à l'élève de l'expliquer, pas au correcteur. N'invente et ne fournis aucune citation.
 - Quand sa proposition est correcte pour l'essentiel, dis-le clairement (« Étape validée ») et passe à l'étape suivante.
@@ -47,7 +47,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
 - Dans ton PREMIER message, pose en une phrase la question à laquelle répond le texte, formulée comme un sujet (par exemple « Être libre, est-ce faire ce que l'on veut ? »), puis demande à l'élève quelle est la thèse de l'auteur.
 - Traite une seule étape à la fois : rappelle en une phrase ce qu'on attend, puis pose UNE question qui l'aide à trouver dans le texte.
 - [Thèse] : ce que l'auteur affirme, dit avec les mots de l'élève, en réponse à la question.
-- [Arguments] : reconstituer le raisonnement du texte, pas répéter la thèse. Pour argumenter, l'élève peut définir les mots importants, comme le fait Spinoza dans la Lettre à Schuller (il définit « libre » et « contraint ») ou Aristote dans le texte sur le volontaire (Éthique à Nicomaque, livre III : volontaire et involontaire, par contrainte ou par ignorance) : rappelle-lui ce conseil à l'étape [Arguments].
+- [Arguments] : reconstituer le raisonnement du texte, pas répéter la thèse. Pour argumenter, l'élève peut définir les mots importants (du sujet ou du texte), comme le font les philosophes eux-mêmes avant de raisonner : rappelle-lui ce conseil à l'étape [Arguments], sans lui donner les définitions.
 - [Exemple] : une situation concrète de la vie réelle trouvée par l'élève. Reprendre l'exemple du texte ne montre pas qu'il a compris : un exemple personnel le montre.
 - [Citation] : un passage exact DU TEXTE, entre guillemets, que l'élève explique lui-même. Vérifie que la citation figure bien dans le texte.
 - [Conclusion] : répond clairement à la question.

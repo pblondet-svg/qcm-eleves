@@ -16,7 +16,7 @@ import type { TexteEntrainement } from "./EntrainementChat";
 type Etape = "these" | "arguments" | "exemple" | "citation" | "conclusion";
 const ETAPES: { key: Etape; label: string; aide: string; cls: string }[] = [
   { key: "these", label: "Thèse", aide: "Une seule idée, qui répond au sujet.", cls: "bg-blue-50 border-blue-300 text-blue-800" },
-  { key: "arguments", label: "Arguments", aide: "Pourquoi ta thèse est vraie : raisonnement. Astuce : définis les mots importants, comme Spinoza (« libre », « contraint ») dans la Lettre à Schuller ou Aristote (le volontaire) dans l'Éthique à Nicomaque.", cls: "bg-indigo-50 border-indigo-300 text-indigo-800" },
+  { key: "arguments", label: "Arguments", aide: "Pourquoi ta thèse est vraie : raisonnement. Astuce : pour argumenter, tu peux définir les mots importants.", cls: "bg-indigo-50 border-indigo-300 text-indigo-800" },
   { key: "exemple", label: "Exemple", aide: "Une situation concrète de la vie réelle.", cls: "bg-green-50 border-green-300 text-green-800" },
   { key: "citation", label: "Citation", aide: "Les mots d'un auteur, entre guillemets, puis ton explication.", cls: "bg-amber-50 border-amber-300 text-amber-800" },
   { key: "conclusion", label: "Conclusion", aide: "Le bilan : réponds clairement au sujet.", cls: "bg-rose-50 border-rose-300 text-rose-800" },
@@ -24,7 +24,7 @@ const ETAPES: { key: Etape; label: string; aide: string; cls: string }[] = [
 // Consignes propres au paragraphe « à partir d'un texte »
 const AIDE_TEXTE: Partial<Record<Etape, string>> = {
   these: "Ce que l'auteur affirme, dit avec tes mots.",
-  arguments: "Reconstitue le raisonnement du texte. Astuce : définis les mots importants, comme Spinoza (« libre », « contraint ») dans la Lettre à Schuller ou Aristote (le volontaire) dans l'Éthique à Nicomaque.",
+  arguments: "Reconstitue le raisonnement du texte. Astuce : pour argumenter, tu peux définir les mots importants.",
   exemple: "Une situation concrète de la vie réelle, trouvée par toi (pas l'exemple du texte).",
   citation: "Un passage exact du texte, entre guillemets, puis ton explication.",
   conclusion: "Le bilan : réponds clairement à la question que pose le texte.",
@@ -157,7 +157,7 @@ ${copie}
 === GRILLE DU PROFESSEUR ===
 Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition, 3 = Acquis, 4 = Très bonne maîtrise. Notes exigeantes et discriminantes : 4 seulement si l'étape est vraiment maîtrisée. Une étape vide ou absente vaut 1.
 - Thèse : une seule idée, claire, qui répond au sujet posé.
-- Arguments : de vraies raisons qui reconstituent un raisonnement, et non la répétition de la thèse ; les concepts importants sont définis (le professeur conseille de définir les mots comme le fait Spinoza dans la Lettre à Schuller ou Aristote dans le texte sur le volontaire ; valorise-le quand l'élève le fait).
+- Arguments : de vraies raisons qui reconstituent un raisonnement, et non la répétition de la thèse ; les concepts importants sont définis (le professeur conseille de définir les mots importants pour argumenter ; valorise-le quand l'élève le fait).
 - Exemple : une situation concrète de la vie réelle, de préférence trouvée par l'élève lui-même, qui illustre bien l'argument (et non une autre idée). Une référence à un auteur ou à une personne qui fait autorité n'est pas un exemple concret ; une référence culturelle montre une bonne culture générale, mais ne remplace pas l'exemple.
 - Citation : entre guillemets, d'un auteur identifié, reliée à l'idée, et toujours expliquée par l'élève : c'est à l'élève de faire le commentaire de la citation, pas au correcteur. Une citation posée sans explication ne dépasse pas 2. Si la citation te semble inexacte ou mal attribuée, signale-le avec prudence.
 - Conclusion : fait le bilan de l'argumentation et répond explicitement au sujet, sans simplement répéter la thèse.
@@ -285,7 +285,7 @@ Réponds uniquement en JSON :
           {showHint && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed space-y-1">
               <p><strong>Thèse :</strong> une seule idée, qui répond au sujet.</p>
-              <p><strong>Arguments :</strong> ne répète pas la thèse, explique pourquoi elle est vraie. Pour argumenter, tu peux définir les mots importants, comme le fait Spinoza dans la <em>Lettre à Schuller</em> (ce qu'est être « libre » ou « contraint ») ou Aristote dans le texte sur le volontaire.</p>
+              <p><strong>Arguments :</strong> ne répète pas la thèse, explique pourquoi elle est vraie. Pour argumenter, tu peux définir les mots importants, comme le font les philosophes eux-mêmes.</p>
               <p><strong>Exemple :</strong> une situation de la vie réelle, que tu trouves toi-même. Citer un auteur ou une célébrité n'est pas un exemple{sujet?.texte ? ", et reprendre l'exemple du texte ne montre pas que tu as compris" : ""}.</p>
               <p><strong>Citation :</strong> {sujet?.texte ? "un passage exact du texte, entre guillemets, " : ""}toujours expliquée. C'est à toi de faire le commentaire de la citation, pas au correcteur.</p>
               <p><strong>Conclusion :</strong> fais le bilan et réponds clairement au sujet.</p>
