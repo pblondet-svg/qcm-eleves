@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 
-type Resultat = { nom: string; ok: boolean; ms: number; erreur?: string };
+type Resultat = { nom: string; ok: boolean; ms: number; erreur?: string; modele?: string; modeles?: string[] };
 const NOMS: Record<string, string> = { google: "Google Gemini", "google-lite": "Gemini Flash-Lite", groq: "Groq", cerebras: "Cerebras", mistral: "Mistral" };
 const codeProf = () => { try { return sessionStorage.getItem("prof_code_session") || ""; } catch { return ""; } };
 
@@ -48,17 +48,20 @@ export default function TestIA() {
             {res.map((r) => (
               <div key={r.nom} className="px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold text-gray-800">{r.ok ? "✅" : "❌"} {NOMS[r.nom] || r.nom}</p>
+                  <p className="text-sm font-bold text-gray-800">{r.ok ? "✅" : "❌"} {NOMS[r.nom] || r.nom}{r.modele && <span className="text-[11px] font-normal text-gray-400"> · {r.modele}</span>}</p>
                   <p className="text-xs text-gray-400">{(r.ms / 1000).toFixed(1)} s</p>
                 </div>
                 {!r.ok && r.erreur && <p className="text-xs text-red-700 mt-0.5 break-words">{r.erreur}</p>}
+                {!r.ok && r.modeles && r.modeles.length > 0 && (
+                  <p className="text-[11px] text-gray-600 mt-1 break-words">Modèles accessibles avec cette clé : {r.modeles.join(", ")}</p>
+                )}
               </div>
             ))}
           </div>
           {ok < res.length && (
             <p className="text-[11px] text-gray-500">
               « clé API absente » : la clé n'est pas renseignée dans Vercel (Settings → Environment Variables). « 429 » ou « quota » : le quota gratuit du jour est épuisé, il revient demain.
-              « 401 » ou « 403 » : la clé n'est plus valable. « 404 » : le modèle n'existe plus chez ce fournisseur.
+              « 401 » ou « 403 » : la clé n'est plus valable. « 404 » : le modèle n'existe plus chez ce fournisseur. « 402 » : ce modèle est devenu payant pour ce compte. Pour changer de modèle sans toucher au code : variable GROQ_MODEL, CEREBRAS_MODEL, MISTRAL_MODEL, GEMINI_MODEL ou GEMINI_LITE_MODEL dans Vercel, puis Redeploy.
             </p>
           )}
         </>

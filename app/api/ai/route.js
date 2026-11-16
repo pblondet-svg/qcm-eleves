@@ -96,6 +96,12 @@ async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20
   }, delai);
   let response = await envoyer(true);
   captureLimits(nom, response.headers);
+  if (response.status === 429 && delai > 6000) {
+    // Limite « par seconde » des offres gratuites : on attend un peu et on réessaie une fois
+    await new Promise((r) => setTimeout(r, 1500));
+    response = await envoyer(true);
+    captureLimits(nom, response.headers);
+  }
   if (!response.ok && gptOss && response.status === 400) {
     // Si le fournisseur refuse le réglage du raisonnement, on réessaie sans
     const err = await erreurLisible(nom, response);
@@ -150,7 +156,21 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
 // Cascade de fallback
 const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
 const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
-async function callWithFallback(providers, messages, max_tokens, deep = false) {
+// Une IA qui vient d'échouer (lenteur, quota, paiement requis…) est essayée en dernier pendant 5 minutes :
+// les élèves n'attendent pas 20 secondes à chaque question qu'elle réponde enfin.
+const PANNE_MS = 5 * 60 * 1000;
+function enPanne(nom) {
+  const q = quotaCache[nom];
+  if (!q?.last_error_at) return false;
+  const t = new Date(q.last_error_at).getTime();
+  return Date.now() - t < PANNE_MS && (!q.last_ok_at || new Date(q.last_ok_at).getTime() < t);
+}
+
+async function callWithFallback(providersDemandes, messages, max_tokens, deep = false) {
+  const providers = [
+    ...providersDemandes.filter((p) => !enPanne(PROVIDER_NAMES.get(p))),
+    ...providersDemandes.filter((p) => enPanne(PROVIDER_NAMES.get(p))),
+  ];
   const fin = Date.now() + 55000; // Vercel coupe à 60 s
   for (let i = 0; i < providers.length; i++) {
     const provider = providers[i];
@@ -279,16 +299,32 @@ async function testerIA(request) {
   const { data } = await supabase.from("config").select("value").eq("key", "prof_code").maybeSingle();
   if (!code || code !== (data?.value || "prof1234")) return Response.json({ error: "réservé au professeur" }, { status: 401 });
   const question = [{ role: "user", content: "Réponds seulement par le mot : OK" }];
+  const MODELES_URL = {
+    groq: ["https://api.groq.com/openai/v1/models", process.env.GROQ_API_KEY, GROQ_MODEL],
+    cerebras: ["https://api.cerebras.ai/v1/models", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL],
+    mistral: ["https://api.mistral.ai/v1/models", process.env.MISTRAL_API_KEY, MISTRAL_MODEL],
+  };
+  const modelesDisponibles = async (nom) => {
+    const [url, cle] = MODELES_URL[nom] || [];
+    if (!url || !cle) return undefined;
+    try {
+      const r = await fetchAvecDelai(url, { headers: { Authorization: `Bearer ${cle}` } }, 8000);
+      if (!r.ok) return undefined;
+      const d = await r.json();
+      return (d.data || []).map((m) => m.id).filter(Boolean).slice(0, 25);
+    } catch { return undefined; }
+  };
   const resultats = await Promise.all([...PROVIDER_NAMES.entries()].map(async ([fn, nom]) => {
     const t0 = Date.now();
     try {
       await fn(question, 50, false, 15000);
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_ok_at: new Date().toISOString() };
-      return { nom, ok: true, ms: Date.now() - t0 };
+      return { nom, ok: true, ms: Date.now() - t0, modele: MODELES_URL[nom]?.[2] || (nom === "google" ? GOOGLE_MODEL : nom === "google-lite" ? GOOGLE_LITE_MODEL : undefined) };
     } catch (e) {
       const erreur = String(e?.message || e).slice(0, 200);
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: erreur, last_error_at: new Date().toISOString() };
-      return { nom, ok: false, ms: Date.now() - t0, erreur };
+      const refuse = / (402|403|404) /.test(erreur) || /model/i.test(erreur);
+      return { nom, ok: false, ms: Date.now() - t0, erreur, modele: MODELES_URL[nom]?.[2], modeles: refuse ? await modelesDisponibles(nom) : undefined };
     }
   }));
   await flushQuota();
