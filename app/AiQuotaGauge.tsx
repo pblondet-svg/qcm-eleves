@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type ProviderKey = "google" | "google-lite" | "groq" | "mistral";
+type ProviderKey = "google" | "google-lite" | "groq" | "openrouter" | "cloudflare" | "mistral";
 type Limits = Record<ProviderKey, number>;
 type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string; last_ok_at?: string };
 
@@ -16,12 +16,14 @@ const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
   { key: "google", nom: "Google Gemini", role: "Principal pour les réponses longues (assistant, corrections, plans)" },
   { key: "google-lite", nom: "Gemini Flash-Lite", role: "Relais de Gemini quand son quota est épuisé" },
   { key: "groq", nom: "Groq", role: "Principal pour les réponses courtes (flashcards, FAQ, petits retours)" },
+  { key: "openrouter", nom: "OpenRouter", role: "Secours : modèles gratuits (50 par jour, 1 000 avec 10 $ de crédit)" },
+  { key: "cloudflare", nom: "Cloudflare Workers AI", role: "Secours : 10 000 neurones gratuits par jour" },
   { key: "mistral", nom: "Mistral", role: "Dernier secours" },
 ];
 
 // Limites gratuites indicatives (requêtes par jour) — modifiables ci-dessous,
 // car les fournisseurs les changent régulièrement.
-const DEFAULT_LIMITS: Limits = { google: 20, "google-lite": 1000, groq: 1000, mistral: 5000 };
+const DEFAULT_LIMITS: Limits = { google: 20, "google-lite": 1000, groq: 1000, openrouter: 50, cloudflare: 300, mistral: 5000 };
 
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const isToday = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date().toDateString();

@@ -117,6 +117,31 @@ async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20
 const callGroq = (m, t, deep, delai) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t, delai);
 const callMistral = (m, t, deep, delai) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t, delai);
 
+// ── OpenRouter : modèles gratuits (suffixe « :free »). OPENROUTER_MODEL facultatif : sinon on choisit
+// automatiquement un bon modèle gratuit dans la liste publique (relue toutes les 6 heures).
+let openrouterModeleCache = { id: "", at: 0 };
+async function modeleOpenRouter() {
+  if (process.env.OPENROUTER_MODEL) return process.env.OPENROUTER_MODEL;
+  if (openrouterModeleCache.id && Date.now() - openrouterModeleCache.at < 6 * 3600 * 1000) return openrouterModeleCache.id;
+  const r = await fetchAvecDelai("https://openrouter.ai/api/v1/models", {}, 8000);
+  if (!r.ok) throw await erreurLisible("openrouter (liste des modèles)", r);
+  const ids = ((await r.json()).data || []).map((m) => m.id).filter((id) => /:free$/.test(id));
+  const preferes = [/llama-3\.3-70b/, /gpt-oss-120b/, /deepseek-(chat|v3)/, /qwen.*(72b|235b|32b)/, /gemma-3-27b/, /mistral-(small|medium)/, /llama/];
+  const id = preferes.map((re) => ids.find((x) => re.test(x))).find(Boolean) || ids[0];
+  if (!id) throw new Error("openrouter : aucun modèle gratuit disponible");
+  openrouterModeleCache = { id, at: Date.now() };
+  return id;
+}
+const callOpenRouter = async (m, t, deep, delai) =>
+  callCompat("openrouter", "https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY,
+    process.env.OPENROUTER_API_KEY ? await modeleOpenRouter() : "", m, t, delai);
+
+// ── Cloudflare Workers AI (API compatible OpenAI) : CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, CLOUDFLARE_MODEL facultatif
+const CLOUDFLARE_MODEL = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const callCloudflare = (m, t, deep, delai) =>
+  callCompat("cloudflare", `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    process.env.CLOUDFLARE_ACCOUNT_ID ? process.env.CLOUDFLARE_API_TOKEN : "", CLOUDFLARE_MODEL, m, t, delai);
+
 // Appel Google Gemini
 async function callGoogle(messages, max_tokens, deep = false, delai = 25000, model = GOOGLE_MODEL) {
   if (!process.env.GOOGLE_AI_API_KEY) throw new Error(`${model} : clé API absente (GOOGLE_AI_API_KEY dans Vercel)`);
@@ -153,7 +178,7 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
 
 // Cascade de fallback
 const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
-const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callMistral, "mistral"]]);
+const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callOpenRouter, "openrouter"], [callCloudflare, "cloudflare"], [callMistral, "mistral"]]);
 // Une IA qui vient d'échouer (lenteur, quota, paiement requis…) est essayée en dernier pendant 5 minutes :
 // les élèves n'attendent pas 20 secondes à chaque question qu'elle réponde enfin.
 const PANNE_MS = 5 * 60 * 1000;
@@ -300,6 +325,8 @@ async function testerIA(request) {
   const MODELES_URL = {
     groq: ["https://api.groq.com/openai/v1/models", process.env.GROQ_API_KEY, GROQ_MODEL],
     mistral: ["https://api.mistral.ai/v1/models", process.env.MISTRAL_API_KEY, MISTRAL_MODEL],
+    openrouter: ["https://openrouter.ai/api/v1/models", process.env.OPENROUTER_API_KEY, process.env.OPENROUTER_MODEL || openrouterModeleCache.id || "choix automatique d'un modèle gratuit"],
+    cloudflare: [`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/models/search?task=Text%20Generation`, process.env.CLOUDFLARE_API_TOKEN, CLOUDFLARE_MODEL],
   };
   const modelesDisponibles = async (nom) => {
     const [url, cle] = MODELES_URL[nom] || [];
@@ -308,7 +335,8 @@ async function testerIA(request) {
       const r = await fetchAvecDelai(url, { headers: { Authorization: `Bearer ${cle}` } }, 8000);
       if (!r.ok) return undefined;
       const d = await r.json();
-      return (d.data || []).map((m) => m.id).filter(Boolean).slice(0, 25);
+      const liste = (d.data || d.result || []).map((m) => m.id && !String(m.id).match(/^[0-9a-f-]{36}$/) ? m.id : m.name).filter(Boolean);
+      return (nom === "openrouter" ? liste.filter((x) => /:free$/.test(x)) : liste).slice(0, 25);
     } catch { return undefined; }
   };
   const resultats = await Promise.all([...PROVIDER_NAMES.entries()].map(async ([fn, nom]) => {
@@ -400,15 +428,15 @@ export async function POST(request) {
     let result = { text: "", provider: "inconnu" };
 
     if (prefer_groq) {
-      // Requêtes légères : Groq → Google Flash-Lite → Google Flash → Mistral
+      // Requêtes légères : Groq → Google Flash-Lite → OpenRouter → Cloudflare → Google Flash → Mistral
       result = await callWithFallback(
-        [callGroq, callGoogleLite, callGoogle, callMistral],
+        [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callGoogle, callMistral],
         messages, max_tokens
       );
     } else {
-      // Requêtes lourdes : Google Flash → Google Flash-Lite → Mistral → Groq
+      // Requêtes lourdes : Google Flash → Google Flash-Lite → OpenRouter → Cloudflare → Mistral → Groq
       result = await callWithFallback(
-        [callGoogle, callGoogleLite, callMistral, callGroq],
+        [callGoogle, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq],
         messages, max_tokens, !!deep
       );
     }
