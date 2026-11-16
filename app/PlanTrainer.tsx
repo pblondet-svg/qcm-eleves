@@ -189,7 +189,7 @@ Tutoie l'élève. Sois court et direct : une seule phrase par critère, une phra
 Dans "piste", ne donne PAS de partie III ni de concept tout fait : donne un indice (2 ou 3 phrases, formulé comme une consigne, pas comme une question) qui aide l'élève à trouver lui-même son concept nouveau, par exemple un mot du sujet que le I et le II ont pris pour acquis, ou une distinction à interroger.
 Réponds uniquement en JSON :
 {"verdict":"reussi|presque|a_retravailler","criteres":[{"nom":"...","ok":true,"commentaire":"..."}],"points_forts":"...","conseil":"le conseil le plus utile pour progresser","piste":"..."}`,
-        2500, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0, seance);
+        1200, (x) => Array.isArray(x?.criteres) && x.criteres.length > 0, seance);
       const verdict = ["reussi", "presque", "a_retravailler"].includes(c.verdict) ? c.verdict : "presque";
       sauverProduction({ id: seance, exercice: "plan", format: "cadres", sujet: sujet?.sujet || "",
         contenu: `I. ${plan.I.titre}\nII. ${plan.II.titre}\n\nOuverture de l'élève : ${ouverture.trim()}\nPartie III de l'élève : ${partie3.trim()}\n\n— Correction —\n${String(c.points_forts || "")}\n${String(c.conseil || "")}`,

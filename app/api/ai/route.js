@@ -476,19 +476,16 @@ export async function POST(request) {
 
     let result = { text: "", provider: "inconnu" };
 
-    if (prefer_groq) {
-      // Requêtes légères : Groq → Google Flash-Lite → OpenRouter → Cloudflare → Google Flash → Mistral
-      result = await callWithFallback(
-        [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callGoogleBis, callGoogle, callMistral],
-        messages, max_tokens
-      );
-    } else {
-      // Requêtes lourdes : Google Flash → 2e modèle Google → Google Flash-Lite → OpenRouter → Cloudflare → Mistral → Groq
-      result = await callWithFallback(
-        [callGoogle, callGoogleBis, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq],
-        messages, max_tokens, !!deep
-      );
-    }
+    // Priorités (choix du professeur, nov. 2026) : les deux meilleurs modèles Gemini, dont le quota gratuit est
+    // très limité (~20 réponses/jour chacun), sont réservés au chatbot de l'accueil et aux entraînements
+    // « introduction » et « paragraphe ». Le plan dialectique et les autres outils passent par les IA de secours.
+    const prioritaire = module === "methode_accueil" || (/^entrainement_/.test(module) && !/plan/.test(module));
+    const chaine = prioritaire
+      ? [callGoogle, callGoogleBis, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq]
+      : prefer_groq
+        ? [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callMistral]
+        : [callGoogleLite, callOpenRouter, callCloudflare, callGroq, callMistral];
+    result = await callWithFallback(chaine, messages, max_tokens, prioritaire && !!deep);
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
     // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu

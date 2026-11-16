@@ -65,6 +65,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
     script: `EXERCICE : partie III d'un plan dialectique.
 - Dans ton PREMIER message, donne la partie I (thèse, qui répond « oui ») et la partie II (antithèse, qui répond « non ») en UNE phrase courte chacune, sans arguments ni auteurs. Ne donne SURTOUT PAS de partie III ni de piste de synthèse. Puis demande à l'élève de proposer l'ouverture de sa conclusion (astuce du professeur : cette ouverture devient la question de la partie III).
 - Ensuite, guide-le vers sa partie III : la synthèse n'est ni un compromis, ni un mélange, ni un résumé du I et du II, ni une conclusion ; c'est une reformulation du problème grâce à un concept nouveau, défini.
+- Exercice court : vise une partie III validée en 4 ou 5 échanges au plus ; réponses de 2 ou 3 phrases.
 - Une question à la fois. Quand sa partie III respecte ces critères, dis-le clairement (« Partie III validée »), résume en une phrase pourquoi elle fonctionne, puis propose-lui un nouveau sujet.`,
   },
 };
@@ -140,7 +141,7 @@ ${s.texte ? `TEXTE À ÉTUDIER (${s.sujet}) :\n"""\n${s.texte.slice(0, 4500)}\n"
       const reply = await askAI([
         { role: "user", content: contexte(s) + (s.texte ? "\n\nCommence l'exercice : pose la question à laquelle répond le texte, puis ta première question." : "\n\nCommence l'exercice : présente le sujet en une phrase et pose ta première question.") },
         ...recents,
-      ], 700, false, id);
+      ], exercice === "plan" ? 450 : 700, false, id);
       const fin: Msg[] = [...histo, { role: "assistant", content: reply.trim() || "Je n'ai pas réussi à répondre. Reformule ta proposition ?" }];
       setMessages(fin);
       const n = noteDepuisTexte(reply) || note;

@@ -272,7 +272,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           {!isHLP && (
             <div className="flex gap-2 flex-shrink-0">
               {([["intro", "📝 L'introduction"], ["paragraphe", "✍️ Le paragraphe argumenté"], ["plan", "🔺 Le plan dialectique"]] as const).map(([k, l]) => (
-                <button key={k} onClick={() => setTrainer(k)}
+                <button key={k} onClick={() => { setTrainer(k); if (k === "plan") setEnCadres(true); }}
                   className={`px-3 py-1.5 rounded-xl border-2 text-xs font-bold transition-all ${trainer === k ? "bg-gray-800 border-gray-800 text-white" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
                   {l}
                 </button>
