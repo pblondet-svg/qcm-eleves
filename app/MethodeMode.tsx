@@ -10,13 +10,18 @@ import ParagrapheTrainer from "./ParagrapheTrainer";
 import IntroductionTrainer from "./IntroductionTrainer";
 import EntrainementChat from "./EntrainementChat";
 import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
-import { DEFAULT_METHODE_CONTENT, EleveQuestion, FaqItem, MethodeContent, MethodeView, callAI, dbLoadSujetsBac, getText, uid } from "./shared";
+import { DEFAULT_METHODE_CONTENT, EleveQuestion, FaqItem, MethodeContent, MethodeView, callAI, dbLoadSujetsBac, dbLoadTextes, entryChapter, entryName, getText, matchesMatiere, uid } from "./shared";
 import { FicheMarkdown } from "./ComposantsCommuns";
 
 // ── ÉLÈVE MODE ────────────────────────────────────────────────────────────────
 
 // ── MODE MÉTHODE ──────────────────────────────────────────────────────────────
 export function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, eleveNom, onEleveQuestion }: { initialView?: MethodeView; serie: "generale" | "techno" | null; matiere: string; methodeContent?: MethodeContent; faqMethode?: FaqItem[]; eleveNom?: string; onEleveQuestion?: (q: EleveQuestion) => void }) {
+  // Textes philosophiques de la bibliothèque du professeur, pour le paragraphe « à partir d'un texte »
+  // (hors cours rédigés, ni trop courts ni trop longs pour un exercice)
+  const chargerTextesEntrainement = async () => (await dbLoadTextes())
+    .filter((e: any) => matchesMatiere(e, matiere) && e.type !== "cours" && (e.content || "").trim().length >= 300 && (e.content || "").length <= 9000)
+    .map((e: any) => ({ id: String(e.id), titre: entryName(e), chapitre: entryChapter(e), contenu: String(e.content).trim() }));
   const [view, setView] = useState<"chat" | "fiche" | "faq" | "plan">(initialView === "intro" || initialView === "paragraphe" ? "plan" : initialView || "faq");
   const [trainer, setTrainer] = useState<"paragraphe" | "plan" | "intro">(initialView === "intro" && matiere !== "hlp" ? "intro" : "paragraphe");
   // Entraînements : chatbot par défaut, version « cadres » au choix de l'élève
@@ -266,6 +271,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               matiere={matiere}
               serie={serie}
               loadSujets={() => dbLoadSujetsBac(matiere)}
+              loadTextes={chargerTextesEntrainement}
               askAI={async (m: { role: string; content: string }[], maxTokens = 700, light = false, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_chat_" + (isHLP ? "paragraphe" : trainer), false, session))}
             />
           ) : !isHLP && trainer === "intro" ? (
@@ -281,6 +287,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
               matiere={matiere}
               serie={serie}
               loadSujets={() => dbLoadSujetsBac(matiere)}
+              loadTextes={chargerTextesEntrainement}
               askAI={async (m: { role: string; content: string }[], maxTokens = 1500, light = false, session?: string) => getText(await callAI(m, maxTokens, light, "entrainement_paragraphe", !light, session))}
             />
           ) : (
