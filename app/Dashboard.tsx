@@ -9,6 +9,7 @@ import UsageElevesIA from "./UsageElevesIA";
 import AppareilsProf from "./AppareilsProf";
 import ProductionsEleves from "./ProductionsEleves";
 import { PHILO_NOTIONS_PROGRAMME, dbLoadDissertations, dbLoadResultatsAll, dbLoadSessions, dbLoadUsageStats } from "./shared";
+import TestIA from "./TestIA";
 
 // ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
 export function Dashboard({ onBack, sharedLib, prof = false }: any) {
@@ -501,6 +502,7 @@ export function Dashboard({ onBack, sharedLib, prof = false }: any) {
                 {/* Appareils du professeur + élèves proches de la limite */}
                 {prof && <AppareilsProf onChange={() => setVersionAppareils((v) => v + 1)} />}
                 {prof && <UsageElevesIA version={versionAppareils} />}
+                {prof && <TestIA />}
                 {/* Jauge de consommation */}
                 <AiQuotaGauge />
                 {/* KPIs */}

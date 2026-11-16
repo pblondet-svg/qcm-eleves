@@ -85,7 +85,33 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6 relative">
+      {/* Accès professeur : discret, en haut à droite */}
+      <div className="absolute top-3 right-3 z-20 flex flex-col items-end">
+        <button onClick={() => { setShowCode(!showCode); setErr(""); }}
+          className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-purple-600 px-2 py-1 rounded-lg transition-colors">
+          <Lock className="w-3 h-3" /> Espace prof
+        </button>
+        {showCode && (
+          <div className="mt-1 bg-white border border-purple-200 shadow-lg rounded-xl p-2.5 w-56">
+            <input
+              type="password"
+              value={code}
+              onChange={(e) => { setCode(e.target.value); setErr(""); }}
+              onKeyDown={(e) => e.key === "Enter" && verifyProfCode()}
+              className="w-full px-2.5 py-1.5 border-2 border-purple-200 rounded-lg text-sm focus:border-purple-500 focus:outline-none text-gray-800"
+              placeholder="Code professeur"
+              autoFocus
+            />
+            {err && <p className="text-red-500 text-[11px] mt-1">{err}</p>}
+            <button onClick={verifyProfCode} disabled={checking}
+              className="mt-1.5 w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5">
+              {checking ? <><Sparkles className="w-3 h-3 animate-spin" /> Vérification…</> : "Entrer"}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="text-center mb-8">
         <h1 className="text-4xl font-black text-gray-800 mb-2">Tuteur de philosophie</h1>
         <p className="text-gray-700 text-lg">Révise la méthode avec ton assistant</p>
@@ -192,40 +218,6 @@ export default function HomeScreenV2({ onSelect, eleveNom, setEleveNom, saveElev
         </button>
       </div>
 
-      {/* Professeur */}
-      <div className="w-full max-w-2xl">
-        <div className="bg-white rounded-3xl border-2 border-purple-200 shadow-lg p-6 hover:border-purple-400 transition-all text-center">
-          <div className="text-4xl mb-2">👩‍🏫</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1">Professeur</h2>
-          <p className="text-gray-500 text-sm mb-4">Gérer la bibliothèque de textes</p>
-          {!showCode ? (
-            <button
-              onClick={() => setShowCode(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all mx-auto">
-              <Lock className="w-4 h-4" /> Accéder
-            </button>
-          ) : (
-            <div className="max-w-xs mx-auto">
-              <input
-                type="password"
-                value={code}
-                onChange={(e) => { setCode(e.target.value); setErr(""); }}
-                onKeyDown={(e) => e.key === "Enter" && verifyProfCode()}
-                className="w-full p-2.5 border-2 border-purple-300 rounded-xl text-sm text-center mb-2 focus:border-purple-500 focus:outline-none text-gray-800"
-                placeholder="Code professeur"
-                autoFocus
-              />
-              {err && <p className="text-red-500 text-xs mb-2">{err}</p>}
-              <button
-                onClick={verifyProfCode}
-                disabled={checking}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
-                {checking ? <><Sparkles className="w-4 h-4 animate-spin" /> Vérification…</> : "Entrer"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

@@ -53,10 +53,35 @@ async function flushQuota() {
   } catch { /* silencieux */ }
 }
 
+// Les IA de secours refusent certaines conversations que Gemini accepte (deux messages de suite du même rôle,
+// conversation qui commence ou finit par une réponse de l'IA) : on remet la conversation en forme.
+function normaliserMessages(messages) {
+  const out = [];
+  for (const m of messages) {
+    const role = m.role === "system" ? "system" : m.role === "assistant" ? "assistant" : "user";
+    const content = String(m.content ?? "");
+    if (!content.trim()) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev.role === role && role !== "system") prev.content += "\n\n" + content;
+    else out.push({ role, content });
+  }
+  const debut = out.findIndex((m) => m.role !== "system");
+  if (debut !== -1 && out[debut].role === "assistant") out.splice(debut, 0, { role: "user", content: "Bonjour." });
+  while (out.length && out[out.length - 1].role === "assistant") out.pop();
+  return out;
+}
+
+// Délai maximum d'une IA avant de passer à la suivante (sinon une IA trop lente bloque toute la cascade
+// jusqu'à la coupure de Vercel, et les IA de secours ne sont jamais appelées)
+const fetchAvecDelai = (url, options, ms) => fetch(url, { ...options, signal: AbortSignal.timeout(Math.max(3000, ms)) })
+  .catch((e) => { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? `pas de réponse en ${Math.round(ms / 1000)} s` : String(e?.message || e)); });
+
 // Appel d'une API « compatible OpenAI » (Groq, Cerebras, Mistral)
 // Les modèles gpt-oss raisonnent avant de répondre : on demande un raisonnement court
 // et on ajoute de la marge, sinon la réponse peut être coupée.
-async function callCompat(nom, url, cle, model, messages, max_tokens) {
+async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20000) {
+  if (!cle) throw new Error(`${nom} : clé API absente (variable d'environnement dans Vercel)`);
+  messages = normaliserMessages(messages);
   const gptOss = /gpt-oss/.test(model);
   const corps = (avecRaisonnement) => JSON.stringify({
     model, messages,
@@ -64,11 +89,11 @@ async function callCompat(nom, url, cle, model, messages, max_tokens) {
     temperature: 0.7,
     ...(gptOss && avecRaisonnement ? { reasoning_effort: "low" } : {}),
   });
-  const envoyer = (avec) => fetch(url, {
+  const envoyer = (avec) => fetchAvecDelai(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cle}` },
     body: corps(avec),
-  });
+  }, delai);
   let response = await envoyer(true);
   captureLimits(nom, response.headers);
   if (!response.ok && gptOss && response.status === 400) {
@@ -84,12 +109,13 @@ async function callCompat(nom, url, cle, model, messages, max_tokens) {
   if (!text.trim()) throw new Error(`${nom} : réponse vide`);
   return text;
 }
-const callGroq = (m, t) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t);
-const callCerebras = (m, t) => callCompat("cerebras", "https://api.cerebras.ai/v1/chat/completions", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL, m, t);
-const callMistral = (m, t) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t);
+const callGroq = (m, t, deep, delai) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t, delai);
+const callCerebras = (m, t, deep, delai) => callCompat("cerebras", "https://api.cerebras.ai/v1/chat/completions", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL, m, t, delai);
+const callMistral = (m, t, deep, delai) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t, delai);
 
 // Appel Google Gemini
-async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MODEL) {
+async function callGoogle(messages, max_tokens, deep = false, delai = 25000, model = GOOGLE_MODEL) {
+  if (!process.env.GOOGLE_AI_API_KEY) throw new Error(`${model} : clé API absente (GOOGLE_AI_API_KEY dans Vercel)`);
   const systemMessage = messages.find((m) => m.role === "system");
   const userMessages = messages.filter((m) => m.role !== "system");
   // Gemini 3 refuse une conversation qui se termine par une réponse du modèle
@@ -109,9 +135,10 @@ async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MOD
       ? { maxOutputTokens: max_tokens + (deep ? 4000 : 1000), thinkingConfig: { thinkingLevel: deep ? "medium" : "minimal" } }
       : { maxOutputTokens: deep ? max_tokens + 3000 : max_tokens, temperature: deep ? 0.5 : 0.7, thinkingConfig: { thinkingBudget: deep ? 3000 : 0 } },
   };
-  const response = await fetch(
+  const response = await fetchAvecDelai(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) }
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) },
+    delai
   );
   if (!response.ok) throw await erreurLisible(model, response);
   const data = await response.json();
@@ -121,12 +148,19 @@ async function callGoogle(messages, max_tokens, deep = false, model = GOOGLE_MOD
 }
 
 // Cascade de fallback
-const callGoogleLite = (messages, max_tokens, deep = false) => callGoogle(messages, max_tokens, deep, GOOGLE_LITE_MODEL);
+const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
 const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
 async function callWithFallback(providers, messages, max_tokens, deep = false) {
-  for (const provider of providers) {
+  const fin = Date.now() + 55000; // Vercel coupe à 60 s
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    const reste = fin - Date.now();
+    if (reste < 4000) break;
+    // Délai de cette IA : 20 s (35 s en réponse « réfléchie »), sans priver les suivantes de tout le temps restant
+    const restantes = providers.length - i - 1;
+    const delai = Math.min(deep ? 35000 : 20000, restantes ? reste - Math.min(restantes, 2) * 6000 : reste);
     try {
-      const text = await provider(messages, max_tokens, deep);
+      const text = await provider(messages, max_tokens, deep, delai);
       const name = PROVIDER_NAMES.get(provider) || "inconnu";
       // Dernier succès : la jauge n'affiche plus une erreur antérieure à ce succès
       quotaCache[name] = { ...(quotaCache[name] || {}), last_ok_at: new Date().toISOString() };
@@ -239,8 +273,31 @@ function calculRestant(lim, parEleve, parConnexion) {
   return Math.max(0, Math.min(...r));
 }
 
+// Test de chaque IA (Mode Prof → Usage IA → « Tester les IA ») : petite question envoyée à toutes en même temps
+async function testerIA(request) {
+  const code = request.headers.get("x-prof-code") || "";
+  const { data } = await supabase.from("config").select("value").eq("key", "prof_code").maybeSingle();
+  if (!code || code !== (data?.value || "prof1234")) return Response.json({ error: "réservé au professeur" }, { status: 401 });
+  const question = [{ role: "user", content: "Réponds seulement par le mot : OK" }];
+  const resultats = await Promise.all([...PROVIDER_NAMES.entries()].map(async ([fn, nom]) => {
+    const t0 = Date.now();
+    try {
+      await fn(question, 50, false, 15000);
+      quotaCache[nom] = { ...(quotaCache[nom] || {}), last_ok_at: new Date().toISOString() };
+      return { nom, ok: true, ms: Date.now() - t0 };
+    } catch (e) {
+      const erreur = String(e?.message || e).slice(0, 200);
+      quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: erreur, last_error_at: new Date().toISOString() };
+      return { nom, ok: false, ms: Date.now() - t0, erreur };
+    }
+  }));
+  await flushQuota();
+  return Response.json({ resultats });
+}
+
 // GET /api/ai?visitor_id=… : compteur affiché à l'élève
 export async function GET(request) {
+  if (new URL(request.url).searchParams.get("test") === "ia") return testerIA(request);
   try {
     const visitor_id = new URL(request.url).searchParams.get("visitor_id") || "unknown";
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
