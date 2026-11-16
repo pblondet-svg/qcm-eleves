@@ -23,7 +23,7 @@ const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const GOOGLE_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GOOGLE_LITE_MODEL = process.env.GEMINI_LITE_MODEL || "gemini-3.5-flash-lite";
 // Chaque modèle Gemini a son propre quota gratuit : un 3e modèle Google sert de relais supplémentaire
-const GOOGLE_BIS_MODEL = process.env.GEMINI_BIS_MODEL || "gemini-3.8-flash";
+const GOOGLE_BIS_MODEL = process.env.GEMINI_BIS_MODEL || "gemini-3.5-flash"; // gemini-3.8-flash : trop lent (> 15 s)
 // mistral-small-latest n'est plus ouvert à l'offre gratuite (nov. 2026) ; mistral-medium-latest : 1 requête/s, 20 000 tokens/min
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-medium-latest";
 
@@ -81,7 +81,10 @@ const fetchAvecDelai = (url, options, ms) => fetch(url, { ...options, signal: Ab
 // Appel d'une API « compatible OpenAI » (Groq, Mistral)
 // Les modèles gpt-oss raisonnent avant de répondre : on demande un raisonnement court
 // et on ajoute de la marge, sinon la réponse peut être coupée.
-async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20000) {
+// Clé lue dans Vercel, sans espaces, guillemets ni « Bearer » collés par erreur
+const cleNettoyee = (v) => String(v || "").trim().replace(/^["']|["']$/g, "").replace(/^Bearer\s+/i, "").trim();
+async function callCompat(nom, url, cleBrute, model, messages, max_tokens, delai = 20000) {
+  const cle = cleNettoyee(cleBrute);
   if (!cle) throw new Error(`${nom} : clé API absente (variable d'environnement dans Vercel)`);
   messages = normaliserMessages(messages);
   const gptOss = /gpt-oss/.test(model);
