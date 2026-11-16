@@ -145,6 +145,7 @@ const callCloudflare = (m, t, deep, delai) =>
     process.env.CLOUDFLARE_ACCOUNT_ID ? process.env.CLOUDFLARE_API_TOKEN : "", CLOUDFLARE_MODEL, m, t, delai);
 
 // Appel Google Gemini
+const niveauMinimalRefuse = new Set(); // modèles Gemini qui refusent thinkingLevel « minimal »
 async function callGoogle(messages, max_tokens, deep = false, delai = 25000, model = GOOGLE_MODEL) {
   if (!process.env.GOOGLE_AI_API_KEY) throw new Error(`${model} : clé API absente (GOOGLE_AI_API_KEY dans Vercel)`);
   const systemMessage = messages.find((m) => m.role === "system");
@@ -163,14 +164,23 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
     // Gemini 2.5 : thinkingBudget 0 (sinon la réflexion consomme les max_tokens).
     // deep = true : on laisse un temps de réflexion, ajouté en plus de la longueur de réponse.
     generationConfig: /^gemini-[3-9]/.test(model)
-      ? { maxOutputTokens: max_tokens + (deep ? 4000 : 1000), thinkingConfig: { thinkingLevel: deep ? "medium" : "minimal" } }
+      ? { maxOutputTokens: max_tokens + (deep ? 4000 : 1000), thinkingConfig: { thinkingLevel: deep ? "medium" : (niveauMinimalRefuse.has(model) ? "low" : "minimal") } }
       : { maxOutputTokens: deep ? max_tokens + 3000 : max_tokens, temperature: deep ? 0.5 : 0.7, thinkingConfig: { thinkingBudget: deep ? 3000 : 0 } },
   };
-  const response = await fetchAvecDelai(
+  const envoyer = () => fetchAvecDelai(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) },
     delai
   );
+  let response = await envoyer();
+  if (!response.ok && response.status === 400 && geminiBody.generationConfig.thinkingConfig?.thinkingLevel === "minimal") {
+    // Certains modèles refusent le niveau de réflexion « minimal » : on réessaie avec « low » (et on le retient)
+    const err = await erreurLisible(model, response);
+    if (!/thinking/i.test(err.message)) throw err;
+    niveauMinimalRefuse.add(model);
+    geminiBody.generationConfig.thinkingConfig.thinkingLevel = "low";
+    response = await envoyer();
+  }
   if (!response.ok) throw await erreurLisible(model, response);
   const data = await response.json();
   const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
