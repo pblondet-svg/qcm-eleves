@@ -83,16 +83,17 @@ const fetchAvecDelai = (url, options, ms) => fetch(url, { ...options, signal: Ab
 // et on ajoute de la marge, sinon la réponse peut être coupée.
 // Clé lue dans Vercel, sans espaces, guillemets ni « Bearer » collés par erreur
 const cleNettoyee = (v) => String(v || "").trim().replace(/^["']|["']$/g, "").replace(/^Bearer\s+/i, "").trim();
-async function callCompat(nom, url, cleBrute, model, messages, max_tokens, delai = 20000) {
+async function callCompat(nom, url, cleBrute, model, messages, max_tokens, delai = 20000, extra = {}) {
   const cle = cleNettoyee(cleBrute);
   if (!cle) throw new Error(`${nom} : clé API absente (variable d'environnement dans Vercel)`);
   messages = normaliserMessages(messages);
   const gptOss = /gpt-oss/.test(model);
   const corps = (avecRaisonnement) => JSON.stringify({
     model, messages,
-    max_tokens: gptOss ? max_tokens + 1500 : max_tokens,
+    max_tokens: gptOss || extra.marge ? max_tokens + (extra.marge || 1500) : max_tokens,
     temperature: 0.7,
-    ...(gptOss && avecRaisonnement ? { reasoning_effort: "low" } : {}),
+    ...(gptOss && avecRaisonnement && !extra.reasoning ? { reasoning_effort: "low" } : {}),
+    ...(extra.reasoning ? { reasoning: extra.reasoning } : {}),
   });
   const envoyer = (avec) => fetchAvecDelai(url, {
     method: "POST",
@@ -117,7 +118,11 @@ async function callCompat(nom, url, cleBrute, model, messages, max_tokens, delai
   if (!response.ok) throw await erreurLisible(nom, response);
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content || "";
-  if (!text.trim()) throw new Error(`${nom} : réponse vide`);
+  if (!text.trim()) {
+    const e = new Error(`${nom} : réponse vide (modèle ${data.model || model}${data.choices?.[0]?.finish_reason ? ", arrêt : " + data.choices[0].finish_reason : ""})`);
+    e.reponseVide = true;
+    throw e;
+  }
   return text;
 }
 const callGroq = (m, t, deep, delai) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t, delai);
@@ -126,21 +131,34 @@ const callMistral = (m, t, deep, delai) => callCompat("mistral", "https://api.mi
 // ── OpenRouter : modèles gratuits (suffixe « :free »). OPENROUTER_MODEL facultatif : sinon on choisit
 // automatiquement un bon modèle gratuit dans la liste publique (relue toutes les 6 heures).
 let openrouterModeleCache = { id: "", at: 0 };
+const openrouterEcartes = new Set(); // modèles gratuits qui ont répondu vide : on passe au suivant
 async function modeleOpenRouter() {
   if (process.env.OPENROUTER_MODEL) return process.env.OPENROUTER_MODEL;
   if (openrouterModeleCache.id && Date.now() - openrouterModeleCache.at < 6 * 3600 * 1000) return openrouterModeleCache.id;
   const r = await fetchAvecDelai("https://openrouter.ai/api/v1/models", {}, 8000);
   if (!r.ok) throw await erreurLisible("openrouter (liste des modèles)", r);
-  const ids = ((await r.json()).data || []).map((m) => m.id).filter((id) => /:free$/.test(id));
-  const preferes = [/llama-3\.3-70b/, /gpt-oss-120b/, /deepseek-(chat|v3)/, /qwen.*(72b|235b|32b)/, /gemma-3-27b/, /mistral-(small|medium)/, /llama/];
+  const ids = ((await r.json()).data || []).map((m) => m.id).filter((id) => /:free$/.test(id) && !openrouterEcartes.has(id));
+  // D'abord les modèles qui répondent directement (sans longue réflexion préalable)
+  const preferes = [/llama-3\.3-70b/, /deepseek-(chat|v3)/, /gemma-3-27b/, /mistral-(small|medium)/, /llama-4/, /qwen.*(72b|235b|32b)/, /gpt-oss-120b/, /llama/];
   const id = preferes.map((re) => ids.find((x) => re.test(x))).find(Boolean) || ids[0];
   if (!id) throw new Error("openrouter : aucun modèle gratuit disponible");
   openrouterModeleCache = { id, at: Date.now() };
   return id;
 }
-const callOpenRouter = async (m, t, deep, delai) =>
-  callCompat("openrouter", "https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY,
-    process.env.OPENROUTER_API_KEY ? await modeleOpenRouter() : "", m, t, delai);
+const callOpenRouter = async (m, t, deep, delai) => {
+  const modele = process.env.OPENROUTER_API_KEY ? await modeleOpenRouter() : "";
+  try {
+    return await callCompat("openrouter", "https://openrouter.ai/api/v1/chat/completions", process.env.OPENROUTER_API_KEY,
+      modele, m, t, delai, { marge: 2000, reasoning: { effort: "low", exclude: true } });
+  } catch (e) {
+    // Réponse vide ou modèle retiré : la prochaine fois, on prendra un autre modèle gratuit
+    if (!process.env.OPENROUTER_MODEL && (e.reponseVide || / 404 /.test(e.message))) {
+      openrouterEcartes.add(modele);
+      openrouterModeleCache = { id: "", at: 0 };
+    }
+    throw e;
+  }
+};
 
 // ── Cloudflare Workers AI (API compatible OpenAI) : CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, CLOUDFLARE_MODEL facultatif
 const CLOUDFLARE_MODEL = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
@@ -369,9 +387,13 @@ async function testerIA(request) {
   const resultats = await Promise.all([...PROVIDER_NAMES.entries()].map(async ([fn, nom]) => {
     const t0 = Date.now();
     try {
-      await fn(question, 50, false, 15000);
+      try { await fn(question, 50, false, 15000); }
+      catch (e) {
+        // OpenRouter : si le modèle gratuit répond vide, on essaie aussitôt le suivant
+        if (nom === "openrouter" && e.reponseVide) await fn(question, 50, false, 15000); else throw e;
+      }
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_ok_at: new Date().toISOString() };
-      return { nom, ok: true, ms: Date.now() - t0, modele: MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom] };
+      return { nom, ok: true, ms: Date.now() - t0, modele: nom === "openrouter" ? (process.env.OPENROUTER_MODEL || openrouterModeleCache.id) : MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom] };
     } catch (e) {
       const erreur = String(e?.message || e).slice(0, 200);
       quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: erreur, last_error_at: new Date().toISOString() };
