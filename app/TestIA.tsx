@@ -6,7 +6,7 @@
 import { useState } from "react";
 
 type Resultat = { nom: string; ok: boolean; ms: number; erreur?: string; modele?: string; modeles?: string[] };
-const NOMS: Record<string, string> = { google: "Google Gemini", "google-lite": "Gemini Flash-Lite", groq: "Groq", cerebras: "Cerebras", mistral: "Mistral" };
+const NOMS: Record<string, string> = { google: "Google Gemini", "google-lite": "Gemini Flash-Lite", groq: "Groq", mistral: "Mistral" };
 const codeProf = () => { try { return sessionStorage.getItem("prof_code_session") || ""; } catch { return ""; } };
 
 export default function TestIA() {
@@ -61,7 +61,7 @@ export default function TestIA() {
           {ok < res.length && (
             <p className="text-[11px] text-gray-500">
               « clé API absente » : la clé n'est pas renseignée dans Vercel (Settings → Environment Variables). « 429 » ou « quota » : le quota gratuit du jour est épuisé, il revient demain.
-              « 401 » ou « 403 » : la clé n'est plus valable. « 404 » : le modèle n'existe plus chez ce fournisseur. « 402 » : ce modèle est devenu payant pour ce compte. Pour changer de modèle sans toucher au code : variable GROQ_MODEL, CEREBRAS_MODEL, MISTRAL_MODEL, GEMINI_MODEL ou GEMINI_LITE_MODEL dans Vercel, puis Redeploy.
+              « 401 » ou « 403 » : la clé n'est plus valable. « 404 » : le modèle n'existe plus chez ce fournisseur. « 402 » : ce modèle est devenu payant pour ce compte. Pour changer de modèle sans toucher au code : variable GROQ_MODEL, MISTRAL_MODEL, GEMINI_MODEL ou GEMINI_LITE_MODEL dans Vercel, puis Redeploy.
             </p>
           )}
         </>

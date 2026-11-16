@@ -16,14 +16,13 @@ export const maxDuration = 60;
 // Modèles utilisés (novembre 2026). Chacun peut être changé sans toucher au code,
 // en ajoutant la variable correspondante dans Vercel (Settings → Environment Variables).
 // - Groq a retiré llama-3.1-8b-instant de son offre gratuite → gpt-oss-20b
-// - Cerebras ne propose plus llama-3.3-70b → gpt-oss-120b (65k de contexte en gratuit)
+// - Cerebras retiré (nov. 2026) : son offre gratuite est devenue un crédit limité avec carte bancaire
 // - Google : gemini-2.5-flash n'a plus de quota gratuit pour les nouveaux comptes,
 //   gemini-2.5-flash-lite n'est plus ouvert aux nouveaux utilisateurs → génération 3.x
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const GOOGLE_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GOOGLE_LITE_MODEL = process.env.GEMINI_LITE_MODEL || "gemini-3.5-flash-lite";
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-small-latest";
-const CEREBRAS_MODEL = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
 
 // Message d'erreur lisible (statut HTTP + message du fournisseur), affiché dans la jauge
 async function erreurLisible(nom, response) {
@@ -33,7 +32,7 @@ async function erreurLisible(nom, response) {
 }
 
 // ── Quotas : on garde les en-têtes « x-ratelimit-* » renvoyés par les fournisseurs ──
-// (Groq, Cerebras et Mistral indiquent ce qu'il reste ; Google ne le fait pas).
+// (Groq et Mistral indiquent ce qu'il reste ; Google ne le fait pas).
 // Instantané enregistré dans config.ai_quota, au plus une fois par minute et par instance.
 let quotaCache = {};
 let lastQuotaWrite = 0;
@@ -76,7 +75,7 @@ function normaliserMessages(messages) {
 const fetchAvecDelai = (url, options, ms) => fetch(url, { ...options, signal: AbortSignal.timeout(Math.max(3000, ms)) })
   .catch((e) => { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? `pas de réponse en ${Math.round(ms / 1000)} s` : String(e?.message || e)); });
 
-// Appel d'une API « compatible OpenAI » (Groq, Cerebras, Mistral)
+// Appel d'une API « compatible OpenAI » (Groq, Mistral)
 // Les modèles gpt-oss raisonnent avant de répondre : on demande un raisonnement court
 // et on ajoute de la marge, sinon la réponse peut être coupée.
 async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20000) {
@@ -116,7 +115,6 @@ async function callCompat(nom, url, cle, model, messages, max_tokens, delai = 20
   return text;
 }
 const callGroq = (m, t, deep, delai) => callCompat("groq", "https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, GROQ_MODEL, m, t, delai);
-const callCerebras = (m, t, deep, delai) => callCompat("cerebras", "https://api.cerebras.ai/v1/chat/completions", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL, m, t, delai);
 const callMistral = (m, t, deep, delai) => callCompat("mistral", "https://api.mistral.ai/v1/chat/completions", process.env.MISTRAL_API_KEY, MISTRAL_MODEL, m, t, delai);
 
 // Appel Google Gemini
@@ -155,7 +153,7 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
 
 // Cascade de fallback
 const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
-const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callCerebras, "cerebras"], [callMistral, "mistral"]]);
+const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callMistral, "mistral"]]);
 // Une IA qui vient d'échouer (lenteur, quota, paiement requis…) est essayée en dernier pendant 5 minutes :
 // les élèves n'attendent pas 20 secondes à chaque question qu'elle réponde enfin.
 const PANNE_MS = 5 * 60 * 1000;
@@ -301,7 +299,6 @@ async function testerIA(request) {
   const question = [{ role: "user", content: "Réponds seulement par le mot : OK" }];
   const MODELES_URL = {
     groq: ["https://api.groq.com/openai/v1/models", process.env.GROQ_API_KEY, GROQ_MODEL],
-    cerebras: ["https://api.cerebras.ai/v1/models", process.env.CEREBRAS_API_KEY, CEREBRAS_MODEL],
     mistral: ["https://api.mistral.ai/v1/models", process.env.MISTRAL_API_KEY, MISTRAL_MODEL],
   };
   const modelesDisponibles = async (nom) => {
@@ -403,15 +400,15 @@ export async function POST(request) {
     let result = { text: "", provider: "inconnu" };
 
     if (prefer_groq) {
-      // Requêtes légères : Groq → Cerebras → Google Flash-Lite → Google Flash → Mistral
+      // Requêtes légères : Groq → Google Flash-Lite → Google Flash → Mistral
       result = await callWithFallback(
-        [callGroq, callCerebras, callGoogleLite, callGoogle, callMistral],
+        [callGroq, callGoogleLite, callGoogle, callMistral],
         messages, max_tokens
       );
     } else {
-      // Requêtes lourdes : Google Flash → Google Flash-Lite → Cerebras (gpt-oss-120b, long contexte) → Mistral → Groq
+      // Requêtes lourdes : Google Flash → Google Flash-Lite → Mistral → Groq
       result = await callWithFallback(
-        [callGoogle, callGoogleLite, callCerebras, callMistral, callGroq],
+        [callGoogle, callGoogleLite, callMistral, callGroq],
         messages, max_tokens, !!deep
       );
     }

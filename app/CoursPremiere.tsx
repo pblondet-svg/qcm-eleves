@@ -177,7 +177,7 @@ async function askJSON(askAI: AskAI, prompt: string, maxTokens: number, valid: (
 const coursTexte = (s: Seance, max = 45000) =>
   s.docs.map((d) => `### ${d.titre}\n${d.contenu}`).join("\n\n").slice(0, max);
 // Extrait du cours qui tient dans la taille acceptée par TOUS les modèles de secours
-// (Groq et Cerebras refusent les requêtes trop longues : si Gemini est épuisé, tout échouait).
+// (Groq refuse les requêtes trop longues : si Gemini est épuisé, tout échouait).
 // - avec une question : les passages les plus proches de la question ;
 // - sans question (quiz, citations) : des passages pris dans chaque document, à tour de rôle.
 const BUDGET = 11000;

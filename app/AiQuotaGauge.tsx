@@ -2,13 +2,13 @@
 // app/AiQuotaGauge.tsx
 // Jauge de consommation IA (Mode Prof → Stats → Usage IA).
 // - « Utilisé aujourd'hui » : appels comptés dans usage_stats (action « leger:groq », « lourd:google »…)
-// - « Reste » : exact quand le fournisseur l'indique (Groq, Cerebras, Mistral via config.ai_quota),
+// - « Reste » : exact quand le fournisseur l'indique (Groq, Mistral via config.ai_quota),
 //   sinon estimé à partir de la limite quotidienne saisie par le professeur (Google ne donne rien).
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type ProviderKey = "google" | "google-lite" | "groq" | "cerebras" | "mistral";
+type ProviderKey = "google" | "google-lite" | "groq" | "mistral";
 type Limits = Record<ProviderKey, number>;
 type QuotaSnap = { headers?: Record<string, string>; at?: string; last_error?: string; last_error_at?: string; last_ok_at?: string };
 
@@ -16,13 +16,12 @@ const PROVIDERS: { key: ProviderKey; nom: string; role: string }[] = [
   { key: "google", nom: "Google Gemini", role: "Principal pour les réponses longues (assistant, corrections, plans)" },
   { key: "google-lite", nom: "Gemini Flash-Lite", role: "Relais de Gemini quand son quota est épuisé" },
   { key: "groq", nom: "Groq", role: "Principal pour les réponses courtes (flashcards, FAQ, petits retours)" },
-  { key: "cerebras", nom: "Cerebras", role: "Secours n° 2" },
   { key: "mistral", nom: "Mistral", role: "Dernier secours" },
 ];
 
 // Limites gratuites indicatives (requêtes par jour) — modifiables ci-dessous,
 // car les fournisseurs les changent régulièrement.
-const DEFAULT_LIMITS: Limits = { google: 250, "google-lite": 1000, groq: 1000, cerebras: 14400, mistral: 5000 };
+const DEFAULT_LIMITS: Limits = { google: 20, "google-lite": 1000, groq: 1000, mistral: 5000 };
 
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 const isToday = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date().toDateString();
@@ -32,7 +31,6 @@ const num = (v?: string) => { const n = parseInt(String(v ?? "").replace(/[^\d]/
 // Lit, dans les en-têtes enregistrés, le quota de requêtes du jour (limite et reste)
 function exactDaily(key: ProviderKey, snap?: QuotaSnap): { limit: number | null; remaining: number | null } {
   const h = snap?.headers || {};
-  if (key === "cerebras") return { limit: num(h["x-ratelimit-limit-requests-day"]), remaining: num(h["x-ratelimit-remaining-requests-day"]) };
   if (key === "groq") return { limit: num(h["x-ratelimit-limit-requests"]), remaining: num(h["x-ratelimit-remaining-requests"]) };
   return { limit: null, remaining: null };
 }
@@ -75,7 +73,7 @@ export default function AiQuotaGauge() {
     (cfg.data || []).forEach((row: any) => {
       try {
         if (row.key === "ai_quota") setQuota(JSON.parse(row.value) || {});
-        if (row.key === "ai_limits") { const l = { ...DEFAULT_LIMITS, ...JSON.parse(row.value) }; setLimits(l); setDraft(l); }
+        if (row.key === "ai_limits") { const saved = JSON.parse(row.value); delete saved.cerebras; if (saved.google === 250) delete saved.google; const l = { ...DEFAULT_LIMITS, ...saved }; setLimits(l); setDraft(l); }
       } catch { /* ignore */ }
     });
     setLoading(false);
