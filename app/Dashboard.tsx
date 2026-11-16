@@ -10,6 +10,7 @@ import AppareilsProf from "./AppareilsProf";
 import ProductionsEleves from "./ProductionsEleves";
 import { PHILO_NOTIONS_PROGRAMME, dbLoadDissertations, dbLoadResultatsAll, dbLoadSessions, dbLoadUsageStats } from "./shared";
 import TestIA from "./TestIA";
+import VisiteursUniques from "./VisiteursUniques";
 
 // ── TABLEAU DE BORD ─────────────────────────────────────────────────────────
 export function Dashboard({ onBack, sharedLib, prof = false }: any) {
@@ -500,7 +501,7 @@ export function Dashboard({ onBack, sharedLib, prof = false }: any) {
             {activeTab === "usage" && (
               <div className="space-y-4">
                 {/* Appareils du professeur + élèves proches de la limite */}
-                {prof && <AppareilsProf onChange={() => setVersionAppareils((v) => v + 1)} />}
+                {prof && <AppareilsProf key={versionAppareils} onChange={() => setVersionAppareils((v) => v + 1)} />}
                 {prof && <UsageElevesIA version={versionAppareils} />}
                 {prof && <TestIA />}
                 {/* Jauge de consommation */}
@@ -588,28 +589,8 @@ export function Dashboard({ onBack, sharedLib, prof = false }: any) {
                   );
                 })()}
 
-                {/* Visiteurs uniques */}
-                {usageStats.length > 0 && (() => {
-                  const visitors: Record<string, number> = {};
-                  usageStats.forEach((u: any) => {
-                    const v = u.visitor_id || "unknown";
-                    visitors[v] = (visitors[v] || 0) + 1;
-                  });
-                  const sorted = Object.entries(visitors).sort((a, b) => b[1] - a[1]);
-                  return (
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-                      <h3 className="font-black text-gray-800 mb-4">👤 Visiteurs uniques ({sorted.length})</h3>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {sorted.map(([vid, count], i) => (
-                          <div key={vid} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
-                            <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded">#{i+1} — {vid.slice(0, 16)}</span>
-                            <span className="text-sm font-black text-indigo-700">{count} appels</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Visiteurs uniques (avec indices pour reconnaître ses appareils) */}
+                <VisiteursUniques usageStats={usageStats} prof={prof} onAppareilsChange={() => setVersionAppareils((v) => v + 1)} />
 
                 {/* Derniers appels */}
                 {usageStats.length > 0 && (
