@@ -24,7 +24,8 @@ const GOOGLE_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GOOGLE_LITE_MODEL = process.env.GEMINI_LITE_MODEL || "gemini-3.5-flash-lite";
 // Chaque modèle Gemini a son propre quota gratuit : un 3e modèle Google sert de relais supplémentaire
 const GOOGLE_BIS_MODEL = process.env.GEMINI_BIS_MODEL || "gemini-3.8-flash";
-const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-small-latest";
+// mistral-small-latest n'est plus ouvert à l'offre gratuite (nov. 2026) ; mistral-medium-latest : 1 requête/s, 20 000 tokens/min
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-medium-latest";
 
 // Message d'erreur lisible (statut HTTP + message du fournisseur), affiché dans la jauge
 async function erreurLisible(nom, response) {
