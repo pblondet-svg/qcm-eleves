@@ -173,11 +173,12 @@ async function compteDuJour(colonne, valeur) {
   return error ? 0 : count || 0;
 }
 
-// Enregistre un appel ; si la colonne eleve_nom n'existe pas encore (usage_eleve_nom.sql), on l'enregistre sans le prénom
+// Enregistre un appel ; si la colonne eleve_nom n'existe pas encore (sql/usage_eleve_nom.sql), on l'enregistre sans le prénom
 function logUsage(row) {
   supabase.from("usage_stats").insert([row]).then(({ error }) => {
     if (error && row.eleve_nom !== undefined) {
-      const { eleve_nom, ...sansNom } = row;
+      const sansNom = { ...row };
+      delete sansNom.eleve_nom;
       supabase.from("usage_stats").insert([sansNom]).then(() => {}, () => {});
     }
   }, () => {});

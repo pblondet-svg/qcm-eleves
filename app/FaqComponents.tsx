@@ -6,7 +6,7 @@
 // - usePendingFaqCount : nombre de questions en attente (badge Mode Prof)
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 export type FaqItem = {
   id: string;

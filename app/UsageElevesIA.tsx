@@ -2,7 +2,7 @@
 // app/UsageElevesIA.tsx
 // Mode Prof → Stats → Usage IA : nombre de réponses IA utilisées aujourd'hui par chaque élève,
 // pour repérer ceux qui approchent de la limite (réglée dans Fonctionnalités → Limites d'utilisation de l'IA).
-// Le prénom vient de la colonne usage_stats.eleve_nom (voir usage_eleve_nom.sql) ; sans elle, l'élève
+// Le prénom vient de la colonne usage_stats.eleve_nom (voir sql/usage_eleve_nom.sql) ; sans elle, l'élève
 // est affiché par un identifiant anonyme.
 
 import { useEffect, useMemo, useState } from "react";
@@ -107,7 +107,7 @@ export default function UsageElevesIA({ version = 0 }: { version?: number }) {
 
       {!avecNoms && (
         <p className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">
-          Pour voir le prénom des élèves au lieu d'un identifiant anonyme, exécute une fois le fichier <strong>usage_eleve_nom.sql</strong> dans Supabase (SQL Editor).
+          Pour voir le prénom des élèves au lieu d'un identifiant anonyme, exécute une fois le fichier <strong>sql/usage_eleve_nom.sql</strong> dans Supabase (SQL Editor).
         </p>
       )}
 

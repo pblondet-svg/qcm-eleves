@@ -6,8 +6,8 @@ import {
   Plus, Trash2, Sparkles, FileUp, Search, X, Edit2,
   Check, FolderOpen, Play, RotateCcw, Trophy, ChevronRight, ChevronLeft,
   Lock, LogOut, Eye, RefreshCw, ArrowLeft, CheckCircle2, AlertTriangle,
-  BookOpen, Send, MessageCircle, User, Layers, PenLine, Lightbulb,
-  Shuffle, ChevronDown, ChevronUp, FileText, Brain, Zap, ListChecks,
+  BookOpen, Send, MessageCircle, User, Layers, PenLine,
+  Shuffle, ChevronDown, FileText, Brain, Zap,
 } from "lucide-react"; import { FaqEleve, ProfFaqManager, usePendingFaqCount } from "./FaqComponents"; import HomeScreenV2 from "./HomeScreenV2"; import PlanTrainer from "./PlanTrainer"; import ParagrapheTrainer from "./ParagrapheTrainer"; import DissertationGuidee from "./DissertationGuidee"; import IntroductionTrainer from "./IntroductionTrainer"; import EntrainementChat from "./EntrainementChat"; import AiQuotaGauge from "./AiQuotaGauge"; import UsageElevesIA from "./UsageElevesIA"; import AppareilsProf from "./AppareilsProf"; import CompteurIA, { signalerQuota } from "./CompteurIA"; import LimitesIA from "./LimitesIA"; import { CoursRevisionEleve, ProfCoursRevision } from "./CoursPremiere"; import { REGLE_LONGUEUR, REGLE_GUIDAGE, DEMANDES_RAPIDES, RichText, HLP_INSTRUCTION } from "./MethodeChatHome";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -163,15 +163,8 @@ const dbSaveResultat = async (resultat: any) => {
   if (error) throw error;
 };
 
-const dbLoadResultats = async () => {
-  const { data, error } = await supabase
-    .from("resultats").select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return data || [];
-};
-
 // ── Sujets Bac DB ─────────────────────────────────────────────────────────────
-const dbLoadSujetsBac = async (matiere?: string, notions?: string[]) => {
+const dbLoadSujetsBac = async (matiere?: string) => {
   let query = supabase.from("sujets_bac").select("*").order("notion_principale");
   if (matiere) query = query.eq("matiere", matiere);
   const { data, error } = await query;
@@ -993,7 +986,7 @@ ${entry.content.slice(0, 4000)}` }], 800, true, "flashcards");
 }
 
 // ── MODE RÉVISION ─────────────────────────────────────────────────────────────
-function RevisionMode({ entries, chapter, onBack, allTextes, eleveNom, featuresConfig, serie }: any) {
+function RevisionMode({ entries, onBack, allTextes, eleveNom, featuresConfig, serie }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledRevTab = (["chat","fiche","flashcards","interrogation"] as const).find(t => feat[("rev_" + t) as keyof FeaturesConfig] !== false) || "chat";
   const [selectedEntry, setSelectedEntry] = useState<any>(entries.length === 1 ? entries[0] : null);
@@ -1470,7 +1463,6 @@ ${autresTextes ? "\n\nAUTRES TEXTES ET COURS DISPONIBLES (mobilise-les si pertin
 
 // ── DISSERTATION MODE ─────────────────────────────────────────────────────────
 type DissWorkMode = "plan" | "brainstorm" | "corrige" | "combined";
-type PlanLevel = 1 | 2 | 3 | 4;
 
 function DissertationMode({ sharedLib, matiere, eleveNom, onBack, featuresConfig }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
@@ -1487,13 +1479,11 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack, featuresConfig
   const [isGeneratingSujet, setIsGeneratingSujet] = useState(false);
   const [isLoadingBac, setIsLoadingBac] = useState(false);
   const [sujetBacSource, setSujetBacSource] = useState("");
-  const [sujetBacNotions, setSujetBacNotions] = useState<string[]>([]);
+  const [sujetBacNotions] = useState<string[]>([]);
   const [workMode, setWorkMode] = useState<DissWorkMode>("plan");
 
   // Plan guidé
-  const [planLevel, setPlanLevel] = useState<PlanLevel>(1);
   const [plan, setPlan] = useState("");
-  const [planLoading, setPlanLoading] = useState(false);
 
   // Brainstorming
   const [brainstormMessages, setBrainstormMessages] = useState<{ role: string; content: string }[]>([]);
@@ -1551,17 +1541,6 @@ function DissertationMode({ sharedLib, matiere, eleveNom, onBack, featuresConfig
       );
     });
   }, [filteredLib, selectedNotions, selectionMode]);
-
-  // Chapitres actifs selon le mode de sélection
-  const activeChaptersForContext = selectionMode === "chapitres"
-    ? selectedChapters
-    : [...new Set(textesForNotions.map((e: any) => entryChapter(e)))] as string[];
-
-  // Textes sélectionnés (pour contexte IA)
-  const selectedTextes = useMemo(
-    () => filteredLib.filter((e: any) => selectedChapters.includes(entryChapter(e))),
-    [filteredLib, selectedChapters]
-  );
 
   const activeTextes = selectionMode === "chapitres"
     ? filteredLib.filter((e: any) => selectedChapters.includes(entryChapter(e)))
@@ -1638,7 +1617,7 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
       setSujet(parsed.classique || "");
       setSujetAlt(parsed.surprenant || "");
       setActiveSujet("main");
-    } catch (e: any) {
+    } catch {
       setSujet("Erreur lors de la génération du sujet.");
     }
     setIsGeneratingSujet(false);
@@ -1715,13 +1694,6 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
 2. OUVERTURE : poser une nouvelle question qui prolonge la réflexion vers un autre horizon philosophique`;
 
   // État pour l'explication de la logique du plan
-  const [planLogique, setPlanLogique] = useState("");
-  const [planLogiqueLoading, setPlanLogiqueLoading] = useState(false);
-  const [planLogiqueMessages, setPlanLogiqueMessages] = useState<{role: string; content: string}[]>([]);
-  const [planLogiqueInput, setPlanLogiqueInput] = useState("");
-  const [planLogiqueChatLoading, setPlanLogiqueChatLoading] = useState(false);
-  const [showLogiqueChat, setShowLogiqueChat] = useState(false);
-  const planLogiqueRef = useRef<HTMLDivElement>(null);
 
   // États rédaction assistée
   const [showRedaction, setShowRedaction] = useState(false);
@@ -1729,23 +1701,12 @@ Réponds UNIQUEMENT en JSON (rien d'autre) :
   const [redacTextes, setRedacTextes] = useState<Record<string, string>>({});
   const [redacFeedbacks, setRedacFeedbacks] = useState<Record<string, string>>({});
   const [redacLoading, setRedacLoading] = useState(false);
-  const [redacInput, setRedacInput] = useState("");
 
-  useEffect(() => { planLogiqueRef.current?.scrollIntoView({ behavior: "smooth" }); }, [planLogiqueMessages]);
-
-  const REDAC_STEPS = [
-    { key: "intro", label: "Introduction", icon: "1️⃣", desc: "Opinion commune → Définitions → Paradoxe → Problématique → Annonce" },
-    { key: "partie1", label: "Partie I — Thèse", icon: "🔹", desc: "3 paragraphes (Thèse/Argument/Exemple/Citation/Mini-conclusion) + transition" },
-    { key: "partie2", label: "Partie II — Antithèse", icon: "🔸", desc: "3 paragraphes + transition vers la synthèse" },
-    { key: "partie3", label: "Partie III — Synthèse", icon: "🔺", desc: "Concept nouveau — PAS un résumé du I et II" },
-    { key: "conclusion", label: "Conclusion", icon: "✅", desc: "Bilan de la progression + Ouverture" },
-  ] as const;
 
   const corrigerPartie = async (step: string, texte: string) => {
     if (!texte.trim()) return;
     setRedacLoading(true);
     const currentSujet = activeSujet === "main" ? sujet : sujetAlt;
-    const stepInfo = REDAC_STEPS.find(s => s.key === step);
     try {
       const data = await callAI([{ role: "user", content:
         `Tu es professeur de ${matiere === "philosophie" ? "Philosophie" : "HLP"} en terminale.
@@ -2703,7 +2664,7 @@ function Dashboard({ onBack, sharedLib, prof = false }: any) {
   const [loading, setLoading] = useState(true);
   const [usageStats, setUsageStats] = useState<any[]>([]);
   const [periodeFilter, setPeriodeFilter] = useState<"semaine" | "mois" | "tout">("tout");
-  const [matiereFilter, setMatiereFilter] = useState("all");
+  const [matiereFilter] = useState("all");
 
   const PHILO = PHILO_NOTIONS_PROGRAMME;
   const HLP_CH = [
@@ -3354,7 +3315,8 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
   const [eleveNom, setEleveNom] = useState<string>(() => {
     try { return localStorage.getItem("qcm_eleve_nom") || ""; } catch { return ""; }
   });
-  const [visitorId] = useState<string>(() => getOrCreateVisitorId());
+  // Crée l'identifiant anonyme du navigateur dès la première visite
+  useState<string>(() => getOrCreateVisitorId());
   const [sharedLib, setSharedLib] = useState<any[]>([]);
   const [libLoaded, setLibLoaded] = useState(false);
   const [quizData, setQuizData] = useState<any | null>(null);
@@ -3510,158 +3472,6 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
       featuresConfig={featuresConfig} serie={serie} initialTab={initialTab} methodeView={methodeView} methodeContent={methodeContent} faqMethode={faqMethode} eleveQuestions={eleveQuestions} onEleveQuestion={(q: EleveQuestion) => { const updated = [q, ...eleveQuestions]; setEleveQuestions(updated); saveEleveQuestions(updated); }} onDashboard={featuresConfig.show_dashboard ? () => setShowDashboard(true) : undefined} />
   );
 }
-
-// ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({ onSelect, eleveNom, setEleveNom, saveEleveNom }: any) {
-  const [showCode, setShowCode] = useState(false);
-  const [code, setCode] = useState("");
-  const [err, setErr] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [pseudoInput, setPseudoInput] = useState(eleveNom || "");
-
-  const verifyProfCode = async () => {
-    if (!code.trim()) return;
-    setChecking(true);
-    setErr("");
-    try {
-      // Vérifier d'abord en BDD, fallback sur "prof1234" si config absente
-      const storedCode = await dbGetConfig("prof_code");
-      const validCode = storedCode || "prof1234";
-      if (code === validCode) {
-        onSelect("prof");
-      } else {
-        setErr("Code incorrect");
-      }
-    } catch {
-      // En cas d'erreur Supabase, fallback local
-      if (code === "prof1234") { onSelect("prof"); }
-      else { setErr("Code incorrect"); }
-    }
-    setChecking(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-blue-50 to-purple-100 flex flex-col items-center justify-center p-6">
-      <div className="text-center mb-8">
-        <div className="text-5xl mb-4">📚</div>
-        <h1 className="text-4xl font-black text-gray-800 mb-2">QCM Entraînement</h1>
-        <p className="text-gray-700 text-lg">Choisissez votre profil</p>
-      </div>
-
-      <div className="w-full max-w-2xl mb-6">
-        <div className="bg-white rounded-2xl border-2 border-gray-200 px-5 py-4 flex items-center gap-3 shadow-sm">
-          <User className="w-5 h-5 text-gray-400 flex-shrink-0" />
-          <input value={pseudoInput} onChange={(e) => { setPseudoInput(e.target.value); setEleveNom(e.target.value); }} onBlur={(e) => saveEleveNom && saveEleveNom(e.target.value)}
-            className="flex-1 text-sm font-semibold text-gray-800 bg-transparent border-none outline-none placeholder-gray-400"
-            placeholder="Ton prénom ou pseudo (optionnel)" />
-          {pseudoInput && <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Enregistré</span>}
-        </div>
-      </div>
-
-      {/* Cartes élèves — Philosophie Série Générale */}
-      <div className="w-full max-w-2xl mb-2">
-        <p className="text-xs font-black text-blue-600 uppercase tracking-widest mb-2 px-1">🧠 Philosophie — Série Générale</p>
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onSelect("eleve-Philosophie-generale")}
-            className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-5 hover:border-blue-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📖</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-blue-700 transition-colors">Cours</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
-          </button>
-          <button onClick={() => onSelect("eleve-Philosophie-generale-methode")}
-            className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-5 hover:border-blue-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📐</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-blue-700 transition-colors">Méthode</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
-          </button>
-        </div>
-      </div>
-
-      {/* Cartes élèves — Philosophie Série Techno */}
-      <div className="w-full max-w-2xl mb-2">
-        <p className="text-xs font-black text-orange-600 uppercase tracking-widest mb-2 px-1">🔧 Philosophie — Série Techno</p>
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onSelect("eleve-Philosophie-techno")}
-            className="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5 hover:border-orange-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📖</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-orange-700 transition-colors">Cours</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
-          </button>
-          <button onClick={() => onSelect("eleve-Philosophie-techno-methode")}
-            className="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5 hover:border-orange-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📐</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-orange-700 transition-colors">Méthode</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
-          </button>
-        </div>
-      </div>
-
-      {/* Carte HLP */}
-      <div className="w-full max-w-2xl mb-2">
-        <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2 px-1">📜 HLP — Humanités, Littérature & Philosophie</p>
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onSelect("eleve-HLP")}
-            className="bg-white rounded-2xl border-2 border-emerald-200 shadow-sm p-5 hover:border-emerald-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📖</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">Cours</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Réviser avec l'IA</p>
-          </button>
-          <button onClick={() => onSelect("eleve-HLP-methode")}
-            className="bg-white rounded-2xl border-2 border-emerald-200 shadow-sm p-5 hover:border-emerald-400 hover:shadow-md transition-all group text-center">
-            <div className="text-3xl mb-2">📐</div>
-            <h2 className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">Méthode</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Fiches méthode</p>
-          </button>
-        </div>
-      </div>
-
-      {/* Carte Dissertation */}
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl mb-4">
-        <button onClick={() => onSelect("eleve-HLP-dissertation")}
-          className="flex-1 bg-white rounded-3xl border-2 border-rose-200 shadow-lg p-6 hover:border-rose-400 hover:shadow-xl transition-all group text-center">
-          <div className="text-4xl mb-2">✍️</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-rose-700 transition-colors">Dissertation HLP</h2>
-          <p className="text-gray-500 text-sm">Sujets inédits croisant plusieurs notions</p>
-        </button>
-        <button onClick={() => onSelect("eleve-Philosophie-dissertation")}
-          className="flex-1 bg-white rounded-3xl border-2 border-pink-200 shadow-lg p-6 hover:border-pink-400 hover:shadow-xl transition-all group text-center">
-          <div className="text-4xl mb-2">🖊️</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-pink-700 transition-colors">Dissertation Philo</h2>
-          <p className="text-gray-500 text-sm">Sujets inédits croisant plusieurs notions</p>
-        </button>
-      </div>
-
-      {/* Carte Prof */}
-      <div className="w-full max-w-2xl">
-        <div className="bg-white rounded-3xl border-2 border-purple-200 shadow-lg p-6 hover:border-purple-400 transition-all text-center">
-          <div className="text-4xl mb-2">👩‍🏫</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-1">Professeur</h2>
-          <p className="text-gray-500 text-sm mb-4">Gérer la bibliothèque de textes</p>
-          {!showCode ? (
-            <button onClick={() => setShowCode(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all mx-auto">
-              <Lock className="w-4 h-4" /> Accéder
-            </button>
-          ) : (
-            <div className="max-w-xs mx-auto">
-              <input type="password" value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }}
-                onKeyDown={(e) => e.key === "Enter" && verifyProfCode()}
-                className="w-full p-2.5 border-2 border-purple-300 rounded-xl text-sm text-center mb-2 focus:border-purple-500 focus:outline-none text-gray-800"
-                placeholder="Code professeur" autoFocus />
-              {err && <p className="text-red-500 text-xs mb-2">{err}</p>}
-              <button onClick={verifyProfCode} disabled={checking}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
-                {checking ? <><Sparkles className="w-4 h-4 animate-spin" /> Vérification…</> : "Entrer"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 
 // ── GESTION NOTIONS PROF ──────────────────────────────────────────────────────
 function GestionNotionsProf({ sharedLib, onReload }: any) {
@@ -4502,240 +4312,8 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
   );
 }
 
-// ── PROF FAQ PANEL ────────────────────────────────────────────────────────────
-function ProfFaqPanel({ faqMethode, setFaqMethode, eleveQuestions, setEleveQuestions }: { faqMethode: FaqItem[]; setFaqMethode: (f: FaqItem[]) => void; eleveQuestions: EleveQuestion[]; setEleveQuestions: (q: EleveQuestion[]) => void }) {
-  const [newQ, setNewQ] = useState("");
-  const [newR, setNewR] = useState("");
-  const [newSerie, setNewSerie] = useState<FaqItem["serie"]>("toutes");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [repondreId, setRepondreId] = useState<string | null>(null);
-  const [reponseInput, setReponseInput] = useState("");
-  const [repSerie, setRepSerie] = useState<FaqItem["serie"]>("toutes");
-  const [activePanel, setActivePanel] = useState<"faq" | "questions">("questions");
-  const [editQ, setEditQ] = useState("");
-  const [editR, setEditR] = useState("");
-  const [editSerie, setEditSerie] = useState<FaqItem["serie"]>("toutes");
-
-  const SERIE_LABELS: Record<FaqItem["serie"], string> = {
-    toutes: "Philo — tronc commun (Générale + Techno)",
-    generale: "Série Générale uniquement",
-    techno: "Série Techno uniquement",
-    hlp: "HLP uniquement",
-  };
-  const SERIE_COLORS: Record<FaqItem["serie"], string> = {
-    toutes: "bg-gray-100 text-gray-700",
-    generale: "bg-blue-100 text-blue-700",
-    techno: "bg-orange-100 text-orange-700",
-    hlp: "bg-emerald-100 text-emerald-700",
-  };
-
-  const addItem = async () => {
-    if (!newQ.trim() || !newR.trim()) return;
-    const item: FaqItem = { id: uid(), question: newQ.trim(), reponse: newR.trim(), serie: newSerie, createdAt: Date.now() };
-    const updated = [item, ...faqMethode];
-    setSaving(true);
-    setFaqMethode(updated);
-    setNewQ(""); setNewR(""); setNewSerie("toutes");
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
-    setSaving(false);
-  };
-
-  const deleteItem = (id: string) => {
-    if (!confirm("Supprimer ce conseil ?")) return;
-    setFaqMethode(faqMethode.filter(f => f.id !== id));
-  };
-
-  const startEdit = (item: FaqItem) => {
-    setEditingId(item.id);
-    setEditQ(item.question);
-    setEditR(item.reponse);
-    setEditSerie(item.serie);
-  };
-
-  const saveEdit = () => {
-    if (!editQ.trim() || !editR.trim()) return;
-    setFaqMethode(faqMethode.map(f => f.id === editingId ? { ...f, question: editQ.trim(), reponse: editR.trim(), serie: editSerie } : f));
-    setEditingId(null);
-  };
-
-  const ajouterAFaq = (q: EleveQuestion) => {
-    if (!reponseInput.trim()) return;
-    const item: FaqItem = { id: uid(), question: q.question, reponse: reponseInput.trim(), serie: repSerie, createdAt: Date.now() };
-    setFaqMethode([item, ...faqMethode]);
-    setEleveQuestions(eleveQuestions.filter(eq => eq.id !== q.id));
-    setRepondreId(null);
-    setReponseInput("");
-    setRepSerie("toutes");
-  };
-
-  const ignorerQuestion = (id: string) => {
-    if (!confirm("Supprimer cette question sans l'ajouter à la FAQ ?")) return;
-    setEleveQuestions(eleveQuestions.filter(q => q.id !== id));
-  };
-
-  const SERIE_LABEL_SHORT: Record<string, string> = { generale: "🧠 Générale", techno: "🔧 Techno", hlp: "📜 HLP" };
-
-  return (
-    <div className="space-y-6">
-      {/* Header + toggle */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-gray-800">❓ FAQ Méthode</h2>
-          <p className="text-sm text-gray-500 mt-1">Gérez les questions des élèves et les conseils de la FAQ.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setActivePanel("questions")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activePanel === "questions" ? "bg-rose-600 text-white border-rose-600" : "bg-white text-gray-700 border-gray-200 hover:border-rose-300"}`}>
-            📬 Questions élèves
-            {eleveQuestions.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${activePanel === "questions" ? "bg-white/30 text-white" : "bg-rose-100 text-rose-700"}`}>{eleveQuestions.length}</span>}
-          </button>
-          <button onClick={() => setActivePanel("faq")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activePanel === "faq" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300"}`}>
-            ❓ FAQ publiée
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${activePanel === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqMethode.length}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* === PANEL QUESTIONS ÉLÈVES === */}
-      {activePanel === "questions" && (
-        <div className="space-y-3">
-          {eleveQuestions.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="text-4xl mb-3">📭</div>
-              <p className="font-bold text-gray-600">Aucune question en attente</p>
-              <p className="text-sm text-gray-400 mt-1">Les questions des élèves apparaîtront ici</p>
-            </div>
-          ) : eleveQuestions.map(q => (
-            <div key={q.id} className="bg-white rounded-2xl border-2 border-rose-100 overflow-hidden">
-              <div className="px-5 py-4">
-                <div className="flex items-start justify-between gap-3 mb-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-gray-800 text-sm">{q.question}</span>
-                    {q.serie && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">{SERIE_LABEL_SHORT[q.serie] || q.serie}</span>}
-                  </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{q.eleveNom} · {new Date(q.createdAt).toLocaleDateString("fr-FR")}</span>
-                </div>
-                {repondreId === q.id ? (
-                  <div className="mt-3 space-y-2">
-                    <textarea value={reponseInput} onChange={e => setReponseInput(e.target.value)}
-                      className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 resize-none"
-                      rows={3} placeholder="Votre réponse à publier dans la FAQ…" autoFocus />
-                    <div className="flex items-center gap-2">
-                      <select value={repSerie} onChange={e => setRepSerie(e.target.value as FaqItem["serie"])}
-                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none">
-                        <option value="toutes">Philo — tronc commun (Générale + Techno)</option>
-                        <option value="generale">Série Générale</option>
-                        <option value="techno">Série Techno</option>
-                        <option value="hlp">HLP</option>
-                      </select>
-                      <button onClick={() => ajouterAFaq(q)} disabled={!reponseInput.trim()}
-                        className={`flex-1 py-1.5 text-xs font-black rounded-lg text-white transition-all ${reponseInput.trim() ? "bg-green-600 hover:bg-green-700" : "bg-gray-300"}`}>
-                        ✓ Répondre et ajouter à la FAQ
-                      </button>
-                      <button onClick={() => { setRepondreId(null); setReponseInput(""); }}
-                        className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg text-gray-600">Annuler</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 mt-2">
-                    <button onClick={() => { setRepondreId(q.id); setReponseInput(""); setRepSerie(q.serie || "toutes"); }}
-                      className="text-xs font-bold px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-200 transition-all">
-                      ✍️ Répondre → FAQ
-                    </button>
-                    <button onClick={() => ignorerQuestion(q.id)}
-                      className="text-xs font-bold px-3 py-1.5 text-gray-500 hover:text-red-600 rounded-lg border border-gray-200 transition-all">
-                      🗑️ Ignorer
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* === PANEL FAQ PUBLIÉE === */}
-      {activePanel === "faq" && <div className="space-y-6">
-
-      {/* Formulaire ajout */}
-      <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 space-y-3">
-        <h3 className="font-black text-indigo-800 text-sm">+ Ajouter un conseil / une question-réponse</h3>
-        <input value={newQ} onChange={e => setNewQ(e.target.value)}
-          className="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white"
-          placeholder="La question ou le titre du conseil (ex : Comment éviter la paraphrase ?)" />
-        <textarea value={newR} onChange={e => setNewR(e.target.value)}
-          className="w-full px-4 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white resize-none"
-          rows={4}
-          placeholder="La réponse détaillée, le conseil, l'astuce…" />
-        <div className="flex items-center gap-3">
-          <select value={newSerie} onChange={e => setNewSerie(e.target.value as FaqItem["serie"])}
-            className="px-3 py-2 border-2 border-indigo-200 rounded-xl text-xs font-bold bg-white focus:outline-none">
-            {(Object.entries(SERIE_LABELS) as [FaqItem["serie"], string][]).map(([val, label]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-          <button onClick={addItem} disabled={!newQ.trim() || !newR.trim() || saving}
-            className={`flex-1 py-2.5 rounded-xl font-black text-sm text-white transition-all ${!newQ.trim() || !newR.trim() ? "bg-gray-300" : "bg-indigo-600 hover:bg-indigo-700"}`}>
-            {saved ? "✓ Ajouté !" : "+ Ajouter"}
-          </button>
-        </div>
-      </div>
-
-      {/* Liste des items */}
-      {faqMethode.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-          <p className="text-gray-500 font-semibold">Aucun conseil pour l'instant. Ajoutez-en un ci-dessus !</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {faqMethode.map(item => (
-            <div key={item.id} className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden">
-              {editingId === item.id ? (
-                <div className="p-4 space-y-3">
-                  <input value={editQ} onChange={e => setEditQ(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400" />
-                  <textarea value={editR} onChange={e => setEditR(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-indigo-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 resize-none" rows={4} />
-                  <div className="flex items-center gap-2">
-                    <select value={editSerie} onChange={e => setEditSerie(e.target.value as FaqItem["serie"])}
-                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none">
-                      {(Object.entries(SERIE_LABELS) as [FaqItem["serie"], string][]).map(([val, label]) => (
-                        <option key={val} value={val}>{label}</option>
-                      ))}
-                    </select>
-                    <button onClick={saveEdit} className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg">✓ Enregistrer</button>
-                    <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg text-gray-600">Annuler</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-gray-800 text-sm">{item.question}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${SERIE_COLORS[item.serie]}`}>{SERIE_LABELS[item.serie]}</span>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button onClick={() => startEdit(item)} className="text-xs text-gray-500 hover:text-indigo-600 font-semibold transition-colors">✏️</button>
-                      <button onClick={() => deleteItem(item.id)} className="text-xs text-gray-500 hover:text-red-600 font-semibold transition-colors">🗑️</button>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{item.reponse}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      </div>}
-    </div>
-  );
-}
-
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode, eleveQuestions, setEleveQuestions }: any) {
+function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode }: any) {
   const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode" | "faq" | "hlp1">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
@@ -5253,7 +4831,6 @@ function MethodeMode({ initialView, serie, matiere, methodeContent, faqMethode, 
 
   const serieLabel = isTechno ? "Série Technologique" : isHLP ? "HLP" : "Série Générale";
   const serieIcon = isTechno ? "🔧" : isHLP ? "📜" : "🧠";
-  const serieColor = isTechno ? "orange" : isHLP ? "emerald" : "blue";
   const headerBg = isTechno ? "bg-orange-50 border-orange-200 text-orange-800" : isHLP ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-blue-800";
   const accentBtn = isTechno ? "bg-orange-600 hover:bg-orange-700" : isHLP ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700";
 
@@ -5616,260 +5193,10 @@ function FicheMarkdown({ title, content }: { title: string; content: string }) {
   );
 }
 
-// ── Composants fiches méthode ─────────────────────────────────────────────────
-function FicheIntroDissertation() {
-  return (
-    <div className="p-6 space-y-5">
-      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">📝 Introduction de la dissertation</h2>
-      {[
-        { num: "1", title: "Opinion commune (la doxa)", color: "bg-rose-50 border-rose-200", tcolor: "text-rose-800",
-          content: "Exprimer clairement ce que les gens pensent habituellement sur le sujet. Attention : tout le développement va souvent consister à montrer en quoi cette opinion courante est fausse ou insuffisante." },
-        { num: "2", title: "Définitions des termes du sujet", color: "bg-amber-50 border-amber-200", tcolor: "text-amber-800",
-          content: "Définir clairement chaque terme important du sujet. S'appuyer sur le dictionnaire, le cours, la culture générale et l'expérience personnelle." },
-        { num: "3", title: "Paradoxe du sujet", color: "bg-orange-50 border-orange-200", tcolor: "text-orange-800",
-          content: "Montrer le caractère quasi-illogique ou surprenant du sujet. Tout sujet est paradoxal — il invite à critiquer un préjugé. Le sujet peut sembler absurde, contradictoire, ou mettre en rapport des concepts opposés. C'est précisément pour ça qu'il mérite d'être posé." },
-        { num: "4", title: "Problématique / Reformulation", color: "bg-yellow-50 border-yellow-200", tcolor: "text-yellow-800",
-          content: "Reformuler le sujet en soulignant ses paradoxes internes. Montrer au lecteur qu'on a compris pourquoi cette question est utile à poser. On peut utiliser des synonymes, antonymes, ou ajouter des adverbes (« vraiment », « nécessairement »…). La problématique fait apparaître un problème là où on n'en voyait pas à première vue." },
-        { num: "5", title: "Annonce de plan", color: "bg-green-50 border-green-200", tcolor: "text-green-800",
-          content: "Annoncer clairement le cheminement pour résoudre le problème : « Nous verrons dans un premier temps… puis… enfin… ». L'annonce de plan est utile pour l'élève (clarifier son cheminement) et pour le correcteur (voir la progression)." },
-      ].map(step => (
-        <div key={step.num} className={`rounded-xl border-2 ${step.color} p-4`}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`w-7 h-7 rounded-full ${step.color} border-2 ${step.color.replace("bg-","border-")} flex items-center justify-center text-sm font-black ${step.tcolor}`}>{step.num}</span>
-            <h3 className={`font-black text-sm ${step.tcolor}`}>{step.title}</h3>
-          </div>
-          <p className="text-sm text-gray-700 leading-relaxed">{step.content}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FichePlanTAS() {
-  return (
-    <div className="p-6 space-y-5">
-      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">🔺 Plan Thèse / Antithèse / Synthèse</h2>
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-        <h3 className="font-black text-gray-700 text-sm mb-3">Structure générale</h3>
-        <div className="space-y-2">
-          {[
-            ["Introduction", "Position du problème"],
-            ["Partie I — Thèse", "Hypothèse de réponse (OUI)"],
-            ["Partie II — Antithèse", "Limites de la thèse + hypothèse contraire (NON)"],
-            ["Partie III — Synthèse", "Dépassement de la contradiction par un concept nouveau"],
-            ["Conclusion", "Récapitulation de la progression"],
-          ].map(([part, desc]) => (
-            <div key={part} className="flex items-center gap-3 text-sm">
-              <span className="font-bold text-gray-700 w-36 flex-shrink-0">{part}</span>
-              <span className="text-gray-500">→</span>
-              <span className="text-gray-600">{desc}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "I — Thèse", color: "bg-blue-50 border-blue-200 text-blue-800", icon: "👍", desc: "Répond OUI à la question posée. Défend l'affirmation principale. Arguments en faveur." },
-          { label: "II — Antithèse", color: "bg-red-50 border-red-200 text-red-800", icon: "👎", desc: "Répond NON. Objections et limites de la thèse. Formule l'hypothèse contraire." },
-          { label: "III — Synthèse", color: "bg-purple-50 border-purple-200 text-purple-800", icon: "💡", desc: "NI compromis NI résumé. Introduit un concept NOUVEAU et imprévu pour dépasser le oui/non. Reformule le problème autrement." },
-        ].map(p => (
-          <div key={p.label} className={`rounded-xl border-2 ${p.color} p-4`}>
-            <div className="text-2xl mb-2">{p.icon}</div>
-            <h3 className="font-black text-sm mb-2">{p.label}</h3>
-            <p className="text-xs leading-relaxed opacity-80">{p.desc}</p>
-          </div>
-        ))}
-      </div>
-      <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
-        <p className="text-xs font-black text-amber-800 mb-2">💡 Astuce pour la Synthèse</p>
-        <p className="text-sm text-amber-700">Recyclez votre ouverture de conclusion pour en faire la question à traiter en Partie III. La synthèse doit introduire un concept <strong>imprévu au départ</strong> qui permet de dépasser la simple opposition I/II.</p>
-      </div>
-      <div className="space-y-3">
-        <h3 className="font-black text-gray-700 text-sm">Exemples</h3>
-        {[
-          { sujet: "Faut-il être optimiste ?", these: "Oui — le bonheur sur terre est accessible.", antithese: "Non — le bonheur est impossible, les autres sont des obstacles.", synthese: "Ni optimiste ni pessimiste : être RÉALISTE. Faire coïncider ses désirs au monde réel." },
-          { sujet: "L'homme s'accomplit-il dans le travail ?", these: "Oui — il trouve sa place dans la société, peut s'épanouir.", antithese: "Non — le travail est une contrainte, il peut détruire psychologiquement.", synthese: "Qu'entend-on par « homme » ? À quelles conditions s'accomplit-il ? Le travail est-il le seul lieu d'accomplissement ?" },
-        ].map(ex => (
-          <div key={ex.sujet} className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm">
-            <p className="font-black text-gray-700 mb-2">Sujet : <span className="italic">« {ex.sujet} »</span></p>
-            <p className="text-blue-700 mb-1"><strong>I.</strong> {ex.these}</p>
-            <p className="text-red-700 mb-1"><strong>II.</strong> {ex.antithese}</p>
-            <p className="text-purple-700"><strong>III.</strong> {ex.synthese}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FicheParagraphe() {
-  return (
-    <div className="p-6 space-y-5">
-      <h2 className="text-xl font-black text-gray-800 border-b-2 border-rose-200 pb-3">✍️ Rédiger un paragraphe argumenté</h2>
-      <p className="text-sm text-gray-600">Un paragraphe doit être <strong>argumenté</strong> : il doit convaincre le lecteur du bien-fondé de l'idée développée. Il doit faire environ <strong>une vingtaine de lignes</strong>.</p>
-      <div className="space-y-3">
-        <h3 className="font-black text-gray-700 text-sm">Les 5 éléments obligatoires</h3>
-        {[
-          { num: "1", label: "Une thèse", desc: "L'idée principale que vous défendez dans ce paragraphe.", color: "bg-blue-50 border-blue-200 text-blue-800" },
-          { num: "2", label: "Une argumentation", desc: "Les raisons qui justifient votre thèse. Pourquoi est-ce vrai ?", color: "bg-indigo-50 border-indigo-200 text-indigo-800" },
-          { num: "3", label: "Un exemple", desc: "Un cas concret, une situation réelle ou fictive qui illustre votre argument.", color: "bg-green-50 border-green-200 text-green-800" },
-          { num: "4", label: "Une citation", desc: "Un passage d'un auteur étudié qui appuie votre propos.", color: "bg-amber-50 border-amber-200 text-amber-800" },
-          { num: "5", label: "Une conclusion", desc: "Un bilan de l'argumentation, une transition vers l'idée suivante.", color: "bg-rose-50 border-rose-200 text-rose-800" },
-        ].map(el => (
-          <div key={el.num} className={`rounded-xl border-2 ${el.color} p-3 flex items-start gap-3`}>
-            <span className="font-black text-lg w-6 flex-shrink-0">{el.num}.</span>
-            <div>
-              <p className="font-black text-sm">{el.label}</p>
-              <p className="text-xs mt-0.5 opacity-80">{el.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <p className="text-xs font-black text-gray-700 mb-2">✨ Éléments optionnels pour enrichir</p>
-        <div className="space-y-1 text-sm text-gray-600">
-          <p><strong>Un constat</strong> — un point essentiel observé pour débuter le paragraphe.</p>
-          <p><strong>Une objection</strong> — un argument opposé pour nuancer ou renforcer votre propos.</p>
-          <p><strong>Un contre-exemple</strong> — un cas qui contredit une règle, pour complexifier.</p>
-        </div>
-      </div>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <p className="text-xs text-amber-800">💡 L'ordre des 5 éléments est conseillé mais pas obligatoire. Faites varier votre style : parfois commencez par la citation, d'autres fois terminez par elle. Les philosophes eux-mêmes jouent avec la structure.</p>
-      </div>
-    </div>
-  );
-}
-
-function FicheExplTechno() {
-  return (
-    <div className="p-6 space-y-5">
-      <h2 className="text-xl font-black text-gray-800 border-b-2 border-orange-200 pb-3">🔧 Explication de texte — Série Technologique</h2>
-      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 text-sm text-orange-800">
-        <p className="font-black mb-1">Deux options possibles</p>
-        <p><strong>Option 1</strong> : Répondre aux questions guidées (A. Analyse + B. Synthèse + C. Commentaire). Indiquer sur la copie : <em>« J'opte pour l'option 1 »</em>.</p>
-        <p className="mt-1"><strong>Option 2</strong> : Rédiger un commentaire libre (comme en Français). Indiquer sur la copie : <em>« J'opte pour l'option 2 »</em>.</p>
-      </div>
-      <div className="space-y-4">
-        {[
-          {
-            letter: "A", title: "Éléments d'analyse", color: "bg-blue-50 border-blue-300 text-blue-800",
-            objectif: "Expliciter clairement les points demandés : mot, groupe de mots, expressions, articulations. Comprendre le texte en profondeur, identifier les concepts clés et montrer comment l'auteur construit son argumentation.",
-            points: [
-              "Expliquer les concepts clés : définir les notions importantes dans le contexte précis du texte (pas de définition générale hors contexte).",
-              "Analyser l'argumentation : repérer les étapes de raisonnement, les distinctions que fait l'auteur, ses exemples et illustrations.",
-              "Ne pas paraphraser : reformuler pour expliquer le sens, sans simplement répéter le texte.",
-              "Illustrer si possible : un exemple concret ou une référence connue peut aider à clarifier le propos.",
-            ]
-          },
-          {
-            letter: "B", title: "Éléments de synthèse", color: "bg-indigo-50 border-indigo-300 text-indigo-800",
-            objectif: "Dégager la thèse principale du texte en tenant compte de l'analyse. Montrer qu'on comprend l'ensemble du texte, sa structure et son idée centrale.",
-            points: [
-              "Identifier la question principale du texte : ce à quoi l'auteur tente de répondre.",
-              "Repérer les moments de l'argumentation : quelles étapes ou parties composent le raisonnement ? (= le plan du texte)",
-              "Dégager l'idée principale : formuler en une ou deux phrases ce que le texte cherche à démontrer.",
-            ]
-          },
-          {
-            letter: "C", title: "Commentaire", color: "bg-orange-50 border-orange-300 text-orange-800",
-            objectif: "Examiner en détail la démarche de l'auteur par une série de questions cohérentes. Produire des « mini-dissertations » sans introduction. On peut faire une partie thèse (d'accord) et une partie antithèse (en désaccord).",
-            points: [
-              "Préciser le sens et l'intérêt de l'idée centrale : pourquoi cette idée est-elle importante ?",
-              "Discuter le texte : réfléchir aux implications de la thèse, à ses limites éventuelles, à ses conséquences pratiques ou théoriques.",
-              "Appuyer vos réflexions : utiliser des références à d'autres auteurs ou exemples pour montrer qu'on comprend le contexte philosophique.",
-            ]
-          },
-        ].map(part => (
-          <div key={part.letter} className={`rounded-xl border-2 ${part.color} overflow-hidden`}>
-            <div className={`${part.color} px-4 py-2.5 border-b ${part.color.replace("bg-","border-")}`}>
-              <h3 className="font-black text-sm">{part.letter}. {part.title}</h3>
-            </div>
-            <div className="p-4 bg-white">
-              <p className="text-xs text-gray-600 mb-3 italic">{part.objectif}</p>
-              <ul className="space-y-1.5">
-                {part.points.map((p, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-gray-400 mt-0.5 flex-shrink-0">→</span>
-                    <span>{p}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FicheExplGenerale() {
-  return (
-    <div className="p-6 space-y-5">
-      <h2 className="text-xl font-black text-gray-800 border-b-2 border-indigo-200 pb-3">📖 Explication de texte — Série Générale</h2>
-      <p className="text-sm text-gray-600">On vous propose un texte philosophique précédé de la consigne : <em>« Expliquer le texte suivant »</em>. Il s'agit de découvrir le problème que le texte résout, comprendre la thèse et l'argumentation, puis examiner la valeur de cette solution.</p>
-      <div className="space-y-4">
-        {[
-          {
-            title: "Introduction", icon: "🔍", color: "bg-indigo-50 border-indigo-200",
-            items: [
-              "Présentation rapide du texte (auteur, titre de l'ouvrage, date)",
-              "Le thème du texte (quelle notion du programme ?)",
-              "La thèse du texte (qu'est-ce qu'affirme l'auteur ?)",
-              "Définitions de quelques termes importants",
-              "Le paradoxe (quelle contradiction la thèse tente-t-elle de régler ?)",
-              "Une problématique en rapport avec le thème et le paradoxe",
-              "Le plan : celui du texte est aussi celui du devoir. Le formuler sous forme de questions.",
-            ]
-          },
-          {
-            title: "Développement — Commentaire linéaire", icon: "📄", color: "bg-blue-50 border-blue-200",
-            items: [
-              "Commenter le texte dans l'ordre, passage par passage, du début à la fin.",
-              "Citer un court passage du texte.",
-              "Reformuler seulement si le sens littéral n'est pas clair (attention : la reformulation seule = paraphrase, ce n'est pas une explication).",
-              "Définir et expliquer les notions ou concepts importants du passage cité.",
-              "Expliquer l'idée exprimée et sa fonction dans l'argumentation : en quoi est-ce un argument pour régler le problème ?",
-              "Proposer une transition (sous forme de question) vers le passage suivant.",
-              "Faire appel au cours et aux autres auteurs pour confirmer ou contredire la thèse (examen critique intégré à l'analyse).",
-            ]
-          },
-          {
-            title: "Conclusion", icon: "✅", color: "bg-green-50 border-green-200",
-            items: [
-              "Répondre point par point aux questions posées en introduction.",
-              "Rassembler ce qui s'est dit d'essentiel dans le développement.",
-              "Ne pas ouvrir sur une nouvelle question sans réponse : on ne pose pas de question qu'on ne va pas traiter.",
-            ]
-          },
-        ].map(part => (
-          <div key={part.title} className={`rounded-xl border-2 ${part.color} overflow-hidden`}>
-            <div className={`${part.color} px-4 py-2.5 border-b`}>
-              <h3 className="font-black text-sm">{part.icon} {part.title}</h3>
-            </div>
-            <div className="p-4 bg-white">
-              <ul className="space-y-1.5">
-                {part.items.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-gray-400 mt-0.5 flex-shrink-0">→</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800">
-        💡 L'examen critique (confrontation avec d'autres auteurs) peut être intégré tout au long de l'analyse linéaire. Il n'est pas obligatoire de le réserver à une partie finale.
-      </div>
-    </div>
-  );
-}
-
 // ── MODE COLLE SIMULÉE ────────────────────────────────────────────────────────
 type CollePhase = "choix" | "preparation" | "oral" | "bilan";
 
-function ModeColle({ filteredLib, matiere, isHLP, eleveNom, serie }: any) {
+function ModeColle({ matiere, isHLP, eleveNom, serie }: any) {
   const [phase, setPhase] = useState<CollePhase>("choix");
   const [selectedNotion, setSelectedNotion] = useState("");
   const [sujet, setSujet] = useState("");
@@ -6225,7 +5552,7 @@ Si la réponse est bonne, valide et approfondis. Si elle est insuffisante, guide
 }
 
 // ── CARTE MENTALE DES NOTIONS ─────────────────────────────────────────────────
-function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
+function CarteMentaleNotions({ filteredLib, isHLP }: any) {
   const PHILO = PHILO_NOTIONS_PROGRAMME;
   const HLP_CH = [
     "Éducation, transmission et émancipation",
@@ -6280,7 +5607,6 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
           {carte.map(({ notion, count }) => {
             const colors = colorForCount(count);
             const isSelected = selectedNotion === notion;
-            const size = count === 0 ? 1 : 1 + (count / maxCount) * 0.4;
             return (
               <button key={notion}
                 onClick={() => setSelectedNotion(isSelected ? null : notion)}
@@ -6393,7 +5719,7 @@ function CarteMentaleNotions({ filteredLib, matiere, isHLP }: any) {
   );
 }
 
-function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, onDashboard, serie, initialTab, methodeView, methodeContent, faqMethode, onEleveQuestion }: any) {
+function EleveMode({ matiere, sharedLib, libLoaded, onBack, onStartQuiz, onStartRevision, onStartDissertation, onRefresh, eleveNom, featuresConfig, serie, initialTab, methodeView, methodeContent, faqMethode, onEleveQuestion }: any) {
   const feat: FeaturesConfig = { ...DEFAULT_FEATURES, ...featuresConfig };
   const firstEnabledTab = (["revision","quiz","dissertation","carte","colle"] as const).find(t => {
     if (t === "revision") return feat.tab_revision;
