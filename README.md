@@ -11,15 +11,22 @@ déployé sur Vercel à chaque `git push` sur `main`.
   `GOOGLE_AI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`.
 
 ## Organisation du code (`app/`)
-- `page.tsx` : application principale (accueil, Mode Élève, Mode Prof, dissertation, révision de textes, tableau de bord).
+- `page.tsx` : point d'entrée (choix du rôle et navigation entre les modes).
+- `shared.tsx` : appels à l'IA (`callAI`), accès Supabase, types, réglages par défaut (fonctionnalités, fiches méthode, FAQ).
 - `HomeScreenV2.tsx` : accueil élève (cases de révision, carrés « S'entraîner », assistant méthode).
-- `MethodeChatHome.tsx` : assistant méthode et règles communes des prompts (`REGLE_GUIDAGE`, `REGLE_LONGUEUR`).
-- Entraînements : `EntrainementChat.tsx` (format chatbot, par défaut), `IntroductionTrainer.tsx`,
-  `ParagrapheTrainer.tsx`, `PlanTrainer.tsx` et `DissertationGuidee.tsx` (format « étapes en cadres »).
-- `CoursPremiere.tsx` : révision des cours par niveau (HLP Première, Terminale).
-- `FaqComponents.tsx` : FAQ élève ↔ professeur.
+- `EleveMode.tsx` : Mode Élève (bibliothèque de textes, colle simulée, carte des notions).
+- `RevisionMode.tsx`, `QuizMode.tsx`, `DissertationMode.tsx` : révision d'un texte, QCM, dissertation.
+- `MethodeMode.tsx` : partie Méthode (assistant, fiches, entraînements, FAQ) ; `MethodeChatHome.tsx` : assistant méthode
+  et règles communes des prompts (`REGLE_GUIDAGE`, `REGLE_LONGUEUR`).
+- Entraînements : `EntrainementChat.tsx` (format chatbot, par défaut), `IntroductionTrainer.tsx`, `ParagrapheTrainer.tsx`,
+  `PlanTrainer.tsx` et `DissertationGuidee.tsx` (format « étapes en cadres ») ; `productions.ts` enregistre chaque exercice.
+- `ProfMode.tsx` : Mode Prof (textes, notions, banque de sujets, fonctionnalités, fiches méthode, code prof).
+- `Dashboard.tsx` : tableau de bord (Stats) ; `ProductionsEleves.tsx` : productions des élèves (Mode Prof).
+- `CoursPremiere.tsx` : révision des cours par niveau (HLP Première, Terminale) ; `FaqComponents.tsx` : FAQ élève ↔ professeur.
 - Usage de l'IA : `CompteurIA.tsx` (compteur élève), `UsageElevesIA.tsx` et `AppareilsProf.tsx` (Mode Prof),
   `AiQuotaGauge.tsx`, `LimitesIA.tsx`.
+- `ComposantsCommuns.tsx` : sélecteur de chapitres, validation des métadonnées, rendu des fiches méthode.
+- Routes serveur (`app/api/`) : `ai` (IA et limites), `faq` (questions et e-mails), `productions`, `extract` (lecture de fichiers).
 
 ## Scripts SQL (`sql/`)
 À exécuter une fois dans Supabase (SQL Editor) :
