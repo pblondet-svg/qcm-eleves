@@ -46,6 +46,10 @@ function exactDaily(key: ProviderKey, snap?: QuotaSnap): { limit: number | null;
 }
 
 const isQuotaError = (msg?: string) => !!msg && /429|quota|rate.?limit|exhaust|too many/i.test(msg);
+// Quota du jour vraiment épuisé (et pas une simple limite « par seconde / par minute », comme celle de Mistral)
+const isDailyQuota = (key: ProviderKey, msg?: string) => !!msg && / 429 /.test(msg)
+  && (/per.?day|daily|jour/i.test(msg) || (key.startsWith("google") && /quota/i.test(msg) && !/retry in/i.test(msg)));
+const ilYaMoinsDe = (iso: string | undefined, minutes: number) => !!iso && Date.now() - new Date(iso).getTime() < minutes * 60000;
 
 export default function AiQuotaGauge() {
   const [used, setUsed] = useState<Record<string, number>>({});
@@ -145,9 +149,11 @@ export default function AiQuotaGauge() {
     // Une erreur n'est « actuelle » que si aucun succès ni relevé de quota ne l'a suivie
     const apres = (a?: string, b?: string) => !b || (!!a && new Date(a) > new Date(b));
     const erreurActuelle = isToday(snap?.last_error_at) && apres(snap?.last_error_at, snap?.at) && apres(snap?.last_error_at, snap?.last_ok_at);
-    const blocked = erreurActuelle && isQuotaError(snap?.last_error);
+    const blocked = erreurActuelle && isDailyQuota(p.key, snap?.last_error);
+    // Limite momentanée (trop de requêtes en peu de temps) : signalée pendant 15 minutes, sans bloquer la jauge
+    const momentane = !blocked && erreurActuelle && isQuotaError(snap?.last_error) && ilYaMoinsDe(snap?.last_error_at, 15);
     const lastError = erreurActuelle ? snap?.last_error : "";
-    return { ...p, limit, limReq, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null && resteTok === null, at: snap?.at, blocked, blockedAt: snap?.last_error_at, lastError, detailTok, parTokens: resteTok !== null && resteTok < resteReq };
+    return { ...p, limit, limReq, used: u, remaining: blocked ? 0 : remaining, pctUsed: blocked ? 100 : pctUsed, exact: ex.remaining !== null && resteTok === null, at: snap?.at, blocked, momentane, blockedAt: snap?.last_error_at, lastError, detailTok, parTokens: resteTok !== null && resteTok < resteReq };
   });
 
   const main = rows[0];
@@ -195,8 +201,8 @@ export default function AiQuotaGauge() {
                 <span className="font-bold text-gray-800">{r.nom}</span>
                 <span className="text-xs text-gray-400 ml-2 hidden sm:inline">{r.role}</span>
               </div>
-              <span className={`text-xs font-black flex-shrink-0 ${textColor(r.pctUsed)}`}>
-                {r.blocked ? "épuisé" : `reste ~${r.remaining.toLocaleString("fr-FR")}`}
+              <span className={`text-xs font-black flex-shrink-0 ${r.momentane ? "text-amber-600" : textColor(r.pctUsed)}`}>
+                {r.blocked ? "épuisé pour aujourd'hui" : r.momentane ? "limité un moment" : `reste ~${r.remaining.toLocaleString("fr-FR")}`}
               </span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1">

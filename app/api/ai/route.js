@@ -44,6 +44,17 @@ function captureLimits(provider, headers) {
   headers.forEach((v, k) => { if (k.toLowerCase().includes("ratelimit")) h[k.toLowerCase()] = v; });
   if (Object.keys(h).length) quotaCache[provider] = { ...(quotaCache[provider] || {}), headers: h, at: new Date().toISOString() };
 }
+// Fusion de deux relevés d'une même IA : pour chaque information, on garde la plus récente
+const plusRecent = (a, b) => (a && (!b || new Date(a) > new Date(b)) ? a : b);
+function fusion(a = {}, b = {}) {
+  const r = { ...a, ...b };
+  const erreur = plusRecent(a.last_error_at, b.last_error_at) === a.last_error_at && a.last_error_at !== b.last_error_at ? a : b;
+  if (erreur.last_error_at) Object.assign(r, { last_error: erreur.last_error, last_error_at: erreur.last_error_at, panne_ms: erreur.panne_ms });
+  const releve = plusRecent(a.at, b.at) === a.at && a.at !== b.at ? a : b;
+  if (releve.at) Object.assign(r, { headers: releve.headers, at: releve.at });
+  r.last_ok_at = plusRecent(a.last_ok_at, b.last_ok_at);
+  return r;
+}
 async function flushQuota() {
   if (Date.now() - lastQuotaWrite < 60000 || !Object.keys(quotaCache).length) return;
   lastQuotaWrite = Date.now();
@@ -51,7 +62,9 @@ async function flushQuota() {
     const { data } = await supabase.from("config").select("value").eq("key", "ai_quota").maybeSingle();
     let current = {};
     try { current = data?.value ? JSON.parse(data.value) : {}; } catch { current = {}; }
-    await supabase.from("config").upsert({ key: "ai_quota", value: JSON.stringify({ ...current, ...quotaCache }) }, { onConflict: "key" });
+    const fusionne = { ...current };
+    for (const [nom, l] of Object.entries(quotaCache)) fusionne[nom] = fusion(current[nom], l);
+    await supabase.from("config").upsert({ key: "ai_quota", value: JSON.stringify(fusionne) }, { onConflict: "key" });
   } catch { /* silencieux */ }
 }
 
@@ -223,17 +236,49 @@ async function callGoogle(messages, max_tokens, deep = false, delai = 25000, mod
 const callGoogleLite = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_LITE_MODEL);
 const callGoogleBis = (messages, max_tokens, deep = false, delai) => callGoogle(messages, max_tokens, deep, delai, GOOGLE_BIS_MODEL);
 const PROVIDER_NAMES = new Map([[callGroq, "groq"], [callGoogle, "google"], [callGoogleLite, "google-lite"], [callGoogleBis, "google-bis"], [callOpenRouter, "openrouter"], [callCloudflare, "cloudflare"], [callMistral, "mistral"]]);
-// Une IA qui vient d'échouer (lenteur, quota, paiement requis…) est essayée en dernier pendant 5 minutes :
-// les élèves n'attendent pas 20 secondes à chaque question qu'elle réponde enfin.
-const PANNE_MS = 5 * 60 * 1000;
+// Une IA qui vient d'échouer est essayée en dernier pendant un moment : les élèves n'attendent pas
+// à chaque question qu'elle réponde enfin. La durée dépend de l'erreur :
+// - quota du jour épuisé → 1 heure
+// - limite « par seconde / par minute » (429 simple, ex. Mistral) → 1 minute
+// - serveur surchargé (503 « high demand »), délai dépassé, autre erreur → 5 minutes
+const quotaDuJour = (nom, msg) => / 429 /.test(msg) && (/per.?day|daily|jour/i.test(msg) || (/^google/.test(nom) && /quota/i.test(msg) && !/retry in/i.test(msg)));
+function dureePanne(nom, msg) {
+  if (quotaDuJour(nom, msg)) return 60 * 60 * 1000;
+  if (/ 429 /.test(msg) || /rate.?limit|too many/i.test(msg)) return 60 * 1000;
+  return 5 * 60 * 1000;
+}
 function enPanne(nom) {
   const q = quotaCache[nom];
   if (!q?.last_error_at) return false;
   const t = new Date(q.last_error_at).getTime();
-  return Date.now() - t < PANNE_MS && (!q.last_ok_at || new Date(q.last_ok_at).getTime() < t);
+  const duree = q.panne_ms || 5 * 60 * 1000;
+  return Date.now() - t < duree && (!q.last_ok_at || new Date(q.last_ok_at).getTime() < t);
+}
+function noterErreur(nom, err) {
+  const msg = String(err?.message || err || "").slice(0, 200);
+  quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: msg, last_error_at: new Date().toISOString(), panne_ms: dureePanne(nom, msg) };
+  lastQuotaWrite = 0; // une panne est partagée tout de suite avec les autres serveurs
+}
+// Vercel fait tourner plusieurs serveurs : chacun relit (au plus une fois par minute) les pannes vues par les autres,
+// pour ne pas renvoyer les élèves vers une IA que l'on sait surchargée.
+let dernierChargement = 0;
+async function chargerEtats() {
+  if (Date.now() - dernierChargement < 60000) return;
+  dernierChargement = Date.now();
+  try {
+    const { data } = await supabase.from("config").select("value").eq("key", "ai_quota").maybeSingle();
+    const distant = data?.value ? JSON.parse(data.value) : {};
+    for (const [nom, d] of Object.entries(distant)) quotaCache[nom] = fusion(d, quotaCache[nom]);
+  } catch { /* silencieux */ }
 }
 
+// Délai accordé à chaque IA : les Gemini (réponses de qualité) ont plus de temps ; les IA de secours
+// sont coupées plus tôt pour que l'élève n'attende pas une minute quand plusieurs sont lentes.
+const DELAI_GEMINI = 20000, DELAI_GEMINI_DEEP = 35000;
+const DELAI_SECOURS = 12000, DELAI_SECOURS_DEEP = 20000;
+
 async function callWithFallback(providersDemandes, messages, max_tokens, deep = false) {
+  await chargerEtats();
   const providers = [
     ...providersDemandes.filter((p) => !enPanne(PROVIDER_NAMES.get(p))),
     ...providersDemandes.filter((p) => enPanne(PROVIDER_NAMES.get(p))),
@@ -243,9 +288,11 @@ async function callWithFallback(providersDemandes, messages, max_tokens, deep = 
     const provider = providers[i];
     const reste = fin - Date.now();
     if (reste < 4000) break;
-    // Délai de cette IA : 20 s (35 s en réponse « réfléchie »), sans priver les suivantes de tout le temps restant
+    // Délai de cette IA, sans priver les suivantes de tout le temps restant (la dernière a tout le temps restant)
     const restantes = providers.length - i - 1;
-    const delai = Math.min(deep ? 35000 : 20000, restantes ? reste - Math.min(restantes, 2) * 6000 : reste);
+    const gemini = /^google/.test(PROVIDER_NAMES.get(provider) || "");
+    const base = gemini ? (deep ? DELAI_GEMINI_DEEP : DELAI_GEMINI) : (deep ? DELAI_SECOURS_DEEP : DELAI_SECOURS);
+    const delai = restantes ? Math.min(base, reste - Math.min(restantes, 2) * 6000) : reste;
     try {
       const brut = await provider(messages, max_tokens, deep, delai);
       const text = String(brut);
@@ -255,8 +302,7 @@ async function callWithFallback(providersDemandes, messages, max_tokens, deep = 
       return { text, provider: name, tokens: brut?.tokens };
     } catch (err) {
       console.warn(`Provider failed: ${err.message}, trying next...`);
-      const name = PROVIDER_NAMES.get(provider) || "inconnu";
-      quotaCache[name] = { ...(quotaCache[name] || {}), last_error: String(err.message || "").slice(0, 200), last_error_at: new Date().toISOString() };
+      noterErreur(PROVIDER_NAMES.get(provider) || "inconnu", err);
     }
   }
   throw new Error("Tous les providers ont échoué");
@@ -407,7 +453,7 @@ async function testerIA(request) {
       return { nom, ok: true, ms: Date.now() - t0, modele: nom === "openrouter" ? (process.env.OPENROUTER_MODEL || openrouterModeleCache.id) : MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom] };
     } catch (e) {
       const erreur = String(e?.message || e).slice(0, 200);
-      quotaCache[nom] = { ...(quotaCache[nom] || {}), last_error: erreur, last_error_at: new Date().toISOString() };
+      noterErreur(nom, erreur);
       const refuse = / (402|403|404) /.test(erreur) || /model/i.test(erreur);
       return { nom, ok: false, ms: Date.now() - t0, erreur, modele: MODELES_URL[nom]?.[2] || MODELE_GOOGLE[nom], modeles: refuse ? await modelesDisponibles(nom) : undefined };
     }
@@ -487,15 +533,16 @@ export async function POST(request) {
 
     let result = { text: "", provider: "inconnu" };
 
+    // Groq passe juste après les Gemini : c'est le secours qui tient le mieux quand les autres sont surchargés.
     // Priorités (choix du professeur, nov. 2026) : les deux meilleurs modèles Gemini, dont le quota gratuit est
     // très limité (~20 réponses/jour chacun), sont réservés au chatbot de l'accueil et aux entraînements
     // « introduction » et « paragraphe ». Le plan dialectique et les autres outils passent par les IA de secours.
     const prioritaire = module === "methode_accueil" || (/^entrainement_/.test(module) && !/plan/.test(module));
     const chaine = prioritaire
-      ? [callGoogle, callGoogleBis, callGoogleLite, callOpenRouter, callCloudflare, callMistral, callGroq]
+      ? [callGoogle, callGoogleBis, callGoogleLite, callGroq, callOpenRouter, callCloudflare, callMistral]
       : prefer_groq
         ? [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callMistral]
-        : [callGoogleLite, callOpenRouter, callCloudflare, callGroq, callMistral];
+        : [callGoogleLite, callGroq, callOpenRouter, callCloudflare, callMistral];
     result = await callWithFallback(chaine, messages, max_tokens, prioritaire && !!deep);
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
