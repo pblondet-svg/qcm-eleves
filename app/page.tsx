@@ -176,7 +176,7 @@ function QCMAppMain({ onCompteurVisible }: { onCompteurVisible: (v: boolean) => 
   if (role === "prof") return (
     <ProfMode sharedLib={sharedLib} setSharedLib={setSharedLib} onLogout={() => setRole(null)}
       libLoaded={libLoaded} onReload={loadLib} onDashboard={() => setShowDashboard(true)}
-      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} faqMethode={faqMethode} setFaqMethode={(faq: FaqItem[]) => { setFaqMethode(faq); saveFaqMethode(faq); }} eleveQuestions={eleveQuestions} setEleveQuestions={(q: EleveQuestion[]) => { setEleveQuestions(q); saveEleveQuestions(q); }} />
+      featuresConfig={featuresConfig} setFeaturesConfig={(cfg: FeaturesConfig) => { setFeaturesConfig(cfg); saveFeaturesConfig(cfg); }} methodeContent={methodeContent} setMethodeContent={(mc: MethodeContent) => { setMethodeContent(mc); saveMethodeContent(mc); }} faqMethode={faqMethode} setFaqMethode={(faq: FaqItem[]) => { setFaqMethode(faq); saveFaqMethode(faq); }} onFaqUpdated={(faq: FaqItem[]) => setFaqMethode(faq)} eleveQuestions={eleveQuestions} setEleveQuestions={(q: EleveQuestion[]) => { setEleveQuestions(q); saveEleveQuestions(q); }} />
   );
   return (
     <EleveMode matiere={matiere!} sharedLib={sharedLib} libLoaded={libLoaded} eleveNom={eleveNom}

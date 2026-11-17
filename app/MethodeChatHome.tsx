@@ -7,7 +7,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { BookOpen, GraduationCap, HelpCircle, RotateCcw, Send, Sparkles, Target } from "lucide-react";
-import type { FaqItem } from "./FaqComponents";
+import { useNouvellesReponses, type FaqItem } from "./FaqComponents";
 
 export type SerieKey = "generale" | "techno" | "hlp";
 type Msg = { role: "user" | "assistant"; content: string };
@@ -169,6 +169,7 @@ export default function MethodeChatHome({
 
   const current = SERIES.find((s) => s.key === serie) || null;
   const prenom = (eleveNom || "").trim().split(/\s+/)[0];
+  const nouvellesReponses = useNouvellesReponses();
   const faqCount = serie ? faqMethode.filter((f) => (serie === "hlp" ? f.serie === "hlp" : f.serie === "toutes" || f.serie === serie)).length : 0;
 
   const chooseSerie = (s: SerieKey) => {
@@ -358,7 +359,9 @@ export default function MethodeChatHome({
             onClick={() => current && onOpenMethode(current.role, "faq")}
             disabled={!current}
             className="flex items-center justify-center gap-2 py-3 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors">
-            <HelpCircle className="w-4 h-4" /> FAQ{faqCount > 0 && <span className="bg-indigo-100 text-indigo-700 rounded-full px-1.5">{faqCount}</span>}
+            <HelpCircle className="w-4 h-4" /> FAQ{nouvellesReponses > 0
+              ? <span className="bg-rose-500 text-white rounded-full px-1.5" title="Le professeur t'a répondu">{nouvellesReponses} réponse{nouvellesReponses > 1 ? "s" : ""}</span>
+              : faqCount > 0 && <span className="bg-indigo-100 text-indigo-700 rounded-full px-1.5">{faqCount}</span>}
           </button>
         </div>
       </div>

@@ -849,7 +849,7 @@ function ProfMethodePanel({ methodeContent, setMethodeContent }: { methodeConten
 }
 
 // ── PROF MODE ─────────────────────────────────────────────────────────────────
-export function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode }: any) {
+export function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReload, onDashboard, featuresConfig, setFeaturesConfig, methodeContent, setMethodeContent, faqMethode, setFaqMethode, onFaqUpdated }: any) {
   const [profTab, setProfTab] = useState<"textes" | "sujets" | "notions" | "features" | "methode" | "faq" | "hlp1">("textes");
   const [search, setSearch] = useState("");
   const [chapterFilter, setChapterFilter] = useState("all");
@@ -1048,7 +1048,7 @@ export function ProfMode({ sharedLib, setSharedLib, onLogout, libLoaded, onReloa
         </div>
       ) : profTab === "faq" ? (
         <div className="max-w-3xl mx-auto px-6 py-8">
-          <ProfFaqManager faqMethode={faqMethode} setFaqMethode={setFaqMethode} />
+          <ProfFaqManager faqMethode={faqMethode} setFaqMethode={setFaqMethode} onFaqUpdated={onFaqUpdated} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">

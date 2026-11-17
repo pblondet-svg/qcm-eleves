@@ -4,7 +4,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, ChevronDown } from "lucide-react";
-import { FaqEleve } from "./FaqComponents";
+import { FaqEleve, useNouvellesReponses } from "./FaqComponents";
 import PlanTrainer from "./PlanTrainer";
 import ParagrapheTrainer from "./ParagrapheTrainer";
 import IntroductionTrainer from "./IntroductionTrainer";
@@ -98,6 +98,7 @@ export function MethodeMode({ initialView, serie, matiere, methodeContent, faqMe
 
   // Filtrer les FAQ pertinentes pour cette série
   // HLP : uniquement les questions marquées HLP ; philo : tronc commun + série de l'élève
+  const nouvellesReponses = useNouvellesReponses();
   const faqRelevantes = (faqMethode || []).filter(f => isHLP
     ? f.serie === "hlp"
     : f.serie === "toutes" || f.serie === serie || (!serie && f.serie === "generale")
@@ -160,7 +161,8 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
           )}
           <button onClick={() => setView("faq")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all ${view === "faq" ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent" : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"}`}>
-            ❓ FAQ {faqRelevantes.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${view === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqRelevantes.length}</span>}
+            ❓ FAQ {nouvellesReponses > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-black bg-rose-500 text-white" title="Le professeur t'a répondu">{nouvellesReponses} réponse{nouvellesReponses > 1 ? "s" : ""}</span>}
+            {nouvellesReponses === 0 && faqRelevantes.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-black ${view === "faq" ? "bg-white/30 text-white" : "bg-indigo-100 text-indigo-700"}`}>{faqRelevantes.length}</span>}
           </button>
         </div>
       </div>
@@ -327,66 +329,7 @@ Si l'élève pose une question hors méthode (contenu philosophique pur, auteurs
         </div>
       )}
       {/* VUE FAQ */}
-      {view === "faq" && <div className="flex-1 overflow-y-auto pb-6"><FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom}
-        askAI={async (m: { role: string; content: string }[]) => getText(await callAI(m, 900, true, "faq_quiz"))} /></div>} {false && (
-        <div className="flex-1 overflow-y-auto space-y-4">
-          {/* Formulaire question élève */}
-          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
-            <p className="text-xs font-black text-indigo-800 mb-2">💬 Poser une question au professeur</p>
-            {eleveQSent ? (
-              <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                <span className="text-lg">✓</span>
-                <span className="text-sm font-bold">Question envoyée ! Le professeur vous répondra bientôt.</span>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input value={eleveQ} onChange={e => setEleveQ(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && eleveQ.trim() && onEleveQuestion) {
-                    onEleveQuestion({ id: uid(), question: eleveQ.trim(), serie, eleveNom: eleveNom || "Anonyme", createdAt: Date.now() });
-                    setEleveQ(""); setEleveQSent(true); setTimeout(() => setEleveQSent(false), 4000);
-                  }}}
-                  className="flex-1 px-3 py-2.5 border-2 border-indigo-200 rounded-xl text-sm focus:border-indigo-400 focus:outline-none bg-white"
-                  placeholder="Ta question sur la méthode…" />
-                <button
-                  onClick={() => {
-                    if (!eleveQ.trim() || !onEleveQuestion) return;
-                    onEleveQuestion({ id: uid(), question: eleveQ.trim(), serie, eleveNom: eleveNom || "Anonyme", createdAt: Date.now() });
-                    setEleveQ(""); setEleveQSent(true); setTimeout(() => setEleveQSent(false), 4000);
-                  }}
-                  disabled={!eleveQ.trim()}
-                  className={`px-4 py-2.5 rounded-xl font-bold text-sm text-white transition-all ${eleveQ.trim() ? "bg-indigo-600 hover:bg-indigo-700" : "bg-gray-300"}`}>
-                  Envoyer
-                </button>
-              </div>
-            )}
-            <p className="text-xs text-indigo-400 mt-1.5">La réponse apparaîtra ici quand le professeur l'aura ajoutée à la FAQ.</p>
-          </div>
-
-          {/* FAQ existante */}
-          {faqRelevantes.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="text-3xl mb-2">❓</div>
-              <p className="font-bold text-gray-600 text-sm">Aucun conseil disponible pour l'instant</p>
-              <p className="text-xs text-gray-400 mt-1">Pose ta question ci-dessus, le professeur te répondra !</p>
-            </div>
-          ) : (
-            faqRelevantes.map((item) => (
-              <details key={item.id} className="bg-white rounded-2xl border-2 border-indigo-100 overflow-hidden group">
-                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-indigo-50 transition-colors list-none">
-                  <div className="flex items-center gap-3">
-                    <span className="text-indigo-500 font-black text-lg">?</span>
-                    <span className="font-bold text-gray-800 text-sm">{item.question}</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform flex-shrink-0" />
-                </summary>
-                <div className="px-5 pb-4 pt-1 border-t border-indigo-50">
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{item.reponse}</p>
-                </div>
-              </details>
-            ))
-          )}
-        </div>
-      )}
+      {view === "faq" && <div className="flex-1 overflow-y-auto pb-6"><FaqEleve items={faqRelevantes} serie={serie} matiere={matiere} eleveNom={eleveNom} /></div>}
     </div>
   );
 }

@@ -199,6 +199,48 @@ export async function POST(req: NextRequest) {
 
   // Tout le reste est réservé au prof
   if (!(await isProf(client, req))) return json({ error: "unauthorized" }, 401);
+
+  // FAQ publiée (config.faq_methode) : chaque modification est appliquée ici, sur la version enregistrée,
+  // pour que deux onglets ou deux appareils ouverts n'effacent pas les modifications l'un de l'autre.
+  if (body.action === "faq_op") {
+    const { data, error } = await client.from("config").select("value").eq("key", "faq_methode").maybeSingle();
+    if (error) return json({ error: "db" }, 500);
+    let items: any[] = [];
+    try { items = data?.value ? JSON.parse(data.value) : []; } catch { return json({ error: "faq illisible" }, 500); }
+    if (!Array.isArray(items)) items = [];
+    const idx = (x: string) => items.findIndex((f) => f?.id === x);
+
+    if (body.op === "upsert") {
+      const it = body.item || {};
+      const question = String(it.question || "").trim().slice(0, 1000);
+      const reponse = String(it.reponse || "").trim().slice(0, 10000);
+      const fid = String(it.id || "").slice(0, 64);
+      if (!fid || !question || !reponse) return json({ error: "invalid" }, 400);
+      const i = idx(fid);
+      const propre = {
+        ...(i >= 0 ? items[i] : {}),
+        id: fid, question, reponse,
+        serie: ["toutes", "generale", "techno", "hlp"].includes(it.serie) ? it.serie : "toutes",
+        categorie: it.categorie ? String(it.categorie).slice(0, 60) : undefined,
+        epingle: !!it.epingle,
+        createdAt: Number(it.createdAt) || (i >= 0 ? items[i].createdAt : Date.now()),
+        questionId: it.questionId ? String(it.questionId).slice(0, 64) : undefined,
+      };
+      if (i >= 0) items[i] = propre; else items.unshift(propre);
+    } else if (body.op === "delete") {
+      items = items.filter((f) => f?.id !== String(body.item_id || ""));
+    } else if (body.op === "move") {
+      const a = idx(String(body.item_id || "")), b = idx(String(body.target_id || ""));
+      if (a < 0 || b < 0) return json({ error: "invalid" }, 400);
+      [items[a], items[b]] = [items[b], items[a]];
+    } else {
+      return json({ error: "unknown op" }, 400);
+    }
+
+    const { error: e2 } = await client.from("config").upsert({ key: "faq_methode", value: JSON.stringify(items) }, { onConflict: "key" });
+    return e2 ? json({ error: "db" }, 500) : json({ ok: true, items });
+  }
+
   const id = String(body.id || "");
   if (!id) return json({ error: "invalid" }, 400);
 
