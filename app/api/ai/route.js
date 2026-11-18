@@ -341,11 +341,49 @@ function debutJourParis() {
   return new Date(minuit.getTime() - ecart).toISOString();
 }
 // Réponses du jour, hors réponses données dans un entraînement (action « seance:… », comptées par exercice)
+// et hors réponses reprises de la mémoire (action « cache:… », qui ne coûtent rien)
 async function compteDuJour(colonne, valeur) {
   const { count, error } = await supabase.from("usage_stats").select("*", { count: "exact", head: true })
     .gte("created_at", debutJourParis()).eq(colonne, valeur).neq("action", "call").neq("action", "limite")
-    .not("action", "like", "seance:%");
+    .not("action", "like", "seance:%").not("action", "like", "cache:%");
   return error ? 0 : count || 0;
+}
+
+// ─── Mémoire des réponses (table ai_cache, sql/ai_cache.sql) ─────────────────
+// Une demande en une seule question (pas une conversation déjà commencée), identique à une demande
+// déjà faite, reçoit la même réponse sans rappeler l'IA. Exemples : explication d'une question de QCM,
+// première question au chatbot de l'accueil. Sans la table, seule une petite mémoire par serveur sert.
+// Outils exclus : ceux où l'élève attend une réponse différente à chaque fois.
+const MODULES_SANS_MEMOIRE = /^entrainement_|flashcards|brainstorm|interrogation|oral|colle|correction|import|prof/;
+const DUREE_MEMOIRE = 7 * 24 * 3600 * 1000; // 7 jours
+const memoireLocale = new Map();
+const normaliserTexte = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+async function cleMemoire(messages, max_tokens, deep, module, session_id) {
+  if (session_id || MODULES_SANS_MEMOIRE.test(String(module))) return null;
+  const msgs = normaliserMessages(Array.isArray(messages) ? messages : []);
+  if (msgs.filter((m) => m.role !== "system").length !== 1) return null;
+  const brut = JSON.stringify([module, max_tokens, !!deep, msgs.map((m) => [m.role, normaliserTexte(m.content)])]);
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(brut));
+  return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function lireMemoire(cle) {
+  const loc = memoireLocale.get(cle);
+  if (loc && Date.now() - loc.at < DUREE_MEMOIRE) return loc;
+  if (!admin) return null;
+  try {
+    const { data } = await admin.from("ai_cache").select("reponse, provider, hits, created_at").eq("key", cle).maybeSingle();
+    if (!data || Date.now() - new Date(data.created_at).getTime() > DUREE_MEMOIRE) return null;
+    admin.from("ai_cache").update({ hits: (data.hits || 0) + 1 }).eq("key", cle).then(() => {}, () => {});
+    const r = { text: data.reponse, provider: data.provider, at: new Date(data.created_at).getTime() };
+    memoireLocale.set(cle, r);
+    return r;
+  } catch { return null; }
+}
+function ecrireMemoire(cle, module, text, provider) {
+  if (memoireLocale.size > 500) memoireLocale.delete(memoireLocale.keys().next().value);
+  memoireLocale.set(cle, { text, provider, at: Date.now() });
+  if (admin) admin.from("ai_cache").upsert({ key: cle, module, reponse: text, provider, hits: 0, created_at: new Date().toISOString() }, { onConflict: "key" }).then(() => {}, () => {});
 }
 
 // ─── Entraînements : un exercice complet compte pour une seule « question » ───
@@ -493,6 +531,17 @@ export async function POST(request) {
     const eleve_nom = String(body.eleve_nom || "").trim().slice(0, 60) || null;
     const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
 
+    // Réponse déjà connue : on la reprend sans appeler l'IA ni compter dans la limite de l'élève
+    const cle = await cleMemoire(messages, max_tokens, deep, module, session_id).catch(() => null);
+    if (cle) {
+      const connue = await lireMemoire(cle);
+      if (connue) {
+        // Action « cache:memoire » (pas le nom d'une IA) : la jauge des quotas ne compte pas ces réponses
+        logUsage({ module, action: "cache:memoire", ip, visitor_id, eleve_nom });
+        return Response.json({ content: [{ type: "text", text: connue.text }] });
+      }
+    }
+
     // Plafonds (le professeur, en Mode Prof, n'est pas limité)
     let quota = null;
     let seance = null; // exercice d'entraînement en cours (compté à part)
@@ -544,6 +593,7 @@ export async function POST(request) {
         ? [callGroq, callGoogleLite, callOpenRouter, callCloudflare, callMistral]
         : [callGoogleLite, callGroq, callOpenRouter, callCloudflare, callMistral];
     result = await callWithFallback(chaine, messages, max_tokens, prioritaire && !!deep);
+    if (cle && result.text.trim()) ecrireMemoire(cle, module, result.text, result.provider);
 
     // Logger l'usage dans Supabase (sans bloquer la réponse)
     // action = « leger:groq », « lourd:google »… : on sait quel modèle a répondu
