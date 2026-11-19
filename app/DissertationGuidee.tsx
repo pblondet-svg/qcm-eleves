@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, Copy, Lightbulb, PenLine, Sparkles } from "lucide-react";
-import { REGLE_GUIDAGE } from "./MethodeChatHome";
+import { CRITERES_INTRO, REGLE_GUIDAGE } from "./MethodeChatHome";
 
 type AskAI = (messages: { role: string; content: string }[], maxTokens?: number, light?: boolean) => Promise<string>;
 
@@ -80,6 +80,8 @@ ${REGLE_GUIDAGE}
 
 ${methode}
 ${contexte ? `\nTextes du cours (pour t'orienter, ne les cite pas à sa place) :\n${contexte.slice(0, 800)}\n` : ""}
+${CRITERES_INTRO}
+
 SUJET : « ${sujet} »
 
 CE QUE L'ÉLÈVE A DÉJÀ CONSTRUIT :
@@ -121,12 +123,12 @@ ${precedent.texte}
 ` : ""}PROPOSITION ${precedent ? "MODIFIÉE " : ""}DE L'ÉLÈVE POUR CETTE ÉTAPE :
 ${t}
 
-Vérifie cette proposition avec bienveillance, en 3 ou 4 phrases :
+Vérifie cette proposition, bienveillant dans le ton mais exigeant sur le fond, en 3 ou 4 phrases :
 ${precedent ? "- commence par dire ce que l'élève a amélioré par rapport à sa version précédente (s'il l'a modifiée) ;\n" : ""}- dis ce qui est juste ;
 - s'il manque quelque chose d'important, termine par une seule piste concrète formulée comme une consigne (« Précise… », « Ajoute… »), PAS par une question : l'élève ne peut pas te répondre, il ne peut que modifier sa proposition et la refaire vérifier.
 Ne réécris pas sa proposition et ne donne pas de version corrigée. N'exige rien que la méthode ne demande pas à cette étape (pas d'exemple dans l'opinion commune, par exemple).
-Sois encourageant : c'est un élève qui apprend. Valide dès que l'essentiel de l'étape est là, même si la formulation peut encore être améliorée${precedent ? " ; s'il a tenu compte de ta remarque précédente, valide" : ""}.
-Commence ta réponse par « VALIDÉ : » si l'étape est réussie pour l'essentiel, sinon par « À REVOIR : ».` }], 450, true);
+Pour les étapes de l'introduction, applique strictement les critères de validation ci-dessus : si un seul critère n'est pas rempli, réponds « À REVOIR ». Pour les autres étapes, valide seulement si ce qu'on attend est vraiment là. Une maladresse d'expression seule n'empêche pas de valider ; une idée absente, vague, hors sujet ou qui répète l'étape précédente, si.${precedent ? " Avoir modifié sa proposition ne suffit pas : valide seulement si la version modifiée remplit maintenant les critères." : ""}
+Commence ta réponse par « VALIDÉ : » si l'étape remplit les critères, sinon par « À REVOIR : ».` }], 450, true);
       const ok = /^\s*\**\s*VALID/i.test(r);
       const nouveaux = { ...retours, [step.key]: { ok, texte: r.replace(/^\s*\**\s*(VALIDÉ|VALIDE|À REVOIR|A REVOIR)\s*\**\s*:?\s*/i, "").trim(), propositionVerifiee: t } };
       setRetours(nouveaux);

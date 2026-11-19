@@ -181,7 +181,7 @@ II. ${plan.II.titre}
 Ouverture de conclusion : ${ouverture.trim() || "(vide)"}
 Partie III : ${partie3.trim() || "(vide)"}
 
-Évalue la réponse avec bienveillance, critère par critère (un critère globalement respecté compte comme réussi) :
+Évalue la réponse avec bienveillance dans le ton mais exigence sur le fond, critère par critère (un critère n'est réussi que s'il est vraiment rempli ; une intention vague ne suffit pas) :
 ${CRITERES.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
 Juge en philosophe : le concept proposé est-il vraiment un concept (et non un mot vague) ? Est-il défini ? Change-t-il réellement les termes du problème ? Un « réalisme » ou un « juste milieu » non défini est un compromis déguisé.

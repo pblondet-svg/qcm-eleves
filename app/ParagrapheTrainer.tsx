@@ -156,7 +156,7 @@ Consigne donnée à l'élève : rédiger un paragraphe argumenté qui reconstitu
 ${copie}
 
 === GRILLE DU PROFESSEUR ===
-Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition, 3 = Acquis, 4 = Très bonne maîtrise. Note avec bienveillance : ce sont des élèves en entraînement. Une étape présente et globalement juste vaut au moins 3 ; 4 si elle est vraiment réussie ; 2 si elle est présente mais confuse ; 1 seulement si elle est vide ou absente.
+Chaque étape est notée de 1 à 4 : 1 = Non acquis, 2 = En cours d'acquisition, 3 = Acquis, 4 = Très bonne maîtrise. Notes exigeantes et discriminantes : 4 seulement si l'étape est vraiment maîtrisée ; 3 si elle est juste et complète ; 2 si elle est présente mais confuse, incomplète ou approximative (une thèse floue, des arguments qui répètent la thèse, un exemple qui n'illustre pas l'argument, une citation non expliquée) ; 1 si elle est vide, absente ou fausse. Une étape simplement présente ne vaut pas 3.
 - Thèse : une seule idée, claire, qui répond au sujet posé.
 - Arguments : de vraies raisons qui reconstituent un raisonnement, et non la répétition de la thèse ; les concepts importants sont définis (le professeur conseille de définir les mots importants pour argumenter ; valorise-le quand l'élève le fait).
 - Exemple : une situation concrète de la vie réelle, de préférence trouvée par l'élève lui-même, qui illustre bien l'argument (et non une autre idée). Une référence à un auteur ou à une personne qui fait autorité n'est pas un exemple concret ; une référence culturelle montre une bonne culture générale, mais ne remplace pas l'exemple.

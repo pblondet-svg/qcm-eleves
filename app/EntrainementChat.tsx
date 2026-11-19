@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GraduationCap, RefreshCw, Send } from "lucide-react";
-import { REGLE_GUIDAGE, RichText } from "./MethodeChatHome";
+import { CRITERES_INTRO, REGLE_GUIDAGE, RichText } from "./MethodeChatHome";
 import { nouvelleSeance, noteDepuisTexte, sauverProduction, type AskAIAvecSeance } from "./productions";
 
 type AskAI = AskAIAvecSeance;
@@ -27,8 +27,8 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
     degrade: "from-indigo-600 to-sky-500", bulle: "bg-indigo-600",
     script: `EXERCICE : l'élève construit l'introduction de sa dissertation, dans cet ordre : 1) opinion commune, 2) définitions des termes du sujet, 3) paradoxe, 4) problématique (l'élève peut formuler une ou plusieurs questions : n'exige pas une question unique), 5) annonce du plan.
 - Traite une seule étape à la fois. Pour chaque étape : rappelle en une phrase ce qu'on attend, puis pose UNE question qui l'aide à trouver.
-- Quand sa proposition est correcte pour l'essentiel, dis-le clairement (« Étape validée ») et passe à l'étape suivante. L'opinion commune n'a pas besoin d'exemple : n'en demande pas.
-- Une fois les cinq étapes validées, demande-lui d'écrire son introduction complète d'un seul tenant. Fais alors une appréciation globale en 3 lignes au plus (ce qui est réussi, la principale fragilité), sans réécrire son texte, puis propose-lui un nouveau sujet.`,
+- Ne dis « Étape validée » que si la proposition remplit les critères de validation de l'introduction donnés plus bas ; sinon, dis ce qui est juste, ce qui manque, et laisse-le reprendre. L'opinion commune n'a pas besoin d'exemple : n'en demande pas.
+- Une fois les cinq étapes validées, demande-lui d'écrire son introduction complète d'un seul tenant. Fais alors une appréciation globale en 3 lignes au plus : commence de façon adoucie, cite une force concrète, puis « Il y a cependant des fragilités » et la principale (enchaînement des étapes, définitions, tension de la problématique…), sans réécrire son texte et sans formule d'encouragement finale ; puis propose-lui un nouveau sujet.`,
   },
   paragraphe: {
     titre: "Rédige un paragraphe argumenté",
@@ -40,7 +40,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
 - Exemple : une situation concrète de la vie réelle, trouvée par l'élève ; une référence à un auteur ou à une personne célèbre n'est pas un exemple.
 - Citation : entre guillemets, d'un auteur identifié, et c'est à l'élève de l'expliquer, pas au correcteur. N'invente et ne fournis aucune citation.
 - Quand sa proposition est correcte pour l'essentiel, dis-le clairement (« Étape validée ») et passe à l'étape suivante.
-- Une fois les cinq étapes validées, demande-lui d'écrire son paragraphe complet d'un seul tenant (15 à 20 lignes). Corrige-le alors avec la grille du professeur : chaque étape notée de 1 à 4 (1 Non acquis, 2 En cours d'acquisition, 3 Acquis, 4 Très bonne maîtrise), une phrase par étape, la note sur 20 (somme des cinq), puis une appréciation de 3 lignes au plus : début adouci (« plutôt bien structuré »), puis « Il y a cependant des fragilités » ; pas de formule d'encouragement finale. Notes bienveillantes : une étape présente et globalement juste vaut au moins 3. Ne réécris pas son paragraphe.`,
+- Une fois les cinq étapes validées, demande-lui d'écrire son paragraphe complet d'un seul tenant (15 à 20 lignes). Corrige-le alors avec la grille du professeur : chaque étape notée de 1 à 4 (1 Non acquis, 2 En cours d'acquisition, 3 Acquis, 4 Très bonne maîtrise), une phrase par étape, la note sur 20 (somme des cinq), puis une appréciation de 3 lignes au plus : début adouci (« plutôt bien structuré »), puis « Il y a cependant des fragilités » ; pas de formule d'encouragement finale. Notes exigeantes et discriminantes : 4 seulement si l'étape est vraiment maîtrisée, 3 si elle est juste et complète, 2 si elle est présente mais confuse, incomplète ou approximative, 1 si elle est absente ou fausse. Ne réécris pas son paragraphe.`,
   },
   paragrapheTexte: {
     titre: "Rédige un paragraphe argumenté à partir d'un texte",
@@ -56,7 +56,7 @@ const SCRIPTS: Record<ExerciceChat | "paragrapheTexte", { titre: string; sousTit
 - [Conclusion] : répond clairement à la question.
 - Signale tout contresens sur le texte, avec bienveillance, et aide l'élève à le corriger en relisant le passage concerné.
 - Quand sa proposition est correcte pour l'essentiel, dis-le clairement (« Étape validée ») et passe à l'étape suivante.
-- Une fois les cinq étapes validées, demande-lui d'écrire son paragraphe complet d'un seul tenant (15 à 20 lignes). Corrige-le alors avec la grille du professeur : chaque étape notée de 1 à 4 (1 Non acquis, 2 En cours d'acquisition, 3 Acquis, 4 Très bonne maîtrise), une phrase par étape, la note sur 20 (somme des cinq), puis une appréciation de 3 lignes au plus : début adouci (« plutôt bien structuré »), puis « Il y a cependant des fragilités » ; pas de formule d'encouragement finale. Notes bienveillantes : une étape présente et globalement juste vaut au moins 3. Ne réécris pas son paragraphe.`,
+- Une fois les cinq étapes validées, demande-lui d'écrire son paragraphe complet d'un seul tenant (15 à 20 lignes). Corrige-le alors avec la grille du professeur : chaque étape notée de 1 à 4 (1 Non acquis, 2 En cours d'acquisition, 3 Acquis, 4 Très bonne maîtrise), une phrase par étape, la note sur 20 (somme des cinq), puis une appréciation de 3 lignes au plus : début adouci (« plutôt bien structuré »), puis « Il y a cependant des fragilités » ; pas de formule d'encouragement finale. Notes exigeantes et discriminantes : 4 seulement si l'étape est vraiment maîtrisée, 3 si elle est juste et complète, 2 si elle est présente mais confuse, incomplète ou approximative, 1 si elle est absente ou fausse. Ne réécris pas son paragraphe.`,
   },
   plan: {
     titre: "Le plan dialectique : crée ta partie III",
@@ -117,9 +117,9 @@ export default function EntrainementChat({ exercice, askAI, methode, matiere, se
     return Object.entries(m).sort((a, b) => cle(a[0]).localeCompare(cle(b[0]), "fr"));
   }, [source]);
 
-  const contexte = (s: Sujet) => `Tu es le tuteur de philosophie d'un élève de ${matiere === "hlp" ? "spécialité HLP" : serie === "techno" ? "Terminale technologique" : "Terminale générale"}. Tu le tutoies, avec bienveillance : il apprend, encourage-le.
+  const contexte = (s: Sujet) => `Tu es le tuteur de philosophie d'un élève de ${matiere === "hlp" ? "spécialité HLP" : serie === "techno" ? "Terminale technologique" : "Terminale générale"}. Tu le tutoies, avec bienveillance dans le ton et exigence sur le fond.
 ${REGLE_GUIDAGE}
-
+${exercice === "intro" ? `\n${CRITERES_INTRO}\n` : ""}
 === MÉTHODE DU PROFESSEUR (référence absolue) ===
 ${methode}
 
